@@ -21,6 +21,7 @@
 #define _chpl_atomics_h_
 
 #include "chpltypes.h"
+#include "error.h"
 #include <pthread.h>
 
 // Locks based atomic implementation. Note that we use pthread mutexes instead
@@ -47,53 +48,65 @@
 typedef struct atomic_int_least8_s {
   pthread_mutex_t lock;
   int_least8_t v;
+  int64_t initialized;
 } atomic_int_least8_t;
 typedef struct atomic_int_least16_s {
   pthread_mutex_t lock;
   int_least16_t v;
+  int64_t initialized;
 } atomic_int_least16_t;
 typedef struct atomic_int_least32_s {
   pthread_mutex_t lock;
   int_least32_t v;
+  int64_t initialized;
 } atomic_int_least32_t;
 typedef struct atomic_int_least64_s {
   pthread_mutex_t lock;
   int_least64_t v;
+  int64_t initialized;
 } atomic_int_least64_t;
 typedef struct atomic_uint_least8_s {
   pthread_mutex_t lock;
   uint_least8_t v;
+  int64_t initialized;
 } atomic_uint_least8_t;
 typedef struct atomic_uint_least16_s {
   pthread_mutex_t lock;
   uint_least16_t v;
+  int64_t initialized;
 } atomic_uint_least16_t;
 typedef struct atomic_uint_least32_s {
   pthread_mutex_t lock;
   uint_least32_t v;
+  int64_t initialized;
 } atomic_uint_least32_t;
 typedef struct atomic_uint_least64_s {
   pthread_mutex_t lock;
   uint_least64_t v;
+  int64_t initialized;
 } atomic_uint_least64_t;
 typedef struct atomic_uintptr_s {
   pthread_mutex_t lock;
   uintptr_t v;
+  int64_t initialized;
 } atomic_uintptr_t;
 
 typedef struct atomic_bool_s {
   pthread_mutex_t lock;
   chpl_bool v;
+  int64_t initialized;
 } atomic_bool;
 
 typedef struct atomic__real32_s {
   pthread_mutex_t lock;
   _real32 v;
+  int64_t initialized;
 } atomic__real32;
 
 typedef struct atomic__real64_s {
   pthread_mutex_t lock;
   _real64 v;
+  int64_t initialized;
 } atomic__real64;
 
 typedef enum {
@@ -104,6 +117,17 @@ typedef enum {
  memory_order_acq_rel,
  memory_order_seq_cst
 } memory_order;
+
+
+#define INITIALIZED 0xa5
+#define DESTROYED 0x5a
+
+#define check_initialized(obj) \
+  do { \
+    if (obj->initialized != INITIALIZED) { \
+      chpl_internal_error("atomic not initialized"); \
+    } \
+  } while (0)
 
 static inline
 void atomic_thread_fence(memory_order order)
@@ -123,13 +147,16 @@ static inline chpl_bool atomic_is_lock_free_ ## type(atomic_ ## type * obj) { \
 static inline void atomic_init_ ## type(atomic_ ## type * obj, basetype value) { \
   obj->v = value; \
   (void) pthread_mutex_init(&obj->lock, NULL); \
+  obj->initialized = INITIALIZED; \
 } \
 static inline void atomic_destroy_ ## type(atomic_ ## type * obj) { \
+  obj->initialized = DESTROYED; \
   (void) pthread_mutex_destroy(&obj->lock); \
 } \
 static MAYBE_INLINE void \
 atomic_store_explicit_ ## type(atomic_ ## type * obj, basetype value, memory_order order) { \
   (void) pthread_mutex_lock(&obj->lock); \
+  check_initialized(obj); \
   obj->v = value; \
   (void) pthread_mutex_unlock(&obj->lock); \
 } \
@@ -140,6 +167,7 @@ static MAYBE_INLINE basetype \
 atomic_load_explicit_ ## type(atomic_ ## type * obj, memory_order order) { \
   basetype ret; \
   (void) pthread_mutex_lock(&obj->lock); \
+  check_initialized(obj); \
   ret = obj->v; \
   (void) pthread_mutex_unlock(&obj->lock); \
   return ret; \
@@ -151,6 +179,7 @@ static MAYBE_INLINE basetype \
 atomic_exchange_explicit_ ## type(atomic_ ## type * obj, basetype value, memory_order order) { \
   basetype ret; \
   (void) pthread_mutex_lock(&obj->lock); \
+  check_initialized(obj); \
   ret = obj->v; \
   obj->v = value; \
   (void) pthread_mutex_unlock(&obj->lock); \
@@ -163,6 +192,7 @@ static MAYBE_INLINE chpl_bool \
 atomic_compare_exchange_strong_explicit_ ## type(atomic_ ## type * obj, basetype expected, basetype desired, memory_order order) { \
   basetype ret; \
   (void) pthread_mutex_lock(&obj->lock); \
+  check_initialized(obj); \
   if( obj->v == expected ) { \
     obj->v = desired; \
     ret = true; \
@@ -187,6 +217,7 @@ static MAYBE_INLINE type \
 atomic_fetch_add_explicit_ ## type(atomic_ ## type * obj, type operand, memory_order order) { \
   type ret; \
   (void) pthread_mutex_lock(&obj->lock); \
+  check_initialized(obj); \
   ret = obj->v; \
   obj->v += operand; \
   (void) pthread_mutex_unlock(&obj->lock); \
@@ -199,6 +230,7 @@ static MAYBE_INLINE type \
 atomic_fetch_sub_explicit_ ## type(atomic_ ## type * obj, type operand, memory_order order) { \
   type ret; \
   (void) pthread_mutex_lock(&obj->lock); \
+  check_initialized(obj); \
   ret = obj->v; \
   obj->v -= operand; \
   (void) pthread_mutex_unlock(&obj->lock); \
@@ -211,6 +243,7 @@ static MAYBE_INLINE type \
 atomic_fetch_or_explicit_ ## type(atomic_ ## type * obj, type operand, memory_order order) { \
   type ret; \
   (void) pthread_mutex_lock(&obj->lock); \
+  check_initialized(obj); \
   ret = obj->v; \
   obj->v |= operand; \
   (void) pthread_mutex_unlock(&obj->lock); \
@@ -223,6 +256,7 @@ static MAYBE_INLINE type \
 atomic_fetch_and_explicit_ ## type(atomic_ ## type * obj, type operand, memory_order order) { \
   type ret; \
   (void) pthread_mutex_lock(&obj->lock); \
+  check_initialized(obj); \
   ret = obj->v; \
   obj->v &= operand; \
   (void) pthread_mutex_unlock(&obj->lock); \
@@ -235,6 +269,7 @@ static MAYBE_INLINE type \
 atomic_fetch_xor_explicit_ ## type(atomic_ ## type * obj, type operand, memory_order order) { \
   type ret; \
   (void) pthread_mutex_lock(&obj->lock); \
+  check_initialized(obj); \
   ret = obj->v; \
   obj->v ^= operand; \
   (void) pthread_mutex_unlock(&obj->lock); \
@@ -249,6 +284,7 @@ static MAYBE_INLINE type \
 atomic_fetch_add_explicit_ ## type(atomic_ ## type * obj, type operand, memory_order order) { \
   type ret; \
   (void) pthread_mutex_lock(&obj->lock); \
+  check_initialized(obj); \
   ret = obj->v; \
   obj->v += operand; \
   (void) pthread_mutex_unlock(&obj->lock); \
@@ -261,6 +297,7 @@ static MAYBE_INLINE type \
 atomic_fetch_sub_explicit_ ## type(atomic_ ## type * obj, type operand, memory_order order) { \
   type ret; \
   (void) pthread_mutex_lock(&obj->lock); \
+  check_initialized(obj); \
   ret = obj->v; \
   obj->v -= operand; \
   (void) pthread_mutex_unlock(&obj->lock); \
