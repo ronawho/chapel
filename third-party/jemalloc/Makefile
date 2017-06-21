@@ -35,10 +35,6 @@ ifeq (, $(CHPL_JEMALLOC_ENABLE_STATS))
 CHPL_JEMALLOC_CFG_OPTIONS += --disable-stats
 endif
 
-# As an optimization, use jemalloc's decay-based purging instead of the
-# default ratio-based purging
-CHPL_JEMALLOC_CFG_OPTIONS += --with-malloc-conf=purge:decay
-
 # To work around a problem with jemalloc's auto-detection of version
 # from git history & out-of-tree builds, explicitly set the version
 CHPL_JEMALLOC_CFG_OPTIONS += --with-version=`cat $(JEMALLOC_SUBDIR)/VERSION`

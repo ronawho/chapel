@@ -36,10 +36,7 @@
 // Decide whether or not to try to use jemalloc's chunk hooks interface
 //   jemalloc < 4.0 didn't support chunk_hooks_t
 //   jemalloc 4.1 changed opt.nareas from size_t to unsigned
-// .. so we use chunk hooks interface for jemalloc >= 4.1
-#if JEMALLOC_VERSION_MAJOR > 4
-#define USE_JE_CHUNK_HOOKS
-#endif
+//   jemalloc 5.0 changed from a hook interface to an extent interface
 #if (JEMALLOC_VERSION_MAJOR == 4) && (JEMALLOC_VERSION_MINOR >= 1)
 #define USE_JE_CHUNK_HOOKS
 #endif
@@ -55,6 +52,7 @@ static struct shared_heap {
 } heap;
 
 
+#ifdef USE_JE_CHUNK_HOOKS
 // compute aligned index into our shared heap, alignment must be a power of 2
 static inline void* alignHelper(void* base_ptr, size_t offset, size_t alignment) {
   uintptr_t p;
@@ -71,7 +69,6 @@ static inline void* alignHelper(void* base_ptr, size_t offset, size_t alignment)
 
 // avoid unused function warnings by only defining these chunk hooks
 // if they could be used
-#ifdef USE_JE_CHUNK_HOOKS
 
 
 // Our chunk replacement hook for allocations (Essentially a replacement for
