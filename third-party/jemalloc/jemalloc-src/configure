@@ -9849,6 +9849,10 @@ if test "x${je_cv_lg_hugepage}" = "x" ; then
     je_cv_lg_hugepage=21
   fi
 fi
+if test "x${LG_PAGE}" != "xundefined" -a \
+        "${je_cv_lg_hugepage}" -lt "${LG_PAGE}" ; then
+  as_fn_error $? "Huge page size (2^${je_cv_lg_hugepage}) must be at least page size (2^${LG_PAGE})" "$LINENO" 5
+fi
 cat >>confdefs.h <<_ACEOF
 #define LG_HUGEPAGE ${je_cv_lg_hugepage}
 _ACEOF
@@ -10146,6 +10150,42 @@ $as_echo "$je_cv_pthread_atfork" >&6; }
 
   if test "x${je_cv_pthread_atfork}" = "xyes" ; then
     $as_echo "#define JEMALLOC_HAVE_PTHREAD_ATFORK  " >>confdefs.h
+
+  fi
+
+{ $as_echo "$as_me:${as_lineno-$LINENO}: checking whether pthread_setname_np(3) is compilable" >&5
+$as_echo_n "checking whether pthread_setname_np(3) is compilable... " >&6; }
+if ${je_cv_pthread_setname_np+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+#include <pthread.h>
+
+int
+main ()
+{
+
+  pthread_setname_np(pthread_self(), "setname_test");
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"; then :
+  je_cv_pthread_setname_np=yes
+else
+  je_cv_pthread_setname_np=no
+fi
+rm -f core conftest.err conftest.$ac_objext \
+    conftest$ac_exeext conftest.$ac_ext
+fi
+{ $as_echo "$as_me:${as_lineno-$LINENO}: result: $je_cv_pthread_setname_np" >&5
+$as_echo "$je_cv_pthread_setname_np" >&6; }
+
+  if test "x${je_cv_pthread_setname_np}" = "xyes" ; then
+    $as_echo "#define JEMALLOC_HAVE_PTHREAD_SETNAME_NP  " >>confdefs.h
 
   fi
 fi
