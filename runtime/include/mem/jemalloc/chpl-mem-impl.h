@@ -45,31 +45,54 @@
 
 #define MALLOCX_NO_FLAGS 0
 
+static inline void chpl_check_arena() {
+  unsigned arena;
+  size_t size;
+
+  size = sizeof(arena);
+  if (CHPL_JE_MALLCTL("thread.arena", &arena, &size, NULL, 0) != 0) {
+      chpl_internal_error("could not get current arena");
+  }
+
+  if (arena == 0) {
+    arena = 1;
+    if (CHPL_JE_MALLCTL("thread.arena", NULL, NULL, &arena, sizeof(arena)) != 0) {
+        chpl_internal_error("could not change current thread's arena to non-0");
+    }
+  }
+}
+
 static inline void* chpl_calloc(size_t n, size_t size) {
+  chpl_check_arena();
   return CHPL_JE_CALLOC(n,size);
 }
 
 static inline void* chpl_malloc(size_t size) {
+  chpl_check_arena();
   return CHPL_JE_MALLOC(size);
 }
 
 static inline void* chpl_memalign(size_t boundary, size_t size) {
   void* ret = NULL;
   int rc;
+  chpl_check_arena();
   rc = CHPL_JE_POSIX_MEMALIGN(&ret, boundary, size);
   if( rc == 0 ) return ret;
   else return NULL;
 }
 
 static inline void* chpl_realloc(void* ptr, size_t size) {
+  chpl_check_arena();
   return CHPL_JE_REALLOC(ptr, size);
 }
 
 static inline void chpl_free(void* ptr) {
+  chpl_check_arena();
   CHPL_JE_FREE(ptr);
 }
 
 static inline size_t chpl_good_alloc_size(size_t minSize) {
+  chpl_check_arena();
   if (minSize == 0) { return 0; }
   return CHPL_JE_NALLOCX(minSize, MALLOCX_NO_FLAGS);
 }

@@ -14,7 +14,8 @@ directed to the Chapel team at https://chapel-lang.org/bugs.html.
 Upgrading jemalloc versions
 ===========================
 
-TODO update instructions to include running with --enable-debug for configs too 
+TODO update instructions to include running with --enable-debug for configs,
+and maybe running `make check` across compilers and platforms?
 
 The directory $CHPL_HOME/third-party/jemalloc/jemalloc-src contains the
 un-tarballed jemalloc package contents. Version updates should be done as
@@ -40,3 +41,13 @@ In particular, if the base name of the jemalloc configuration environment
 variable changes from "MALLOC_CONF" to something else, please update the
 reference to that variable in runtime/src/comm/ugni/comm-ugni-launch.c to
 the new name.
+
+Upgrading to jemalloc 5.0 issues:
+=================================
+
+It seems we can no longer replace the allocation hooks for arena 0
+
+Some relevant links:
+ - http://jemalloc.net/jemalloc.3.html#arenas.create
+ - https://github.com/jemalloc/jemalloc/issues/825
+ - https://github.com/jemalloc/jemalloc/issues/700
