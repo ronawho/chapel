@@ -215,9 +215,7 @@ static void replaceExtentHooks(void) {
 
   // for each arena, change the extent hooks
   narenas = get_num_arenas();
-  // TODO should be arena=0, but that's causing jemalloc assertions. Can we no
-  // longer replace the hooks for an arena that already made allocations?
-  for (arena=1; arena<narenas; arena++) {
+  for (arena=0; arena<narenas; arena++) {
     char path[128];
     snprintf(path, sizeof(path), "arena.%u.extent_hooks", arena);
     if (CHPL_JE_MALLCTL(path, NULL, NULL, &new_hooks, sizeof(extent_hooks_t*)) != 0) {
