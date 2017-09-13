@@ -14,6 +14,8 @@ directed to the Chapel team at https://chapel-lang.org/bugs.html.
 Upgrading jemalloc versions
 ===========================
 
+TODO update instructions to include running with --enable-debug for configs too 
+
 The directory $CHPL_HOME/third-party/jemalloc/jemalloc-src contains the
 un-tarballed jemalloc package contents. Version updates should be done as
 follows, assuming the CWD is $CHPL_HOME/third-party/jemalloc/:
