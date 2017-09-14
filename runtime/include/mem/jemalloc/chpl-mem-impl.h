@@ -45,7 +45,7 @@
 
 #define MALLOCX_NO_FLAGS 0
 
-static inline void chpl_check_arena() {
+static inline void chpl_check_arena(void) {
   unsigned arena;
   size_t size;
 
