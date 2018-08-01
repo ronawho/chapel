@@ -91,11 +91,20 @@ module NetworkAtomics {
     }
 
     inline proc const waitFor(value:bool, order:memory_order = memory_order_seq_cst): void {
-      on this {
-        while (this.read(order=memory_order_relaxed) != value) {
-          chpl_task_yield();
+      var numTries = 0;
+      var readVal = this.read(order=memory_order_relaxed);
+      while (numTries < 1000 && readVal != value) {
+        numTries += 1;
+        readVal = this.read(order=memory_order_relaxed);
+        chpl_task_yield();
+      }
+      if (readVal != value) {
+        on this {
+          while (this.read(order=memory_order_relaxed) != value) {
+            chpl_task_yield();
+          }
+          atomic_thread_fence(order);
         }
-        atomic_thread_fence(order);
       }
     }
 
@@ -265,11 +274,20 @@ module NetworkAtomics {
     }
 
     inline proc const waitFor(value:T, order:memory_order = memory_order_seq_cst): void {
-      on this {
-        while (this.read(order=memory_order_relaxed) != value) {
-          chpl_task_yield();
+      var numTries = 0;
+      var readVal = this.read(order=memory_order_relaxed);
+      while (numTries < 1000 && readVal != value) {
+        numTries += 1;
+        readVal = this.read(order=memory_order_relaxed);
+        chpl_task_yield();
+      }
+      if (readVal != value) {
+        on this {
+          while (this.read(order=memory_order_relaxed) != value) {
+            chpl_task_yield();
+          }
+          atomic_thread_fence(order);
         }
-        atomic_thread_fence(order);
       }
     }
 
