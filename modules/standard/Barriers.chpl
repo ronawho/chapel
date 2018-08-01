@@ -198,6 +198,7 @@ module Barriers {
 /* A task barrier implemented using atomics. Can be used as a simple barrier
    or as a split-phase barrier.
  */
+  use BlockDist;
   pragma "no doc" class aBarrier: BarrierBaseType {
     /* If true the barrier can be used multiple times.  When using this as a
        split-phase barrier this causes :proc:`wait` to block until all tasks
@@ -212,6 +213,9 @@ module Barriers {
     var count: if procAtomics then chpl__processorAtomicType(int) else atomic int;
     pragma "no doc"
     var done: if procAtomics then chpl__processorAtomicType(bool) else atomic bool;
+    const BarrierSpace = LocaleSpace dmapped Block(LocaleSpace);
+
+    var doneArr: [BarrierSpace] atomic bool;
 
     // Hack for AllLocalesBarrier
     pragma "no doc"
@@ -243,6 +247,7 @@ module Barriers {
         n = nTasks;
         count.write(n);
         done.write(false);
+        doneArr.write(false);
       }
       if procAtomics then on this do innerReset(); else innerReset();
     }
@@ -254,28 +259,34 @@ module Barriers {
       inline proc innerBarrier() {
         const myc = count.fetchSub(1);
         if myc<=1 {
-          if hackIntoCommBarrier {
-            extern proc chpl_comm_barrier(msg: c_string);
-            chpl_comm_barrier("local barrier call".localize().c_str());
-          }
-          const alreadySet = done.testAndSet();
-          if boundsChecking && alreadySet {
-            HaltWrappers.boundsCheckHalt("Too many callers to barrier()");
-          }
+          for d in doneArr do d.write(true);
+          //coforall loc in Locales do on loc {
+          //  doneArr.localAccess[here.id].write(true);
+          //}
+           // done.write(true);//testAndSet();
           if reusable {
             count.waitFor(n-1);
             count.add(1);
-            done.clear();
+            for d in doneArr do d.write(false);
+            //coforall loc in Locales do on loc {
+            //  doneArr.localAccess[here.id].write(false);
+            //}
+            //done.clear();
           }
         } else {
-          done.waitFor(true);
+          // may be waiting here for a while..
+          doneArr.localAccess[here.id].waitFor(true);
+          //done.waitFor(true);
+
           if reusable {
             count.add(1);
-            done.waitFor(false);
+            //done.waitFor(false);
+          doneArr.localAccess[here.id].waitFor(false);
           }
         }
       }
       if procAtomics then on this do innerBarrier(); else innerBarrier();
+      //innerBarrier();
     }
 
     /* Notify the barrier that this task has reached this point. */
