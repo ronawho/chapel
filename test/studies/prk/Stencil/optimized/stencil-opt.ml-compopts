@@ -1,1 +1,1 @@
---set order=128000 --set iterations=3
+--set order="sqrt(16e9*numLocales / 8):int" --set iterations=3

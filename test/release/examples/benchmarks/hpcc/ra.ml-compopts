@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+# TODO update this comment and the filenames below
+
 # Run ra with n=33 and 10 million updates. ugni and gasnet-aries are much
 # faster for the rmo version, so bump the number of updates to 1 billion to get
 # stable timings.
@@ -10,10 +12,10 @@ comm_sub = os.getenv('CHPL_COMM_SUBSTRATE')
 ugni = comm == 'ugni'
 gn_aries = comm == 'gasnet' and comm_sub  == 'aries'
 
-on_nu = 10000000
-rmo_nu = 10000000
+on_nu = "2**(n-10)"
+rmo_nu = "2**(n-10)"
 if ugni or gn_aries:
-  rmo_nu = 1000000000
+  rmo_nu = "2**(n-5)"
 
-print('-suseOn=true  -sn=33:indexType -sN_U={0}:indexType -sverify=false # ra.on-n33'.format(on_nu))
-print('-suseOn=false -sn=33:indexType -sN_U={0}:indexType -sverify=false # ra.rmo-n33'.format(rmo_nu))
+print('-suseOn=true  -sN_U={0} -sverify=false # ra.on-n33'.format(on_nu))
+print('-suseOn=false -sN_U={0} -sverify=false # ra.rmo-n33'.format(rmo_nu))
