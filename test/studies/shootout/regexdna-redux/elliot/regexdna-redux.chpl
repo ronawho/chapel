@@ -17,6 +17,13 @@
    converted from regex-dna program
 */
 
+
+
+
+
+
+
+
 proc main(args: [] string) {
   var variants = [
     "agggtaaa|tttaccct",
@@ -36,34 +43,44 @@ proc main(args: [] string) {
   ];
 
   var data: string;
-  stdin.readstring(data); // read in the entire file
-  const initLen = data.length;
 
-  // remove newlines
-  data = compile(">.*\n|\n").sub("", data);
+
+
+
+
+
+
+
+  stdin.readstring(data); // read in the entire file as a string
+
+
+
+  const initLen = data.length;
+  data = compile(">.*\n|\n").sub("", data); // remove newlines
 
   var copy = data; // make a copy so we can perform replacements in parallel
 
-  var results: [variants.domain] int;
+  {
+    // count variants
+    for variants in variants {
+      var count = 0;
 
-  sync {
-    // fire off a task to perform replacements
-    begin with (ref copy) {
-      for (f, r) in subst do
-        copy = compile(f).sub(r, copy);
+
+
+      for m in compile(variants).matches(data) {
+        count += 1;
+      }
+
+      writeln(variants, " ", count);
     }
 
-    // count patterns
-    forall (pattern, result) in zip(variants, results) do
-      for m in compile(pattern).matches(data) do
-        result += 1;
+    // perform replacements
+    for (f, r) in subst {
+      copy = compile(f).sub(r, copy);
+    }
   }
 
-  // print results
-  for (p,r) in zip(variants, results) do
-    writeln(p, " ", r);
   writeln();
-
   writeln(initLen);
   writeln(data.length);
   writeln(copy.length);
