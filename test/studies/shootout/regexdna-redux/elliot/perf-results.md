@@ -1,16 +1,15 @@
 Performance results for nearly identical serial re2-based C++ and Chapel codes.
-`C++ time` is using Chapel's version of re2, `sys C++ time` is using a system
-install. All results gathered on shootout-like box.
+All results gathered on shootout-like box:
 
-| step            | C++ time  | sys C++ time  | Chpl time | cp-clone Chpl time |
-| --------------- | --------- | ------------- | --------- | ------------------ |
-| init            |  0.11s    |  0.11s        |  1.48s    |  1.48s             |
-| rm newline      |  0.87s    |  0.75s        |  1.02s    |  0.92s             |
-| count variants  |  3.31s    |  2.80s        |  3.32s    |  2.87s             |
-| do replacements |  5.08s    |  4.89s        |  5.92s    |  5.57s             |
-|                 |           |               |           |                    |
-| above total     |  9.37s    |  8.55s        | 11.74s    | 10.84s             |
-| time -p total   |  9.42s    |  8.62s        | 11.82s    | 10.93s             |
+| step            | C++ time  | Chpl time |
+| --------------- | --------- | --------- |
+| init            |  0.11s    |  1.48s    |
+| rm newline      |  0.75s    |  0.92s    |
+| count variants  |  2.80s    |  2.87s    |
+| do replacements |  4.89s    |  5.57s    |
+|                 |           |           |
+| above total     |  8.55s    | 10.84s    |
+| time -p total   |  8.62s    | 10.93s    |
 
 C++ code is from the shootout site and was slightly modified to match chapel
 style for easier diffing, but code is identical. Timing from the site is 8.71s
@@ -42,6 +41,20 @@ code, but we had a pretty bad experience with gcc 7 in general, especially
 without that flag. I suggest we just wait for the next ubuntu/gcc upgrade.
 18.10 will be out in October and it is slated to have gcc 8.1:
 https://www.phoronix.com/scan.php?page=news_item&px=Ubuntu-18.10-Compiler-Tooling
+
+`C++ time` is using Chapel's version of re2, `sys C++ time` is using a system
+install and `cp-clone` (compiled w/o `-fno-ipa-cp-clone`) I see C++ perf on par
+with the sys and better chpl times.
+
+| step            | C++ time  | sys C++ time  | Chpl time | cp-clone Chpl time |
+| --------------- | --------- | ------------- | --------- | ------------------ |
+| init            |  0.11s    |  0.11s        |  1.48s    |  1.48s             |
+| rm newline      |  0.87s    |  0.75s        |  1.02s    |  0.92s             |
+| count variants  |  3.31s    |  2.80s        |  3.32s    |  2.87s             |
+| do replacements |  5.08s    |  4.89s        |  5.92s    |  5.57s             |
+|                 |           |               |           |                    |
+| above total     |  9.37s    |  8.55s        | 11.74s    | 10.84s             |
+| time -p total   |  9.42s    |  8.62s        | 11.82s    | 10.93s             |
 
 
 How to reproduce:
