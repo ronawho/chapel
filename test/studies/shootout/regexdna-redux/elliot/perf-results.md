@@ -2,15 +2,15 @@ Performance results for nearly identical serial re2-based C++ and Chapel codes.
 `C++ time` is using Chapel's version of re2, `sys C++ time` is using a system
 install. All results gathered on shootout-like box.
 
-| step            | C++ time  | sys C++ time  | Chpl time |
-| --------------- | --------- | ------------- | --------- |
-| init            |  0.11s    |  0.11s        |  1.48s    |
-| rm newline      |  0.87s    |  0.75s        |  1.02s    |
-| count variants  |  3.31s    |  2.80s        |  3.32s    |
-| do replacements |  5.08s    |  4.89s        |  5.92s    |
-|                 |           |               |           |
-| above total     |  9.37s    |  8.55s        | 11.74s    |
-| time -p total   |  9.42s    |  8.62s        | 11.82s    |
+| step            | C++ time  | sys C++ time  | Chpl time | cp-clone Chpl time |
+| --------------- | --------- | ------------- | --------- | ------------------ |
+| init            |  0.11s    |  0.11s        |  1.48s    |  1.48s             |
+| rm newline      |  0.87s    |  0.75s        |  1.02s    |  0.92s             |
+| count variants  |  3.31s    |  2.80s        |  3.32s    |  2.87s             |
+| do replacements |  5.08s    |  4.89s        |  5.92s    |  5.57s             |
+|                 |           |               |           |                    |
+| above total     |  9.37s    |  8.55s        | 11.74s    | 10.84s             |
+| time -p total   |  9.42s    |  8.62s        | 11.82s    | 10.93s             |
 
 C++ code is from the shootout site and was slightly modified to match chapel
 style for easier diffing, but code is identical. Timing from the site is 8.71s
@@ -30,7 +30,7 @@ doing copies instead of in-place replacement.
 Using our re2 also adds overhead. This is because of how we're building re2.
 Under gcc 7 we end up throwing `-fno-ipa-cp-clone`, which hurts re2
 performance. If I remove that I see better performance (C++ on par with sys
-version, and chpl down at 10.92s.) Note that `-fno-ipa-cp-clone` is only thrown
+version, and chpl down at 10.93s.) Note that `-fno-ipa-cp-clone` is only thrown
 for gcc 7. It was added in https://github.com/chapel-lang/chapel/pull/9481 to
 help avoid correctness issues we saw with gcc 7. We actually saw the regression
 on the shootout box, but it went in on May 8 when the shootout box was offline:
