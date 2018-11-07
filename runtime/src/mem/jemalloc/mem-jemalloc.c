@@ -194,7 +194,7 @@ static void initialize_arenas(void) {
     }
   }
 
-  // then set the current thread to use arena 0
+  // then set the current thread back to using arena 0
   arena = 0;
   if (CHPL_JE_MALLCTL("thread.arena", NULL, NULL, &arena, sizeof(arena)) != 0) {
       chpl_internal_error("could not change current thread's arena back to 0");
@@ -215,7 +215,7 @@ static void replaceExtentHooks(void) {
 
   // for each arena, change the extent hooks
   narenas = get_num_arenas();
-  for (arena=1; arena<narenas; arena++) {
+  for (arena=0; arena<narenas; arena++) {
     char path[128];
     snprintf(path, sizeof(path), "arena.%u.extent_hooks", arena);
     if (CHPL_JE_MALLCTL(path, NULL, NULL, &new_hooks, sizeof(extent_hooks_t*)) != 0) {
@@ -284,11 +284,11 @@ static void useUpMemNotInHeap(void) {
     size_t alloc_size;
     alloc_size = classes[class];
     do {
-      if ((p = chpl_malloc(alloc_size)) == NULL) {
+      if ((p = CHPL_JE_MALLOC(alloc_size)) == NULL) {
         chpl_internal_error("could not use up memory outside of shared heap");
       }
     } while (addressNotInHeap(p));
-    chpl_free(p);
+    CHPL_JE_FREE(p);
   }
 }
 
@@ -338,7 +338,7 @@ void chpl_mem_layerInit(void) {
     if ((p = CHPL_JE_MALLOC(1)) == NULL) {
       chpl_internal_error("cannot init heap: chpl_je_malloc() failed");
     }
-    chpl_free(p);
+    CHPL_JE_FREE(p);
   }
 }
 
