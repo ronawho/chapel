@@ -5,6 +5,12 @@
 
 #include "jemalloc/jemalloc.h"
 
+// Compile with:
+//
+// JE_INSTALL_DIR=$(./je_install_dir.py)
+// cc replace-hooks-test.c -I $JE_INSTALL_DIR/include -L $JE_INSTALL_DIR/lib -l jemalloc
+
+
 static extent_hooks_t *old_hooks;
 
 static void* extent_alloc(extent_hooks_t *extent_hooks, void *new_addr, size_t size, size_t alignment, bool *zero, bool *commit, unsigned arena_ind) {
