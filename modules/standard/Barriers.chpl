@@ -198,6 +198,8 @@ module Barriers {
 /* A task barrier implemented using atomics. Can be used as a simple barrier
    or as a split-phase barrier.
  */
+
+  use PrivateDist;
   pragma "no doc" class aBarrier: BarrierBaseType {
     /* If true the barrier can be used multiple times.  When using this as a
        split-phase barrier this causes :proc:`wait` to block until all tasks
@@ -212,6 +214,23 @@ module Barriers {
     var count: if procAtomics then chpl__processorAtomicType(int) else atomic int;
     pragma "no doc"
     var done: if procAtomics then chpl__processorAtomicType(bool) else atomic bool;
+
+    var doneArr: [PrivateSpace] chpl__processorAtomicType(bool);
+
+    inline proc doneWrite(val: bool) {
+      if CHPL_COMM == 'none' then
+        done.write(val);
+      else
+        forall done in doneArr do done.write(val);
+    }
+
+    inline proc doneWaitFor(val: bool) {
+      if CHPL_COMM == 'none' then
+        done.waitFor(val);
+      else
+        doneArr[here.id].waitFor(val);
+    }
+
 
     // Hack for AllLocalesBarrier
     pragma "no doc"
@@ -242,7 +261,7 @@ module Barriers {
       inline proc innerReset() {
         n = nTasks;
         count.write(n);
-        done.write(false);
+        doneWrite(false);
       }
       if procAtomics then on this do innerReset(); else innerReset();
     }
@@ -258,24 +277,25 @@ module Barriers {
             extern proc chpl_comm_barrier(msg: c_string);
             chpl_comm_barrier("local barrier call".localize().c_str());
           }
-          const alreadySet = done.testAndSet();
-          if boundsChecking && alreadySet {
-            HaltWrappers.boundsCheckHalt("Too many callers to barrier()");
-          }
+          doneWrite(true);
+
           if reusable {
-            count.waitFor(n-1);
+            if procAtomics then
+              count.waitFor(n-1);
+            else
+              while (count.read() != n-1) do chpl_task_yield();
             count.add(1);
-            done.clear();
+            doneWrite(false);
           }
         } else {
-          done.waitFor(true);
+          doneWaitFor(true);
           if reusable {
             count.add(1);
-            done.waitFor(false);
+            doneWaitFor(false);
           }
         }
       }
-      if procAtomics then on this do innerBarrier(); else innerBarrier();
+      innerBarrier();
     }
 
     /* Notify the barrier that this task has reached this point. */
