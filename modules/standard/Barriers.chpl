@@ -198,6 +198,13 @@ module Barriers {
 /* A task barrier implemented using atomics. Can be used as a simple barrier
    or as a split-phase barrier.
  */
+
+  proc aType(type T, param procAtomics: bool) type {
+    if procAtomics then return chpl__processorAtomicType(T);
+                   else return chpl__atomicType(T);
+  }
+
+  use BlockDist;
   pragma "no doc" class aBarrier: BarrierBaseType {
     /* If true the barrier can be used multiple times.  When using this as a
        split-phase barrier this causes :proc:`wait` to block until all tasks
@@ -209,9 +216,26 @@ module Barriers {
     pragma "no doc"
     param procAtomics = if CHPL_NETWORK_ATOMICS == "none" then true else false;
     pragma "no doc"
-    var count: if procAtomics then chpl__processorAtomicType(int) else atomic int;
-    pragma "no doc"
-    var done: if procAtomics then chpl__processorAtomicType(bool) else atomic bool;
+
+    var count: aType(int, procAtomics);
+    var done: aType(bool, procAtomics);
+
+    param doneArrProcAtomics = false;//procAtomics;
+    const BarrierSpace = LocaleSpace dmapped Block(LocaleSpace);
+
+    var doneArr: [BarrierSpace] aType(bool, doneArrProcAtomics);
+
+    inline proc setAllDoneArr(val: bool) {
+      use UnorderedAtomics;
+      if doneArrProcAtomics then
+        coforall loc in Locales do on loc do
+          doneArr.localAccess[here.id].write(val);
+      else {
+        for d in doneArr do d.unorderedWrite(val);
+        unorderedAtomicTaskFence();
+      }
+    }
+
 
     // Hack for AllLocalesBarrier
     pragma "no doc"
@@ -242,7 +266,7 @@ module Barriers {
       inline proc innerReset() {
         n = nTasks;
         count.write(n);
-        done.write(false);
+        setAllDoneArr(false);
       }
       if procAtomics then on this do innerReset(); else innerReset();
     }
@@ -258,24 +282,26 @@ module Barriers {
             extern proc chpl_comm_barrier(msg: c_string);
             chpl_comm_barrier("local barrier call".localize().c_str());
           }
-          const alreadySet = done.testAndSet();
-          if boundsChecking && alreadySet {
-            HaltWrappers.boundsCheckHalt("Too many callers to barrier()");
-          }
+          setAllDoneArr(true);
+
           if reusable {
-            count.waitFor(n-1);
+            if procAtomics then
+              count.waitFor(n-1);
+            else
+              while (count.read() != n-1) do chpl_task_yield();
             count.add(1);
-            done.clear();
+            setAllDoneArr(false);
           }
         } else {
-          done.waitFor(true);
+          ref A = doneArr.localAccess[here.id];
+          while (A.peek() != true) do chpl_task_yield();
           if reusable {
             count.add(1);
-            done.waitFor(false);
+            while (A.peek() != false) do chpl_task_yield();
           }
         }
       }
-      if procAtomics then on this do innerBarrier(); else innerBarrier();
+      innerBarrier();
     }
 
     /* Notify the barrier that this task has reached this point. */
