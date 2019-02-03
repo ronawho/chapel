@@ -40,6 +40,9 @@
 #define DECL_CHPL_COMM_ATOMIC_WRITE(type)                               \
   void chpl_comm_atomic_write_ ## type                                  \
          (void* desired, c_nodeid_t node, void* object,                 \
+          int ln, int32_t fn);                                          \
+  void chpl_comm_atomic_write_unordered_ ## type                        \
+         (void* desired, c_nodeid_t node, void* object,                 \
           int ln, int32_t fn);
 
 DECL_CHPL_COMM_ATOMIC_WRITE(int32)
