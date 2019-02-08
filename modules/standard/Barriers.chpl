@@ -267,16 +267,16 @@ module Barriers {
 
         const myc = count.fetchSub(1);
         if myc<=1 {
-          var localizedWaiters:[0..n-1] unmanaged waiter;
-          localizedWaiters =  waiters;
 
-          for waiter in localizedWaiters do waiter.done.writeBuff(true);
+          on waiters do {
+          for waiter in waiters do waiter.done.writeBuff(true);
           chpl_comm_atomic_unordered_task_fence();
           if reusable {
             while (count.read() != n-1) do chpl_task_yield();
             count.add(1);
-            for waiter in localizedWaiters do waiter.done.writeBuff(false);
+            for waiter in waiters do waiter.done.writeBuff(false);
             chpl_comm_atomic_unordered_task_fence();
+          }
           }
         } else {
           ref done = myWaiter.done;
