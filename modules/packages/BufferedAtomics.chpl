@@ -85,6 +85,19 @@ module BufferedAtomics {
     if isReal(T) then return "chpl_comm_atomic_" + s + "_real" + numBits(T):string;
   }
 
+  /* Buffered atomic write. */
+  inline proc AtomicBool.writeBuff(value:bool): void {
+    this.write(value);
+  }
+  pragma "no doc"
+  inline proc RAtomicBool.writeBuff(value:bool): void {
+    pragma "insert line file info" extern externFunc("write_unordered", int(64))
+      proc atomic_write_unordered(ref desired:int(64), l:int(32), obj:c_void_ptr): void;
+
+    var v = value:int(64);
+    atomic_write_unordered(v, _localeid(), _addr());
+  }
+
   /* Buffered atomic add. */
   inline proc AtomicT.addBuff(value:T): void {
     this.add(value);

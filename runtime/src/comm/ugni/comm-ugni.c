@@ -1506,6 +1506,11 @@ static void      amo_res_free(fork_amo_data_t*);
 static void      consume_all_outstanding_cq_events(int);
 static void      do_remote_put(void*, c_nodeid_t, void*, size_t,
                                mem_region_t*, drpg_may_proxy_t);
+static void      remote_put_buff_init(void);
+static void      remote_put_buff_flush(void);
+static void      remote_put_buff_task_flush(void);
+static void      do_remote_put_buff(void*, c_nodeid_t, void*, size_t,
+                                    mem_region_t*, drpg_may_proxy_t);
 static void      do_remote_put_V(int, void**, c_nodeid_t*, void**, size_t*,
                                  mem_region_t**, drpg_may_proxy_t);
 static void      do_remote_get(void*, c_nodeid_t, void*, size_t,
@@ -2084,6 +2089,7 @@ void chpl_comm_post_task_init(void)
   amo_res_init();
   nic_amo_buff_init();
   remote_get_buff_init();
+  remote_put_buff_init();
 
   //
   // Create all the communication domains, including their GNI NIC
@@ -5630,6 +5636,180 @@ void chpl_comm_get(void* addr, c_nodeid_t locale, void* raddr,
 
 
 /*
+ *** START OF BUFFERED PUT OPERATIONS ***
+ *
+ * Support for buffered PUT operations. We internally buffer PUT operations and
+ * then initiate them with chained transactions for increased transaction rate.
+ */
+
+// Per thread information about PUT buffers
+typedef struct put_buff_thread_info_t {
+  int                            vi;
+  spinlock                       lock;
+  chpl_bool                      inited;
+  void*                          src_addr_v[MAX_CHAINED_PUT_LEN];
+  c_nodeid_t                     locale_v[MAX_CHAINED_PUT_LEN];
+  void*                          tgt_addr_v[MAX_CHAINED_PUT_LEN];
+  size_t                         size_v[MAX_CHAINED_PUT_LEN];
+  mem_region_t*                  remote_mr_v[MAX_CHAINED_PUT_LEN];
+  struct put_buff_thread_info_t* next;
+} put_buff_thread_info_t;
+
+// Contains linked list of all thread private PUT buffer infos (so we can flush
+// all of them) and a lock to protect access to the list
+typedef struct {
+  put_buff_thread_info_t* list;
+  rwlock                  lock;
+  pthread_key_t           destructor_key;
+} put_buff_global_info_t;
+
+static __thread put_buff_thread_info_t put_buff_thread_info;
+
+static put_buff_global_info_t put_buff_global_info;
+
+// Flush buffered PUT operations for the specified thread and reset the
+// counter. Should be called with info lock acquired
+static
+inline
+void put_buff_thread_info_flush(put_buff_thread_info_t* info) {
+  if (info->vi > 0) {
+    do_remote_put_V(info->vi, info->src_addr_v, info->locale_v,
+                    info->tgt_addr_v, info->size_v,
+                    info->remote_mr_v, may_proxy_true);
+    info->vi = 0;
+  }
+}
+
+static
+void put_buff_thread_info_init(put_buff_thread_info_t* info) {
+  rwlock_writer_lock(&put_buff_global_info.lock);
+  // need to recheck now that we have to lock
+  if (!info->inited) {
+    spinlock_init(&info->lock);
+    info->vi = 0;
+
+    // add thread to linked list
+    info->next = put_buff_global_info.list;
+    put_buff_global_info.list = info;
+
+    // dummy key binding needed so key destructor is called
+    pthread_setspecific(put_buff_global_info.destructor_key, info);
+
+    info->inited = true;
+  }
+  rwlock_unlock(&put_buff_global_info.lock);
+}
+
+static
+void put_buff_thread_info_destroy(void* p) {
+  put_buff_thread_info_t* info = &put_buff_thread_info;
+
+  // remove the thread from the linked list
+  rwlock_writer_lock(&put_buff_global_info.lock);
+  put_buff_thread_info_t* global_info = put_buff_global_info.list;
+  if (info == global_info) {
+    put_buff_global_info.list = info->next;
+  } else {
+    while (global_info != NULL) {
+      if (info == global_info->next) {
+        global_info->next = info->next;
+        break;
+      }
+      global_info = global_info->next;
+    }
+  }
+  rwlock_unlock(&put_buff_global_info.lock);
+
+  // flush any pending ops
+  spinlock_lock(&info->lock);
+  put_buff_thread_info_flush(info);
+  spinlock_unlock(&info->lock);
+  spinlock_destroy(&info->lock);
+}
+
+static
+void remote_put_buff_init(void) {
+  put_buff_global_info.list = NULL;
+  rwlock_init(&put_buff_global_info.lock);
+  pthread_key_create(&put_buff_global_info.destructor_key, put_buff_thread_info_destroy);
+}
+
+// Flush buffered PUT operations for all threads
+static
+inline
+void remote_put_buff_flush(void) {
+  put_buff_thread_info_t* info;
+
+  rwlock_reader_lock(&put_buff_global_info.lock);
+  info = put_buff_global_info.list;
+  while (info != NULL) {
+    spinlock_lock(&info->lock);
+    put_buff_thread_info_flush(info);
+    spinlock_unlock(&info->lock);
+    info = info->next;
+  }
+  rwlock_unlock(&put_buff_global_info.lock);
+}
+
+static
+inline
+void remote_put_buff_task_flush(void) {
+  if (chpl_task_canMigrateThreads()) {
+    remote_put_buff_flush();
+  } else {
+    put_buff_thread_info_t* info = &put_buff_thread_info;
+    // Safe to check inited/vi outside the lock because no other thread can be
+    // modifying them, but concurrent flushing from other threads is possible.
+    if (info->inited && info->vi > 0) {
+      spinlock_lock(&info->lock);
+      put_buff_thread_info_flush(info);
+      spinlock_unlock(&info->lock);
+    }
+  }
+}
+
+static
+inline
+void do_remote_put_buff(void* src_addr, c_nodeid_t locale, void* tgt_addr,
+                        size_t size, mem_region_t* remote_mr, 
+                        drpg_may_proxy_t may_proxy) {
+
+//TODO 
+//  DBG_P_LP(DBGF_GETPUT, "DoRemBuffGet %p <- %d:%p (%#zx), proxy %c",
+//           tgt_addr, (int) locale, src_addr, size, may_proxy ? 'y' : 'n');
+
+  if (remote_mr == NULL)
+    remote_mr = mreg_for_remote_addr(tgt_addr, locale);
+
+  put_buff_thread_info_t* info = &put_buff_thread_info;
+
+  if (!info->inited) {
+    put_buff_thread_info_init(info);
+  }
+
+  // grab lock for this thread
+  spinlock_lock(&info->lock);
+
+  int vi = info->vi;
+  info->src_addr_v[vi] = src_addr;
+  info->locale_v[vi] = locale;
+  info->tgt_addr_v[vi] = tgt_addr;
+  info->size_v[vi] = size;
+  info->remote_mr_v[vi] = remote_mr;
+  info->vi++;
+
+  // flush if buffers are full
+  if (info->vi == MAX_CHAINED_PUT_LEN) {
+    put_buff_thread_info_flush(info);
+  }
+
+  // release lock for this thread
+  spinlock_unlock(&info->lock);
+}
+/*** END OF BUFFERED PUT OPERATIONS ***/
+
+
+/*
  *** START OF BUFFERED GET OPERATIONS ***
  *
  * Support for buffered GET operations. We internally buffer GET operations and
@@ -6494,6 +6674,47 @@ int chpl_comm_addr_gettable(c_nodeid_t node, void* start, size_t len)
             do_remote_put(val, loc, obj, sizeof(_t), remote_mr,         \
                           may_proxy_false);                             \
           }                                                             \
+        }                                                               \
+        void chpl_comm_atomic_write_unordered_##_f(void* val,           \
+                                       int32_t loc,                     \
+                                       void* obj,                       \
+                                       int ln, int32_t fn)              \
+        {                                                               \
+          mem_region_t* remote_mr;                                      \
+          DBG_P_LP(DBGF_IFACE|DBGF_AMO,                                 \
+                   "IFACE chpl_comm_atomic_write_uo_"#_f"(%p, %d, %p)", \
+                   val, (int) loc, obj);                                \
+                                                                        \
+          if (chpl_numNodes == 1) {                                     \
+            atomic_store_##_t((atomic_##_t*) obj, *(_t*) val);          \
+            return;                                                     \
+          }                                                             \
+                                                                        \
+          if (IS_32_BIT_AMO_ON_GEMINI(_t)                               \
+              || (remote_mr = mreg_for_remote_addr(obj, loc)) == NULL) {\
+            if (loc == chpl_nodeID)                                     \
+              (void) do_amo_on_cpu(_c, NULL, obj, val, NULL);           \
+            else                                                        \
+              do_fork_amo_##_c##_##_f(obj, NULL, val, NULL, loc);       \
+          }                                                             \
+          else if (nic_type == GNI_DEVICE_GEMINI) {                     \
+            /*                                                          \
+            ** Gemini PUT and AMO are not coherent (Bug 760752) when    \
+            ** the memory segment has GNI_MEM_RELAXED_PI_ORDERING, as   \
+            ** ours does.  Therefore, emulate the PUT using a FAX AMO.  \
+            ** We don't actually need the result and indeed ignore it,  \
+            ** but the corresponding non-fetching AX is broken in       \
+            ** hardware and disabled in ugni.                           \
+            */                                                          \
+            int64_t res;                                                \
+            int64_t mask = 0;                                           \
+            do_nic_amo(&mask, val, loc, obj, sizeof(_t),                \
+                       GNI_FMA_ATOMIC_FAX, &res, remote_mr);            \
+          }                                                             \
+          else {                                                        \
+            do_remote_put_buff(val, loc, obj, sizeof(_t), remote_mr,    \
+                          may_proxy_false);                             \
+          }                                                             \
         }
 
 DEFINE_CHPL_COMM_ATOMIC_WRITE(int32, put_32, int_least32_t)
@@ -6987,10 +7208,12 @@ DEFINE_CHPL_COMM_ATOMIC_SUB(real64, double, NEGATE_U_OR_R)
 
 void chpl_comm_atomic_unordered_fence(void) {
   nic_amo_nf_buff_flush();
+  remote_put_buff_flush();
 }
 
 void chpl_comm_atomic_unordered_task_fence(void) {
   nic_amo_nf_buff_task_flush();
+  remote_put_buff_task_flush();
 }
 
 static

@@ -199,6 +199,8 @@ module Barriers {
     var done: atomic bool;
   }
 
+  extern proc chpl_comm_atomic_unordered_task_fence();
+  use BufferedAtomics;
 /* A task barrier implemented using atomics. Can be used as a simple barrier
    or as a split-phase barrier.
  */
@@ -262,29 +264,26 @@ module Barriers {
         const myId = id.fetchAdd(1) % n;
         var myWaiter = new unmanaged waiter();
         waiters[myId] = myWaiter;
+
         const myc = count.fetchSub(1);
         if myc<=1 {
-          if hackIntoCommBarrier {
-            extern proc chpl_comm_barrier(msg: c_string);
-            chpl_comm_barrier("local barrier call".localize().c_str());
-          }
-          const localizedWaiters = waiters;
+          var localizedWaiters:[0..n-1] unmanaged waiter;
+          localizedWaiters =  waiters;
 
-          //for waiter in localizedWaiters do waiter.done.write(true);
-          done.write(true);
+          for waiter in localizedWaiters do waiter.done.writeBuff(true);
+          chpl_comm_atomic_unordered_task_fence();
           if reusable {
             while (count.read() != n-1) do chpl_task_yield();
             count.add(1);
-            //for waiter in localizedWaiters do waiter.done.clear();
-            done.clear();
+            for waiter in localizedWaiters do waiter.done.writeBuff(false);
+            chpl_comm_atomic_unordered_task_fence();
           }
         } else {
-          //while (myWaiter.done.peek() != true) do chpl_task_yield();
-          while (done.read() != true) do chpl_task_yield();
+          ref done = myWaiter.done;
+          local do while (done.peek() != true) do chpl_task_yield();
           if reusable {
             count.add(1);
-            //while (myWaiter.done.peek() != false) do chpl_task_yield();
-            while (done.read() != false) do chpl_task_yield();
+            local do while (done.peek() != false) do chpl_task_yield();
           }
         }
         delete myWaiter;
