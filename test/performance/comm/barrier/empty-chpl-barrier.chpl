@@ -34,7 +34,7 @@ proc main() {
 }
 
 proc LocalBarrierBarrier() {
-  var barrier = new Barrier(numTasks, BarrierType.Atomic);
+  var barrier = new owned aBarrier(numTasks, reusable=true);
   coforall loc in Locales do on loc do
     coforall 1..numTasksPerLocale do
       for 1..numTrials do

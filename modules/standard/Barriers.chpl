@@ -195,6 +195,10 @@ module Barriers {
     }
   }
 
+  class waiter {
+    var done: atomic bool;
+  }
+
 /* A task barrier implemented using atomics. Can be used as a simple barrier
    or as a split-phase barrier.
  */
@@ -210,8 +214,10 @@ module Barriers {
     param procAtomics = if CHPL_NETWORK_ATOMICS == "none" then true else false;
     pragma "no doc"
     var count: if procAtomics then chpl__processorAtomicType(int) else atomic int;
+    var id: if procAtomics then chpl__processorAtomicType(int) else atomic int;
     pragma "no doc"
     var done: if procAtomics then chpl__processorAtomicType(bool) else atomic bool;
+    var waiters: [0..n-1] unmanaged waiter;
 
     // Hack for AllLocalesBarrier
     pragma "no doc"
@@ -223,6 +229,7 @@ module Barriers {
      */
     proc init(n: int, param reusable: bool) {
       this.reusable = reusable;
+      this.n = n;
       this.complete();
       reset(n);
     }
@@ -252,28 +259,35 @@ module Barriers {
      */
     /* inline */ override proc barrier() {
       inline proc innerBarrier() {
+        const myId = id.fetchAdd(1) % n;
+        var myWaiter = new unmanaged waiter();
+        waiters[myId] = myWaiter;
         const myc = count.fetchSub(1);
         if myc<=1 {
           if hackIntoCommBarrier {
             extern proc chpl_comm_barrier(msg: c_string);
             chpl_comm_barrier("local barrier call".localize().c_str());
           }
-          const alreadySet = done.testAndSet();
-          if boundsChecking && alreadySet {
-            HaltWrappers.boundsCheckHalt("Too many callers to barrier()");
-          }
+          const localizedWaiters = waiters;
+
+          //for waiter in localizedWaiters do waiter.done.write(true);
+          done.write(true);
           if reusable {
-            count.waitFor(n-1);
+            while (count.read() != n-1) do chpl_task_yield();
             count.add(1);
+            //for waiter in localizedWaiters do waiter.done.clear();
             done.clear();
           }
         } else {
-          done.waitFor(true);
+          //while (myWaiter.done.peek() != true) do chpl_task_yield();
+          while (done.read() != true) do chpl_task_yield();
           if reusable {
             count.add(1);
-            done.waitFor(false);
+            //while (myWaiter.done.peek() != false) do chpl_task_yield();
+            while (done.read() != false) do chpl_task_yield();
           }
         }
+        delete myWaiter;
       }
       if procAtomics then on this do innerBarrier(); else innerBarrier();
     }
