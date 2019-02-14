@@ -70,10 +70,10 @@ module AllLocalesBarriers {
   class AllLocalesBarrier: BarrierBaseType {
 
     const BarrierSpace = LocaleSpace dmapped Block(LocaleSpace);
-    var globalBarrier: [BarrierSpace] unmanaged aBarrier(reusable=true, procAtomics=true, hackIntoCommBarrier=true);
+    var globalBarrier: [BarrierSpace] unmanaged LocalAtomicBarrier();
 
     proc init(numTasksPerLocale: int) {
-      globalBarrier = [b in BarrierSpace] new unmanaged aBarrier(numTasksPerLocale, reusable=true, procAtomics=true, hackIntoCommBarrier=true);
+      globalBarrier = [b in BarrierSpace] new unmanaged LocalAtomicBarrier(numTasksPerLocale);
     }
 
     proc deinit() {
@@ -86,6 +86,45 @@ module AllLocalesBarriers {
 
     proc reset(numTasksPerLocale: int) {
       [b in globalBarrier] b.reset(numTasksPerLocale);
+    }
+  }
+
+  private inline proc commBarrier() {
+    extern proc chpl_comm_barrier(msg: c_string);
+    chpl_comm_barrier(c"local barrier call");
+  }
+
+  pragma "no doc"
+  class LocalAtomicBarrier {
+    var n: int;
+    var count: chpl__processorAtomicType(int);
+    var done: chpl__processorAtomicType(bool);
+
+    proc init (n: int) {
+      this.n = n;
+      this.complete();
+      this.count.write(n);
+    }
+
+    inline proc reset(n: int) {
+      this.n = n;
+      this.count.write(n);
+    }
+
+    inline proc barrier() {
+      const myc = count.fetchSub(1);
+      if myc <= 1 {
+        commBarrier();
+
+        done.write(true);
+        count.waitFor(n-1);
+        count.add(1);
+        done.clear();
+      } else {
+        done.waitFor(true);
+        count.add(1);
+        done.waitFor(false);
+      }
     }
   }
 
