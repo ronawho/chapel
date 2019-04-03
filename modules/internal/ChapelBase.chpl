@@ -30,6 +30,9 @@ module ChapelBase {
   // Is the cache for remote data enabled at compile time?
   config param CHPL_CACHE_REMOTE: bool = false;
 
+  pragma "no doc"
+  config param useNativeSyncVar = true;
+
   config param warnMaximalRange = false;    // Warns if integer rollover will cause
                                             // the iterator to yield zero times.
   proc _throwOpError(param op: string) {
@@ -1059,6 +1062,8 @@ module ChapelBase {
     type iType;
     type taskType;
     var i: iType;
+    var s: sync bool;
+    var sA: chpl__processorAtomicType(bool);
     var taskCnt: taskType;
     proc init(type iType, type taskType) {
       this.iType = iType;
@@ -1155,7 +1160,20 @@ module ChapelBase {
     chpl_save_task_error(e, err);
     chpl_comm_task_end();
     // inform anybody waiting that we're done
-    e.i.sub(1, memory_order_release);
+    // TODO need to special cose downEndCount used for boundedcoforalls
+
+    if (e.iType == chpl__processorAtomicType(int)) {
+      var c = e.i.fetchSub(1, memory_order_release);
+      if c == 1 then
+        e.s.writeXF(true);
+    }
+    else {
+      e.i.sub(1, memory_order_release);
+      if here.id == 0 && !e.sA.testAndSet() then {
+        //chpl_debug_writeln("Waking");
+        e.s.writeXF(true);
+      }
+    }
   }
 
   // This function is called once by the initiating task.  As above, no
@@ -1199,7 +1217,19 @@ module ChapelBase {
     chpl_taskListExecute(e.taskList);
 
     // Wait for all tasks to finish
-    e.i.waitFor(0, memory_order_acquire);
+    if (e.i.read() != 0) {
+      chpl_task_yield();
+      if (e.i.read() != 0) {
+        e.s.readFF();
+      }
+    }
+
+    if (e.iType != chpl__processorAtomicType(int)) {
+      while e.i.read() != 0 {
+        chpl_task_yield();
+        local do while e.i.peek() != 0 do chpl_task_yield();
+      }
+    }
 
     if countRunningTasks {
       here.runningTaskCntSub(numTasks:int-1);

@@ -81,9 +81,6 @@ module ChapelSyncvar {
       compilerError("sync/single types cannot be of type '", t : string, "'");
   }
 
-  pragma "no doc"
-  config param useNativeSyncVar = true;
-
   // use native sync vars if they're enabled and supported for the valType
   private proc getSyncClassType(type valType) type {
     if useNativeSyncVar && supportsNativeSyncVar(valType) {
