@@ -1061,6 +1061,7 @@ typedef struct {
 
 typedef struct {
   fork_base_info_t b;
+  chpl_bool dirty_exit;
 } fork_shutdown_info_t;
 
 typedef struct {
@@ -1438,6 +1439,7 @@ static barrier_info_t* parent_bar_info;
 //
 static volatile chpl_bool polling_task_running     = false;
 static volatile chpl_bool polling_task_please_exit = false;
+static volatile chpl_bool dirty_exit               = false;
 static volatile chpl_bool polling_task_done        = false;
 
 static chpl_bool polling_task_blocking_cq;
@@ -1562,7 +1564,7 @@ static void      fork_put(void*, c_nodeid_t, void*, size_t);
 static void      fork_get(void*, c_nodeid_t, void*, size_t);
 static void      fork_free(c_nodeid_t, void*);
 static void      fork_amo(fork_t*, c_nodeid_t);
-static void      fork_shutdown(c_nodeid_t);
+static void      fork_shutdown(c_nodeid_t, chpl_bool);
 static void      do_fork_post(c_nodeid_t, chpl_bool,
                               uint64_t, fork_base_info_t* const, int*, int*);
 static void      acquire_comm_dom(void);
@@ -3835,7 +3837,7 @@ void chpl_comm_pre_task_exit(int all)
       int i;
       for (i = 0; i < chpl_numNodes; i++) {
         if (i != chpl_nodeID) {
-          fork_shutdown(i);
+          fork_shutdown(i, false);
         }
       }
     } else {
@@ -3846,6 +3848,7 @@ void chpl_comm_pre_task_exit(int all)
       pthread_mutex_unlock(&shutdown_mutex);
     }
 
+    if (!dirty_exit) {
     chpl_comm_barrier("chpl_comm_pre_task_exit");
 
     polling_task_please_exit = true;
@@ -3854,6 +3857,12 @@ void chpl_comm_pre_task_exit(int all)
       while (!polling_task_done)
         sched_yield();
     }
+    }
+  } else {
+      int i;
+      for (i = 0; i < chpl_numNodes; i++) {
+        fork_shutdown(i, true);
+      }
   }
 
   //
@@ -4105,6 +4114,12 @@ void rf_handler(gni_cq_entry_t* ev)
              (int) req_li, sprintf_rf_req(-1, f));
 
     {
+      chpl_bool my_dirty_exit = f->s.dirty_exit;
+      if (my_dirty_exit) {
+        polling_task_please_exit = true;
+        dirty_exit = true;
+      }
+
       release_req_buf(req_li, req_cdi, req_rbi);
       pthread_mutex_lock(&shutdown_mutex);
       can_shutdown = true;
@@ -7769,11 +7784,11 @@ void fork_amo(fork_t* p_rf_req, c_nodeid_t locale)
 }
 
 static
-void fork_shutdown(c_nodeid_t locale)
+void fork_shutdown(c_nodeid_t locale, chpl_bool dirty_exit)
 {
   fork_base_info_t hdr = { .op = fork_op_shutdown };
 
-  fork_shutdown_info_t req = { .b = hdr };
+  fork_shutdown_info_t req = { .b = hdr, .dirty_exit = dirty_exit };
 
   if (locale < 0 || locale >= chpl_numNodes)
     CHPL_INTERNAL_ERROR("fork_shutdown(): remote locale out of range");
