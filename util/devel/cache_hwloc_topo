@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+
+CWD=$(cd $(dirname ${BASH_SOURCE[0]}) ; pwd)
+
+xml_file=$(${CWD}/gen_hwloc_topo.py)
+export HWLOC_XMLFILE=$xml_file
+export HWLOC_THISSYSTEM=1
