@@ -1895,6 +1895,8 @@ static void gasneti_odp_init(void) {
       memset(&in, 0, sizeof(in));
       in.pd = hca->pd;
       in.exp_access = (enum ibv_exp_access_flags)( IBV_EXP_ACCESS_ON_DEMAND |
+                                                   IBV_EXP_ACCESS_REMOTE_READ |
+                                                   IBV_EXP_ACCESS_REMOTE_WRITE |
                                                    IBV_EXP_ACCESS_LOCAL_WRITE );
       in.length = IBV_EXP_IMPLICIT_MR_SIZE;
       hca->implicit_odp.handle = ibv_exp_reg_mr(&in);
@@ -2771,7 +2773,6 @@ static int gasnetc_attach_segment(gex_Segment_t                 *segment_p,
 
     /* pin the segment and exchange the RKeys, once per HCA */
     { uint32_t	*my_rkeys;
-      gasnetc_memreg_t  memreg;
       int		vstat;
       int		j;
 
@@ -2784,25 +2785,15 @@ static int gasnetc_attach_segment(gex_Segment_t                 *segment_p,
         hca->seg_lkeys = gasneti_malloc_aligned(GASNETI_CACHE_LINE_BYTES,
                                                 gasnetc_max_regs * sizeof(uint32_t));
         gasneti_leak_aligned(hca->seg_lkeys);
-      #if GASNETC_IBV_SHUTDOWN
-        hca->seg_regs = gasneti_calloc(gasnetc_seg_regs, sizeof(gasnetc_memreg_t));
-        gasneti_leak(hca->seg_regs);
-      #endif
 
         for (j = 0, addr = gasnetc_seg_start, remain = segsize; remain != 0; ++j) {
 	  size_t len = (gasnetc_max_regs == 1) ? remain : MIN(remain, gasnetc_pin_maxsz);
-          if (0 != gasnetc_pin(hca, (void *)addr, len, gasneti_seg_access_flags, &memreg)) {
-             gasneti_segreg_failed(len, "", errno);
-          }
-	  my_rkeys[j] = memreg.handle->rkey;
-	  hca->seg_lkeys[j] = memreg.handle->lkey;
+          // Instead of memory registration, just use the "Implicit ODP" registation
+          my_rkeys[j] = hca->implicit_odp.handle->rkey;
+          hca->seg_lkeys[j] = hca->implicit_odp.handle->lkey;
 	  addr += len;
 	  remain -= len;
           gasneti_assert(j <= gasnetc_max_regs);
-        #if GASNETC_IBV_SHUTDOWN
-          gasneti_assert(j <= gasnetc_seg_regs);
-          hca->seg_regs[j] = memreg;
-        #endif
         }
         GASNETI_TRACE_PRINTF(I, ("Attach registered %p bytes in %d regions",
                                  (void*)segsize, (int)gasnetc_max_regs));
@@ -3049,13 +3040,6 @@ gasnetc_shutdown(void) {
   }
 
   GASNETC_FOR_ALL_HCA(hca) {
-  #if GASNETC_PIN_SEGMENT
-    if (hca->seg_regs) {
-      for (i=0; i<gasnetc_seg_regs; ++i) {
-        gasnetc_unpin(hca, &hca->seg_regs[i]);
-      }
-    }
-  #endif
   #if GASNETC_IBV_ODP
     if (gasnetc_use_odp) {
       gasnetc_odp_dereg(hca);
