@@ -1634,6 +1634,8 @@ static void gasneti_odp_init(void) {
     GASNETC_FOR_ALL_HCA(hca) {
     #if GASNETC_IBV_ODP_CORE
       unsigned int access_flags = (unsigned int)IBV_ACCESS_ON_DEMAND |
+                                  (unsigned int)IBV_ACCESS_REMOTE_READ |
+                                  (unsigned int)IBV_ACCESS_REMOTE_WRITE |
                                   (unsigned int)IBV_ACCESS_LOCAL_WRITE;
       hca->implicit_odp.handle = ibv_reg_mr(hca->pd, 0, SIZE_MAX, access_flags);
     #else
@@ -1641,6 +1643,8 @@ static void gasneti_odp_init(void) {
       memset(&in, 0, sizeof(in));
       in.pd = hca->pd;
       in.exp_access = (enum ibv_exp_access_flags)( IBV_EXP_ACCESS_ON_DEMAND |
+                                                   IBV_EXP_ACCESS_REMOTE_READ |
+                                                   IBV_EXP_ACCESS_REMOTE_WRITE |
                                                    IBV_EXP_ACCESS_LOCAL_WRITE );
       in.length = IBV_EXP_IMPLICIT_MR_SIZE;
       hca->implicit_odp.handle = ibv_exp_reg_mr(&in);
@@ -2473,33 +2477,12 @@ static int gasnetc_segment_register(gasnetc_Segment_t segment, int is_attach)
 
     gasnetc_hca_t *hca;
     GASNETC_FOR_ALL_HCA(hca) {
-      // Register page-aligned bounding-box (since client-provided need not be aligned).
-      gasnetc_memreg_t memreg;
-      uintptr_t lb = GASNETI_PAGE_ALIGNDOWN(segment->_addr);
-      uintptr_t ub = GASNETI_PAGE_ALIGNUP(segment->_ub);
-      uintptr_t bb_size = ub - lb;
-      int rc = gasnetc_pin(hca, (void*)lb, bb_size, gasneti_seg_access_flags, &memreg);
-
-      if (rc) {
-        if (gasneti_VerboseErrors) {
-          gex_MK_Class_t mk_class = (segment->_kind == GEX_MK_HOST)
-                                  ? GEX_MK_CLASS_HOST
-                                  : gex_MK_QueryClass(segment->_kind);
-          enum gasnetc_segreg which = is_attach ? gasnetc_segreg_attach : gasnetc_segreg_create;
-          gasneti_console_message("WARNING", "%s", gasnetc_segreg_failed(segment->_size, which, errno, mk_class));
-        }
-      #if (GASNETC_IB_MAX_HCAS > 1)
-        for (int i = 0; i < hca->hca_index; ++i) {
-          gasnetc_unpin(gasnetc_hca+i, segment->seg_reg+i);
-        }
-      #endif
-        // TODO: can we do better sorting out failure modes?
-        return GASNET_ERR_RESOURCE;
-      }
       GASNETI_TRACE_PRINTF(I, ("Registered %"PRIuPTR" byte segment on HCA %d", segment->_size, hca->hca_index));
 
-      segment->seg_lkey[hca->hca_index] = memreg.handle->lkey;
-      segment->seg_reg[hca->hca_index] = memreg;
+      segment->seg_lkey[hca->hca_index] = hca->implicit_odp.handle->lkey;
+      segment->seg_reg[hca->hca_index].handle = hca->implicit_odp.handle;
+      segment->seg_reg[hca->hca_index].addr = (uintptr_t)segment->_addr;
+      segment->seg_reg[hca->hca_index].len = segment->_size;
     }
 #endif
 
@@ -2510,11 +2493,6 @@ static int gasnetc_segment_deregister(gasnetc_Segment_t segment)
 {
 #if GASNETC_PIN_SEGMENT
   GASNETI_TRACE_PRINTF(C,("Deregistering segment [%p, %p)", segment->_addr, segment->_ub));
-
-  int h;
-  GASNETC_FOR_ALL_HCA_INDEX(h) {
-    gasnetc_unpin(gasnetc_hca+h, segment->seg_reg+h);
-  }
 #endif
   return GASNET_OK;
 }
@@ -2794,15 +2772,6 @@ gasnetc_shutdown(void) {
   if (rc != GASNET_OK) {
     gasneti_fatalerror("gasnetc_sndrcv_shutdown() failed");
   }
-
-  #if GASNETC_PIN_SEGMENT
-    GASNETI_SEGTBL_LOCK();
-      gasneti_Segment_t seg;
-      GASNETI_SEGTBL_FOR_EACH(seg) {
-        gasnetc_segment_deregister((gasnetc_Segment_t)seg);
-      }
-    GASNETI_SEGTBL_UNLOCK();
-  #endif
 
   GASNETC_FOR_ALL_HCA(hca) {
   #if GASNETC_IBV_ODP
