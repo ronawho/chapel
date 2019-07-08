@@ -42,6 +42,11 @@ extern c_nodeid_t chpl_nodeID; // unique ID for each node: 0, 1, 2, ...
 // (hopefully) unique to the running image, and never changed again.
 extern int32_t chpl_numNodes; // number of nodes
 
+#include "chpl-comm-diags.h"
+#include "chpl-comm-callbacks.h"
+#include "chpl-comm-callbacks-internal.h"
+#include "chpl-linefile-support.h"
+
 size_t chpl_comm_getenvMaxHeapSize(void);
 
 
@@ -394,9 +399,41 @@ void chpl_comm_exit(int all, int status);
 //   address is arbitrary
 //   size and locale are part of p
 //
-void  chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
-                    size_t size, int32_t typeIndex,
-                    int32_t commID, int ln, int32_t fn);
+
+void chpl_comm_impl_put(void* addr, c_nodeid_t node, void* raddr,
+                        size_t size, int32_t typeIndex,
+                        int32_t commID, int ln, int32_t fn);
+
+static inline
+void chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
+                   size_t size, int32_t typeIndex,
+                   int32_t commID, int ln, int32_t fn) {
+  
+  assert(addr != NULL);
+  assert(raddr != NULL);
+  assert(node >= 0 && node < chpl_numNodes);
+
+  if (size == 0) return;
+
+  if (chpl_nodeID == node) {
+    memmove(raddr, addr, size);
+    return;
+  }
+
+  // Communications callback support
+  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put)) {
+      chpl_comm_cb_info_t cb_data =
+        {chpl_comm_cb_event_kind_put, chpl_nodeID, node,
+         .iu.comm={addr, raddr, size, typeIndex, commID, ln, fn}};
+      chpl_comm_do_callbacks (&cb_data);
+  }
+
+  // Comm diags support
+  chpl_comm_diags_verbose_rdma("put", node, size, ln, fn);
+  chpl_comm_diags_incr(put);
+
+  chpl_comm_impl_put(addr, node, raddr, size, typeIndex, commID, ln, fn);
+}
 
 //
 // get 'size' bytes of remote data at 'raddr' on locale 'locale' to
