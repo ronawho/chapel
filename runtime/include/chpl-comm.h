@@ -30,6 +30,9 @@
 #include "chpl-comm-task-decls.h"
 #include "chpl-comm-locales.h"
 #include "chpl-mem-desc.h"
+#include "chpl-comm-diags.h"
+#include "chpl-comm-callbacks.h"
+#include "chpl-comm-callbacks-internal.h"
 
 //
 // Shared interface (implemented in chpl-comm.c)
@@ -41,11 +44,6 @@ extern c_nodeid_t chpl_nodeID; // unique ID for each node: 0, 1, 2, ...
 // Note also that this value is set only in chpl_comm_init to a value which is
 // (hopefully) unique to the running image, and never changed again.
 extern int32_t chpl_numNodes; // number of nodes
-
-#include "chpl-comm-diags.h"
-#include "chpl-comm-callbacks.h"
-#include "chpl-comm-callbacks-internal.h"
-#include "chpl-linefile-support.h"
 
 size_t chpl_comm_getenvMaxHeapSize(void);
 
@@ -408,7 +406,7 @@ static inline
 void chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
                    size_t size, int32_t typeIndex,
                    int32_t commID, int ln, int32_t fn) {
-  
+
   assert(addr != NULL);
   assert(raddr != NULL);
   assert(node >= 0 && node < chpl_numNodes);
