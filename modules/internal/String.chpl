@@ -196,8 +196,7 @@ module String {
 
   private config param debugStrings = false;
 
-  pragma "no doc"
-  param chpl_shortStringSize = 8;
+  private param chpl_shortStringSize = 8;
 
   pragma "no doc"
   record __serializeHelper {
@@ -599,7 +598,7 @@ module String {
     pragma "no doc"
     proc chpl__serialize() {
       var data : c_array(bufferType.eltType, chpl_shortStringSize);
-      if len <= chpl_shortStringSize {
+      if len <= data.size {
         chpl_string_comm_get(data:bufferType, locale_id, buff, len);
       }
       return new __serializeHelper(len, buff, _size, locale_id, data);
