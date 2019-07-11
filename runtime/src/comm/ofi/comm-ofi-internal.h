@@ -113,6 +113,7 @@ char* chpl_comm_ofi_dbg_val(const void*, enum fi_datatype);
 //
 int chpl_comm_ofi_abort_on_error;
 
+#ifndef INTERNAL_ERROR_V
 #define INTERNAL_ERROR_V(fmt, ...)                                      \
   do {                                                                  \
     if (chpl_comm_ofi_abort_on_error) {                                 \
@@ -139,6 +140,7 @@ int chpl_comm_ofi_abort_on_error;
       }                                                                 \
     } while (0)
 
+#endif
 #define CHK_EQ_TYPED(expr, wantVal, type, fmtSpec)                      \
     do {                                                                \
       type _exprVal = (expr);                                           \

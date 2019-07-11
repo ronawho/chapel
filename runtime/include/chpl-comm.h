@@ -395,9 +395,9 @@ static inline
 void chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
                    size_t size, int32_t commID, int ln, int32_t fn) {
 
-  assert(addr != NULL);
-  assert(raddr != NULL);
-  assert(node >= 0 && node < chpl_numNodes);
+  CHK_TRUE(addr != NULL);
+  CHK_TRUE(raddr != NULL);
+  CHK_TRUE(node >= 0 && node < chpl_numNodes);
 
   if (size == 0) return;
 
@@ -406,7 +406,6 @@ void chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
     return;
   }
 
-  // Communications callback support
   if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put)) {
       chpl_comm_cb_info_t cb_data =
         {chpl_comm_cb_event_kind_put, chpl_nodeID, node,
@@ -414,7 +413,6 @@ void chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
       chpl_comm_do_callbacks (&cb_data);
   }
 
-  // Comm diags support
   chpl_comm_diags_verbose_rdma("put", node, size, ln, fn);
   chpl_comm_diags_incr(put);
 

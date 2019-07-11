@@ -94,6 +94,37 @@ void chpl_internal_error_v(const char *restrict format, ...) {
 void chpl_msg(int verbose_level, const char* fmt, ...)
   __attribute__((format(printf, 2, 3)));
 
+#define INTERNAL_ERROR_V(fmt, ...)                                      \
+  do {                                                                  \
+    if (false)                                                          \
+      fprintf(stderr, "%d: %s:%d: " fmt, chpl_nodeID,                   \
+              __FILE__, (int) __LINE__, ## __VA_ARGS__);                \
+      abort();                                                          \
+    } else {                                                            \
+      chpl_internal_error_v("%d: %s:%d: " fmt, chpl_nodeID,             \
+                            __FILE__, (int) __LINE__, ## __VA_ARGS__);  \
+    }                                                                   \
+  } while (0)
+
+#define CHK_TRUE(expr)                                                  \
+    do {                                                                \
+      if (!(expr)) {                                                    \
+        INTERNAL_ERROR_V("!(%s)", #expr);                               \
+      }                                                                 \
+    } while (0)
+
+#define CHK_FALSE(expr)                                                 \
+    do {                                                                \
+      if (expr) {                                                       \
+        INTERNAL_ERROR_V("%s", #expr);                                  \
+      }                                                                 \
+    } while (0)
+
+#define UNREACHABLE()                                                   \
+    do {                                                                \
+      INTERNAL_ERROR_V("%s", "Unreachable");                            \
+    } while (0)
+
 #ifndef LAUNCHER
 void chpl_error_init(void);
 #endif
