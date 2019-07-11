@@ -143,11 +143,9 @@ void chpl_comm_pre_task_exit(int all) { }
 
 void chpl_comm_exit(int all, int status) { }
 
-void  chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
-                    size_t size, int32_t commID, int ln, int32_t fn) {
-  assert(node==0);
-
-  memmove(raddr, addr, size);
+void chpl_comm_impl_put(void* addr, c_nodeid_t node, void* raddr,
+                        size_t size, int32_t commID, int ln, int32_t fn) {
+  chpl_internal_error("Unreachable");
 }
 
 void  chpl_comm_get(void* addr, c_nodeid_t node, void* raddr,
