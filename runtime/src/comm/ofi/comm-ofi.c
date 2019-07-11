@@ -2227,30 +2227,8 @@ int chpl_comm_try_nb_some(chpl_comm_nb_handle_t* h, size_t nhandles) {
 }
 
 
-void chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
-                   size_t size, int32_t commID, int ln, int32_t fn) {
-  //
-  // Sanity checks, self-communication.
-  //
-  CHK_TRUE(addr != NULL);
-  CHK_TRUE(raddr != NULL);
-
-  if (node == chpl_nodeID) {
-    memmove(raddr, addr, size);
-    return;
-  }
-
-  // Communications callback support
-  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put)) {
-      chpl_comm_cb_info_t cb_data =
-        {chpl_comm_cb_event_kind_put, chpl_nodeID, node,
-         .iu.comm={addr, raddr, size, commID, ln, fn}};
-      chpl_comm_do_callbacks (&cb_data);
-  }
-
-  chpl_comm_diags_verbose_rdma("put", node, size, ln, fn);
-  chpl_comm_diags_incr(put);
-
+void chpl_comm_impl_put(void* addr, c_nodeid_t node, void* raddr,
+                        size_t size, int32_t commID, int ln, int32_t fn) {
   (void) ofi_put(addr, node, raddr, size);
 }
 
