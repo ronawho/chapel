@@ -2415,9 +2415,6 @@ void codegen() {
       codegenMultiLocaleInteropWrappers();
     }
 
-    fprintf(strconfig.fptr, "#include \"chpl-string.h\"\n");
-    fprintf(strconfig.fptr, "chpl_string defaultStringValue=\"\";\n");
-
     info->cfile = hdrfile.fptr;
     codegen_header_addons();
 

@@ -92,5 +92,4 @@ c_string chpl_bool64_to_c_string(chpl_bool64 x) {
   return x ? "true" : "false";
 }
 
-#include "chpl-string.h"
 #endif // _chplcast_h_
