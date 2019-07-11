@@ -182,21 +182,6 @@ module String {
   pragma "fn synchronization free"
   private extern proc qio_nbytes_char(chr:int(32)):c_int;
 
-  pragma "no doc"
-  extern const CHPL_SHORT_STRING_SIZE : c_int;
-
-  pragma "no doc"
-  extern record chpl__inPlaceBuffer {};
-
-  pragma "fn synchronization free"
-  pragma "no doc"
-  extern proc chpl__getInPlaceBufferData(const ref data : chpl__inPlaceBuffer) : c_ptr(uint(8));
-
-  // Signal to the Chapel compiler that the actual argument may be modified.
-  pragma "fn synchronization free"
-  pragma "no doc"
-  extern proc chpl__getInPlaceBufferDataForWrite(ref data : chpl__inPlaceBuffer) : c_ptr(uint(8));
-
   private inline proc chpl_string_comm_get(dest: bufferType, src_loc_id: int(64),
                                            src_addr: bufferType, len: integral) {
     __primitive("chpl_comm_get", dest, src_loc_id, src_addr, len.safeCast(size_t));
@@ -212,12 +197,15 @@ module String {
   private config param debugStrings = false;
 
   pragma "no doc"
+  param chpl_shortStringSize = 8;
+
+  pragma "no doc"
   record __serializeHelper {
     var len       : int;
     var buff      : bufferType;
     var size      : int;
     var locale_id : chpl_nodeID.type;
-    var shortData : chpl__inPlaceBuffer;
+    var shortData : c_array(bufferType.eltType, chpl_shortStringSize);
   }
 
   /*
@@ -610,9 +598,9 @@ module String {
 
     pragma "no doc"
     proc chpl__serialize() {
-      var data : chpl__inPlaceBuffer;
-      if len <= CHPL_SHORT_STRING_SIZE {
-        chpl_string_comm_get(chpl__getInPlaceBufferDataForWrite(data), locale_id, buff, len);
+      var data : c_array(bufferType.eltType, chpl_shortStringSize);
+      if len <= chpl_shortStringSize {
+        chpl_string_comm_get(data:bufferType, locale_id, buff, len);
       }
       return new __serializeHelper(len, buff, _size, locale_id, data);
     }
@@ -620,8 +608,9 @@ module String {
     pragma "no doc"
     proc type chpl__deserialize(data) {
       if data.locale_id != chpl_nodeID {
-        if data.len <= CHPL_SHORT_STRING_SIZE {
-          return new string(chpl__getInPlaceBufferData(data.shortData), data.len,
+        var shortData = data.shortData;
+        if data.len <= data.shortData.size {
+          return new string(/*data.*/shortData:bufferType, data.len,
                             data.size, isowned=true, needToCopy=true);
         } else {
           var localBuff = copyRemoteBuffer(data.locale_id, data.buff, data.len);
