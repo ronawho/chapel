@@ -39,10 +39,3 @@ chpl_wide_string_copy(chpl____wide_chpl_string* x, int32_t lineno, int32_t filen
   return s;
 }
 
-uint8_t* chpl__getInPlaceBufferData(chpl__inPlaceBuffer* buf) {
-  return buf->data;
-}
-
-uint8_t* chpl__getInPlaceBufferDataForWrite(chpl__inPlaceBuffer* buf) {
-  return chpl__getInPlaceBufferData(buf);
-}
