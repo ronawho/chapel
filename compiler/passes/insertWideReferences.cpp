@@ -1046,7 +1046,6 @@ static void propagateVar(Symbol* sym) {
               case PRIM_GET_MEMBER: // ??
               case PRIM_GET_MEMBER_VALUE:
               case PRIM_ARRAY_GET_VALUE:
-              case PRIM_STRING_COPY:
               case PRIM_CAST:
               case PRIM_DYNAMIC_CAST:
               case PRIM_DEREF:

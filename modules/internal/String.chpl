@@ -2489,15 +2489,7 @@ module String {
   // Cast from c_string to string
   pragma "no doc"
   proc _cast(type t, cs: c_string) where t == string {
-    var ret: string;
-    ret.len = cs.length;
-    ret._size = ret.len+1;
-    ret.buff = if ret.len > 0
-      then __primitive("string_copy", cs): bufferType
-      else nil;
-    ret.isowned = true;
-
-    return ret;
+    return new string(cs);
   }
 
   // Cast from byteIndex to int

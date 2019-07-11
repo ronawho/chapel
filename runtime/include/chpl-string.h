@@ -31,6 +31,4 @@ extern chpl_string defaultStringValue;
 
 struct chpl_chpl____wide_chpl_string_s;
 
-chpl_string chpl_wide_string_copy(struct chpl_chpl____wide_chpl_string_s* x, int32_t lineno, int32_t filename);
-
 #endif

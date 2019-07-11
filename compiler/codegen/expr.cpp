@@ -4873,18 +4873,6 @@ DEFINE_PRIM(PRIM_INT_ERROR) {
     codegenCall("chpl_internal_error",
                 new_CStringSymbol("compiler generated error"));
 }
-DEFINE_PRIM(PRIM_STRING_COPY) {
-    GenRet cpyFrom = call->get(1)->codegen();
-
-    if (call->get(1)->typeInfo()->symbol->hasFlag(FLAG_WIDE_CLASS)) {
-      cpyFrom.isLVPtr = GEN_VAL; // Prevent &(char*) syntax.
-      ret             = codegenCallExpr("chpl_wide_string_copy",
-                                        cpyFrom,
-                                        call->get(2),
-                                        call->get(3));
-    } else
-      ret = call->codegenBasicPrimitiveExpr();
-}
 
 DEFINE_PRIM(PRIM_CAST_TO_VOID_STAR) {
     GenRet act = call->get(1);

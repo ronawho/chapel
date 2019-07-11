@@ -292,7 +292,6 @@ void checkPrimitives()
      case PRIM_CAPTURE_FN_FOR_CHPL:
      case PRIM_CAPTURE_FN_FOR_C:
      case PRIM_CREATE_FN_TYPE:
-     case PRIM_STRING_COPY:
      case PRIM_CAST_TO_VOID_STAR:       // Cast the object argument to void*.
      case PRIM_RT_ERROR:
      case PRIM_RT_WARNING:

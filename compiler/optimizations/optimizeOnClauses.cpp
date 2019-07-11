@@ -284,9 +284,6 @@ classifyPrimitive(CallExpr *call) {
     // call so we don't consider them fast-eligible.
     // However, they are communication free.
     //
-  case PRIM_STRING_COPY:
-    return LOCAL_NOT_FAST;
-
   case PRIM_GET_DYNAMIC_END_COUNT:
   case PRIM_SET_DYNAMIC_END_COUNT:
     return FAST_AND_LOCAL;
