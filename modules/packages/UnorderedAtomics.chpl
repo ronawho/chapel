@@ -83,6 +83,18 @@ module UnorderedAtomics {
     if isReal(T) then return "chpl_comm_atomic_" + s + "_real" + numBits(T):string;
   }
 
+
+  inline proc AtomicBool.unorderedWrite(value:bool): void {
+    this.write(value);
+  }
+  inline proc RAtomicBool.unorderedWrite(value:bool): void {
+    pragma "insert line file info" extern externFunc("write_unordered", int(64))
+      proc atomic_write_unordered(ref desired:int(64), l:int(32), obj:c_void_ptr): void;
+
+    var v = value:int(64);
+    atomic_write_unordered(v, _localeid(), _addr());
+  }
+
   /* Unordered atomic read. */
   inline proc const AtomicT.unorderedRead(): T {
     return this.read();
