@@ -2233,30 +2233,8 @@ void chpl_comm_impl_put(void* addr, c_nodeid_t node, void* raddr,
 }
 
 
-void chpl_comm_get(void* addr, int32_t node, void* raddr,
-                   size_t size, int32_t commID, int ln, int32_t fn) {
-  //
-  // Sanity checks, self-communication.
-  //
-  CHK_TRUE(addr != NULL);
-  CHK_TRUE(raddr != NULL);
-
-  if (node == chpl_nodeID) {
-    memmove(addr, raddr, size);
-    return;
-  }
-
-  // Communications callback support
-  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get)) {
-      chpl_comm_cb_info_t cb_data =
-        {chpl_comm_cb_event_kind_get, chpl_nodeID, node,
-         .iu.comm={addr, raddr, size, commID, ln, fn}};
-      chpl_comm_do_callbacks (&cb_data);
-  }
-
-  chpl_comm_diags_verbose_rdma("get", node, size, ln, fn);
-  chpl_comm_diags_incr(get);
-
+void chpl_comm_impl_get(void* addr, int32_t node, void* raddr,
+                        size_t size, int32_t commID, int ln, int32_t fn) {
   (void) ofi_get(addr, node, raddr, size);
 }
 

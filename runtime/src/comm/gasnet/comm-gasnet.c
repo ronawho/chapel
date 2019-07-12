@@ -1115,24 +1115,11 @@ void chpl_comm_impl_put(void* addr, c_nodeid_t node, void* raddr,
 ////GASNET - pass trace info to gasnet_get
 ////GASNET - define GASNET_E_ PUTGET always REMOTE
 ////GASNET - look at GASNET tools at top of README.tools has atomic counters
-void  chpl_comm_get(void* addr, c_nodeid_t node, void* raddr,
+void chpl_comm_impl_get(void* addr, c_nodeid_t node, void* raddr,
                     size_t size, int32_t commID, int ln, int32_t fn) {
   int remote_in_segment;
 
-  if (chpl_nodeID == node) {
-    memmove(addr, raddr, size);
-  } else {
-    // Communications callback support
-    if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get)) {
-      chpl_comm_cb_info_t cb_data = 
-        {chpl_comm_cb_event_kind_get, chpl_nodeID, node,
-         .iu.comm={addr, raddr, size, commID, ln, fn}};
-      chpl_comm_do_callbacks (&cb_data);
-    }
-
-    chpl_comm_diags_verbose_rdma("get", node, size, ln, fn);
-    chpl_comm_diags_incr(get);
-
+  {
     // Handle remote address not in remote segment.
 
     // The GASNet Spec says:

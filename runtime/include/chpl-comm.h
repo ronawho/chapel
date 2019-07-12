@@ -426,8 +426,35 @@ void chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
 //   address is arbitrary
 //   size and locale are part of p
 //
+void chpl_comm_impl_get(void *addr, c_nodeid_t node, void* raddr,
+                        size_t size, int32_t commID, int ln, int32_t fn);
+
+static inline
 void chpl_comm_get(void *addr, c_nodeid_t node, void* raddr,
-                    size_t size, int32_t commID, int ln, int32_t fn);
+                    size_t size, int32_t commID, int ln, int32_t fn) {
+  assert(addr != NULL);
+  assert(raddr != NULL);
+  assert(node >= 0 && node < chpl_numNodes);
+
+  if (size == 0) return;
+
+  if (chpl_nodeID == node) {
+    memmove(addr, raddr, size);
+    return;
+  }
+
+  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get)) {
+    chpl_comm_cb_info_t cb_data =
+      {chpl_comm_cb_event_kind_get, chpl_nodeID, locale,
+       .iu.comm={addr, raddr, size, commID, ln, fn}};
+    chpl_comm_do_callbacks(&cb_data);
+  }
+
+  chpl_comm_diags_verbose_rdma("get", locale, size, ln, fn);
+  chpl_comm_diags_incr(get);
+
+  chpl_comm_impl_get(addr, node, raddr, size, commId, ln, fn);
+}
 
 //
 // put the number of elements pointed out by count array, with strides pointed

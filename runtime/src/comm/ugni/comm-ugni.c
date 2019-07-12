@@ -5826,32 +5826,11 @@ void chpl_comm_getput_unordered_task_fence(void) {
 }
 
 
-void chpl_comm_get(void* addr, c_nodeid_t locale, void* raddr,
+void chpl_comm_impl_get(void* addr, c_nodeid_t locale, void* raddr,
                    size_t size, int32_t commID, int ln, int32_t fn)
 {
   DBG_P_LP(DBGF_IFACE|DBGF_GETPUT, "IFACE chpl_comm_get(%p, %d, %p, %zd)",
            addr, (int) locale, raddr, size);
-
-  assert(addr != NULL);
-  assert(raddr != NULL);
-  if (size == 0)
-    return;
-
-  if (locale == chpl_nodeID) {
-    memmove(addr, raddr, size);
-    return;
-  }
-
-  // Communications callback support
-  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get)) {
-      chpl_comm_cb_info_t cb_data = 
-        {chpl_comm_cb_event_kind_get, chpl_nodeID, locale,
-         .iu.comm={addr, raddr, size, commID, ln, fn}};
-      chpl_comm_do_callbacks (&cb_data);
-  }
-
-  chpl_comm_diags_verbose_rdma("get", locale, size, ln, fn);
-  chpl_comm_diags_incr(get);
 
   do_remote_get(addr, locale, raddr, size, may_proxy_true);
 }
