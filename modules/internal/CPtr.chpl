@@ -431,18 +431,12 @@ module CPtr {
 
   pragma "no doc"
   inline proc -(a: c_ptr(?t), b: c_ptr(t)):c_ptrdiff {
+    pragma "fn synchronization free"
+    extern proc c_pointer_diff(a:c_void_ptr, b:c_void_ptr,
+                               eltSize:c_ptrdiff):c_ptrdiff;
+
     return c_pointer_diff(a, b, c_sizeof(a.eltType):c_ptrdiff);
   }
-
-  pragma "no doc"
-  pragma "fn synchronization free"
-  extern proc c_pointer_return(ref x:?t):c_ptr(t);
-  pragma "no doc"
-  pragma "fn synchronization free"
-  extern proc c_pointer_diff(a:c_void_ptr, b:c_void_ptr,
-                             eltSize:c_ptrdiff):c_ptrdiff;
-
-
 
   /*
 
@@ -457,6 +451,16 @@ module CPtr {
     :returns: a pointer to the array data
   */
   inline proc c_ptrTo(arr: []) where isRectangularArr(arr) {
+    pragma "fn synchronization free"
+    extern proc c_pointer_return(ref x:?t):c_ptr(t);
+
+    return c_pointer_return(arr[arr.domain.low]);
+  }
+
+  inline proc c_ptrToConst(const ref arr: []) where isRectangularArr(arr) {
+    pragma "fn synchronization free"
+    extern proc c_pointer_return(const ref x:?t):c_ptr(t);
+
     return c_pointer_return(arr[arr.domain.low]);
   }
 
@@ -473,6 +477,9 @@ module CPtr {
 
   */
   inline proc c_ptrTo(ref x:?t):c_ptr(t) {
+    pragma "fn synchronization free"
+    extern proc c_pointer_return(ref x:?t):c_ptr(t);
+
     if isArrayType(t) then
       compilerError("c_ptrTo unsupported array type", 2);
     if isDomainType(t) then
@@ -481,10 +488,22 @@ module CPtr {
     return c_pointer_return(x);
   }
 
+  inline proc c_ptrToConst(const ref x:?t):c_ptr(t) {
+    pragma "fn synchronization free"
+    extern proc c_pointer_return(const ref x:?t):c_ptr(t);
+
+    if isArrayType(t) then
+      compilerError("c_ptrToConst unsupported array type", 2);
+    if isDomainType(t) then
+      compilerError("c_ptrToConst domain type not supported", 2);
+    return c_pointer_return(x);
+  }
+
   pragma "no doc"
   inline proc c_ptrTo(x: c_fn_ptr) {
     return x;
   }
+
   pragma "no doc"
   proc c_fn_ptr.this() {
     compilerError("Can't call a C function pointer within Chapel");

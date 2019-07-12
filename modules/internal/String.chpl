@@ -599,7 +599,7 @@ module String {
     proc chpl__serialize() {
       var data : c_array(bufferType.eltType, chpl_shortStringSize);
       if len <= data.size {
-        chpl_string_comm_get(data:bufferType, locale_id, buff, len);
+        chpl_string_comm_get(c_ptrTo(data[0]), locale_id, buff, len);
       }
       return new __serializeHelper(len, buff, _size, locale_id, data);
     }
@@ -607,9 +607,8 @@ module String {
     pragma "no doc"
     proc type chpl__deserialize(data) {
       if data.locale_id != chpl_nodeID {
-        var shortData = data.shortData;
         if data.len <= data.shortData.size {
-          return new string(/*data.*/shortData:bufferType, data.len,
+          return new string(c_ptrToConst(data.shortData[0]), data.len,
                             data.size, isowned=true, needToCopy=true);
         } else {
           var localBuff = copyRemoteBuffer(data.locale_id, data.buff, data.len);
