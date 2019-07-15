@@ -5747,14 +5747,14 @@ void chpl_comm_getput_unordered(c_nodeid_t dst_locale, void* dst_addr,
     // flush GET buffer before the PUT buffer
     if (size <= MAX_UNORDERED_TRANS_SZ) {
       char buf[MAX_UNORDERED_TRANS_SZ];
-      chpl_comm_get(buf, src_locale, src_addr, size, commID, ln, fn);
-      chpl_comm_put(buf, dst_locale, dst_addr, size, commID, ln, fn);
+      chpl_comm_impl_get(buf, src_locale, src_addr, size, commID, ln, fn);
+      chpl_comm_impl_put(buf, dst_locale, dst_addr, size, commID, ln, fn);
     } else {
       // Note, we do not expect this case to trigger, but if it does we may
       // want to do on-stmt to src locale and then transfer
       char* buf = chpl_mem_alloc(size, CHPL_RT_MD_COMM_PER_LOC_INFO, 0, 0);
-      chpl_comm_get(buf, src_locale, src_addr, size, commID, ln, fn);
-      chpl_comm_put(buf, dst_locale, dst_addr, size, commID, ln, fn);
+      chpl_comm_impl_get(buf, src_locale, src_addr, size, commID, ln, fn);
+      chpl_comm_impl_put(buf, dst_locale, dst_addr, size, commID, ln, fn);
       chpl_mem_free(buf, 0, 0);
     }
   }
@@ -6348,7 +6348,7 @@ chpl_comm_nb_handle_t chpl_comm_put_nb(void* addr, c_nodeid_t locale,
   // it do a real nonblocking implementation, but right now we don't
   // have time.
   //
-  chpl_comm_put(addr, locale, raddr, size, commID, ln, fn);
+  chpl_comm_impl_put(addr, locale, raddr, size, commID, ln, fn);
   return NULL;
 }
 
@@ -8327,6 +8327,7 @@ void chpl_comm_statsReport(chpl_bool sum_over_locales)
     sum = chpl_comm_pstats;
     for (int li = 0; li < chpl_numNodes; li++) {
       if (li != chpl_nodeID) {
+        // TODO _impl_ call?
         chpl_comm_get(&ps, li, &chpl_comm_pstats, sizeof(ps), CHPL_COMM_UNKNOWN_ID, 0, -1);
 #define _PSV_SUM(psv) _PSV_ADD_FUNC(&sum.psv, _PSV_LD_FUNC(&ps.psv));
         PERFSTATS_DO_ALL(_PSV_SUM);

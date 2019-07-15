@@ -148,14 +148,14 @@ void put_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t dstlocale,
 
   switch (strlvls) {
   case 0:
-    chpl_comm_put(srcaddr_arg, dstlocale, dstaddr_arg, cnt[0], commID, ln, fn);
+    chpl_comm_impl_put(srcaddr_arg, dstlocale, dstaddr_arg, cnt[0], commID, ln, fn);
     break;
 
   case 1:
     dstaddr=(int8_t*)dstaddr_arg;
     srcaddr=(int8_t*)srcaddr_arg;
     for(i=0; i<cnt[1]; i++) {
-      strd_nb_helper(chpl_comm_put_nb,
+      strd_nb_helper(chpl_comm_impl_put_nb,
                      srcaddr, dstlocale, dstaddr, cnt[0],
                      handles, &currHandles, maxOutstandingXfers, yieldFn,
                      commID, ln, fn);
@@ -169,7 +169,7 @@ void put_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t dstlocale,
       srcaddr = (int8_t*)srcaddr_arg + srcstr[1]*i;
       dstaddr = (int8_t*)dstaddr_arg + dststr[1]*i;
       for(j=0; j<cnt[1]; j++) {
-        strd_nb_helper(chpl_comm_put_nb,
+        strd_nb_helper(chpl_comm_impl_put_nb,
                        srcaddr, dstlocale, dstaddr, cnt[0],
                        handles, &currHandles, maxOutstandingXfers, yieldFn,
                        commID, ln, fn);
@@ -187,7 +187,7 @@ void put_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t dstlocale,
         srcaddr = srcaddr1 + srcstr[1]*j;
         dstaddr = dstaddr1 + dststr[1]*j;
         for(k=0; k<cnt[1]; k++) {
-          strd_nb_helper(chpl_comm_put_nb,
+          strd_nb_helper(chpl_comm_impl_put_nb,
                          srcaddr, dstlocale, dstaddr, cnt[0],
                          handles, &currHandles, maxOutstandingXfers, yieldFn,
                          commID, ln, fn);
@@ -225,7 +225,7 @@ void put_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t dstlocale,
             srcdisp[j]=srcstr[t-1]*x;
             dstdisp[j]=dststr[t-1]*x;
           }
-          strd_nb_helper(chpl_comm_put_nb,
+          strd_nb_helper(chpl_comm_impl_put_nb,
                          srcaddr+srcdisp[j], dstlocale, dstaddr+dstdisp[j],
                          cnt[0],
                          handles, &currHandles, maxOutstandingXfers, yieldFn,
@@ -296,15 +296,14 @@ void get_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t srclocale,
   case 0:
     dstaddr=(int8_t*)dstaddr_arg;
     srcaddr=(int8_t*)srcaddr_arg;
-    chpl_comm_get(dstaddr, srclocale, srcaddr, cnt[0],
-                  commID, ln, fn);
+    chpl_comm_impl_get(dstaddr, srclocale, srcaddr, cnt[0], commID, ln, fn);
     break;
 
   case 1:
     dstaddr=(int8_t*)dstaddr_arg;
     srcaddr=(int8_t*)srcaddr_arg;
     for(i=0; i<cnt[1]; i++) {
-      strd_nb_helper(chpl_comm_get_nb,
+      strd_nb_helper(chpl_comm_impl_get_nb,
                      dstaddr, srclocale, srcaddr, cnt[0],
                      handles, &currHandles, maxOutstandingXfers, yieldFn,
                      commID, ln, fn);
@@ -318,7 +317,7 @@ void get_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t srclocale,
       srcaddr = (int8_t*)srcaddr_arg + srcstr[1]*i;
       dstaddr = (int8_t*)dstaddr_arg + dststr[1]*i;
       for(j=0; j<cnt[1]; j++) {
-        strd_nb_helper(chpl_comm_get_nb,
+        strd_nb_helper(chpl_comm_impl_get_nb,
                        dstaddr, srclocale, srcaddr, cnt[0],
                        handles, &currHandles, maxOutstandingXfers, yieldFn,
                        commID, ln, fn);
@@ -336,7 +335,7 @@ void get_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t srclocale,
         srcaddr = srcaddr1 + srcstr[1]*j;
         dstaddr = dstaddr1 + dststr[1]*j;
         for(k=0; k<cnt[1]; k++) {
-          strd_nb_helper(chpl_comm_get_nb,
+          strd_nb_helper(chpl_comm_impl_get_nb,
                          dstaddr, srclocale, srcaddr, cnt[0],
                          handles, &currHandles, maxOutstandingXfers, yieldFn,
                          commID, ln, fn);
@@ -374,7 +373,7 @@ void get_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t srclocale,
             srcdisp[j]=srcstr[t-1]*x;
             dstdisp[j]=dststr[t-1]*x;
           }
-          strd_nb_helper(chpl_comm_get_nb,
+          strd_nb_helper(chpl_comm_impl_get_nb,
                          dstaddr+dstdisp[j], srclocale, srcaddr+srcdisp[j],
                          cnt[0],
                          handles, &currHandles, maxOutstandingXfers, yieldFn,

@@ -375,8 +375,8 @@ static void fork_large_wrapper(large_fork_task_t* f) {
 
   // GET the bundle data
   // TODO: This could get only the payload
-  chpl_comm_get(arg, caller, arg_on_caller, bundle_size_on_caller,
-                CHPL_COMM_UNKNOWN_ID, 0, CHPL_FILE_IDX_FORK_LARGE);
+  chpl_comm_impl_get(arg, caller, arg_on_caller, bundle_size_on_caller,
+                     CHPL_COMM_UNKNOWN_ID, 0, CHPL_FILE_IDX_FORK_LARGE);
 
   // Call the on body function
   chpl_ftable_call(fid, arg);
@@ -455,8 +455,8 @@ static void fork_nb_large_wrapper(large_fork_task_t* f) {
                            CHPL_RT_MD_COMM_FRK_RCV_ARG, 0, 0);
 
   // GET the bundle data
-  chpl_comm_get(arg, caller, arg_on_caller, bundle_size_on_caller,
-                CHPL_COMM_UNKNOWN_ID, 0, CHPL_FILE_IDX_FORK_LARGE);
+  chpl_comm_impl_get(arg, caller, arg_on_caller, bundle_size_on_caller,
+                     CHPL_COMM_UNKNOWN_ID, 0, CHPL_FILE_IDX_FORK_LARGE);
 
   // Signal that the allocated region can be freed
   GASNET_Safe(gasnet_AMRequestShort2(caller, FREE,
@@ -608,7 +608,7 @@ chpl_comm_nb_handle_t chpl_comm_impl_put_nb(void *addr, c_nodeid_t node, void* r
 #endif
 
   if(!remote_in_segment) {
-    chpl_comm_put(addr, node, raddr, size, commID, ln, fn);
+    chpl_comm_impl_put(addr, node, raddr, size, commID, ln, fn);
     ret = NULL;
     return (chpl_comm_nb_handle_t) ret;
   }
@@ -632,7 +632,7 @@ chpl_comm_nb_handle_t chpl_comm_impl_get_nb(void* addr, c_nodeid_t node, void* r
 #endif
 
   if(!remote_in_segment) {
-    chpl_comm_get(addr, node, raddr, size, commID, ln, fn);
+    chpl_comm_impl_get(addr, node, raddr, size, commID, ln, fn);
     ret = NULL;
     return (chpl_comm_nb_handle_t) ret;
   }
