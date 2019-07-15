@@ -6247,9 +6247,9 @@ void chpl_comm_get_strd(void* dstaddr_arg, size_t* dststrides,
 //
 // Non-blocking get interface
 //
-chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t locale,
-                                       void* raddr, size_t size,
-                                       int32_t commID, int ln, int32_t fn)
+chpl_comm_nb_handle_t chpl_comm_impl_get_nb(void* addr, c_nodeid_t locale,
+                                            void* raddr, size_t size,
+                                            int32_t commID, int ln, int32_t fn)
 {
   mem_region_t*          local_mr;
   mem_region_t*          remote_mr;
@@ -6260,30 +6260,6 @@ chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t locale,
 
   DBG_P_LP(DBGF_IFACE|DBGF_GETPUT, "IFACE chpl_comm_get_nb(%p, %d, %p, %zd)",
            addr, (int) locale, raddr, size);
-
-  assert(addr != NULL);
-  assert(raddr != NULL);
-  if (size == 0)
-    return NULL;
-
-  if (locale < 0 || locale >= chpl_numNodes)
-    CHPL_INTERNAL_ERROR("chpl_comm_get_nb(): remote locale out of range");
-
-  if (locale == chpl_nodeID) {
-    memmove(addr, raddr, size);
-    return NULL;
-  }
-
-  // Communications callback support
-  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get_nb)) {
-    chpl_comm_cb_info_t cb_data = 
-      {chpl_comm_cb_event_kind_get_nb, chpl_nodeID, locale,
-       .iu.comm={addr, raddr, size, commID, ln, fn}};
-    chpl_comm_do_callbacks (&cb_data);
-  }
-
-  chpl_comm_diags_verbose_rdma("non-blocking get", locale, size, ln, fn);
-  chpl_comm_diags_incr(get_nb);
 
   //
   // For now, if the local address isn't in a memory region known to the
@@ -6374,21 +6350,6 @@ chpl_comm_nb_handle_t chpl_comm_put_nb(void* addr, c_nodeid_t locale,
   //
   chpl_comm_put(addr, locale, raddr, size, commID, ln, fn);
   return NULL;
-
-#if 0
-  // When non blocking PUT is implemented, this is the code to
-  // enable for communication callbacks, don't enable while using
-  // blocking puts as it will log two communications
-  
-  // Communication callbacks
-  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put_nb)) {
-    chpl_comm_cb_info_t cb_data = 
-      {chpl_comm_cb_event_kind_put_nb, chpl_nodeID, locale,
-       .iu.comm={addr, raddr, size, commID, ln, fn}};
-    chpl_comm_do_callbacks (&cb_data);
-  }
-#endif
-
 }
 
 

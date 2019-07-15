@@ -57,21 +57,19 @@ static int mysystem(const char* command, const char* description,
 }
 
 // Chapel interface
-chpl_comm_nb_handle_t chpl_comm_put_nb(void *addr, c_nodeid_t node, void* raddr,
-                                       size_t size, int32_t commID,
-                                       int ln, int32_t fn)
+chpl_comm_nb_handle_t chpl_comm_impl_put_nb(void *addr, c_nodeid_t node, void* raddr,
+                                            size_t size, int32_t commID,
+                                            int ln, int32_t fn)
 {
-  assert(node == 0);
-  chpl_memmove(raddr, addr, size);
+  chpl_internal_error("Unreachable");
   return NULL;
 }
 
-chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t node, void* raddr,
-                                       size_t size, int32_t commID,
-                                       int ln, int32_t fn)
+chpl_comm_nb_handle_t chpl_comm_impl_get_nb(void* addr, c_nodeid_t node, void* raddr,
+                                            size_t size, int32_t commID,
+                                            int ln, int32_t fn)
 {
-  assert(node == 0);
-  chpl_memmove(addr, raddr, size);
+  chpl_internal_error("Unreachable");
   return NULL;
 }
 

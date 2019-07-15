@@ -594,21 +594,13 @@ static gasnet_handlerentry_t ftable[] = {
 //
 // Chapel interface starts here
 //
-chpl_comm_nb_handle_t chpl_comm_put_nb(void *addr, c_nodeid_t node, void* raddr,
-                                       size_t size, int32_t commID,
-                                       int ln, int32_t fn)
+chpl_comm_nb_handle_t chpl_comm_impl_put_nb(void *addr, c_nodeid_t node, void* raddr,
+                                            size_t size, int32_t commID,
+                                            int ln, int32_t fn)
 {
   gasnet_handle_t ret;
   int remote_in_segment;
 
-  // Communication callbacks
-  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put_nb)) {
-    chpl_comm_cb_info_t cb_data = 
-      {chpl_comm_cb_event_kind_put_nb, chpl_nodeID, node,
-       .iu.comm={addr, raddr, size, commID, ln, fn}};
-    chpl_comm_do_callbacks (&cb_data);
-  }
-    
 #ifdef GASNET_SEGMENT_EVERYTHING
     remote_in_segment = 1;
 #else
@@ -623,25 +615,15 @@ chpl_comm_nb_handle_t chpl_comm_put_nb(void *addr, c_nodeid_t node, void* raddr,
 
   ret = gasnet_put_nb_bulk(node, raddr, addr, size);
 
-  chpl_comm_diags_incr(put_nb);
-
   return (chpl_comm_nb_handle_t) ret;
 }
 
-chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t node, void* raddr,
-                                       size_t size, int32_t commID,
-                                       int ln, int32_t fn)
+chpl_comm_nb_handle_t chpl_comm_impl_get_nb(void* addr, c_nodeid_t node, void* raddr,
+                                            size_t size, int32_t commID,
+                                            int ln, int32_t fn)
 {
   gasnet_handle_t ret;
   int remote_in_segment;
-
-  // Communications callback support
-  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get_nb)) {
-    chpl_comm_cb_info_t cb_data = 
-      {chpl_comm_cb_event_kind_get_nb, chpl_nodeID, node,
-       .iu.comm={addr, raddr, size, commID, ln, fn}};
-    chpl_comm_do_callbacks (&cb_data);
-  }
 
 #ifdef GASNET_SEGMENT_EVERYTHING
     remote_in_segment = 1;
@@ -656,8 +638,6 @@ chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t node, void* raddr,
   }
 
   ret = gasnet_get_nb_bulk(addr, node, raddr, size);
-
-  chpl_comm_diags_incr(get_nb);
 
   return (chpl_comm_nb_handle_t) ret;
 }

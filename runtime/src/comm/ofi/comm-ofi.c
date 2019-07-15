@@ -2180,17 +2180,17 @@ void amSendDone(struct chpl_comm_bundleData_base_t* b,
 // Interface: RMA
 //
 
-chpl_comm_nb_handle_t chpl_comm_put_nb(void *addr, c_nodeid_t node,
-                                       void* raddr, size_t size,
-                                       int32_t commID, int ln, int32_t fn) {
+chpl_comm_nb_handle_t chpl_comm_impl_put_nb(void *addr, c_nodeid_t node,
+                                            void* raddr, size_t size,
+                                            int32_t commID, int ln, int32_t fn) {
   chpl_comm_put(addr, node, raddr, size, commID, ln, fn);
   return NULL;
 }
 
 
-chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t node,
-                                       void* raddr, size_t size,
-                                       int32_t commID, int ln, int32_t fn) {
+chpl_comm_nb_handle_t chpl_comm_impl_get_nb(void* addr, c_nodeid_t node,
+                                            void* raddr, size_t size,
+                                            int32_t commID, int ln, int32_t fn) {
   chpl_comm_get(addr, node, raddr, size, commID, ln, fn);
   return NULL;
 }

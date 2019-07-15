@@ -117,35 +117,6 @@ void chpl_comm_taskCallFTable(chpl_fn_int_t fid,      // ftable[] entry to call
 
 
 
-// Do a GET in a nonblocking fashion, returning a handle which can be used to
-// wait for the GET to complete. The destination buffer must not be modified
-// before the request completes (after waiting on the returned handle)
-chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t node, void* raddr,
-                                       size_t size, int32_t commID,
-                                       int ln, int32_t fn);
-
-// Do a PUT in a nonblocking fashion, returning a handle which can be used to
-// wait for the PUT to complete. The source buffer must not be modified before
-// the request completes (after waiting on the returned handle)
-chpl_comm_nb_handle_t chpl_comm_put_nb(void *addr, c_nodeid_t node, void* raddr,
-                                       size_t size, int32_t commID,
-                                       int ln, int32_t fn);
-
-// Returns nonzero iff the handle has already been waited for and has
-// been cleared out in a call to chpl_comm_{wait,try}_some.
-int chpl_comm_test_nb_complete(chpl_comm_nb_handle_t h);
-
-// Wait on handles created by chpl_comm_start_....  ignores completed handles.
-// Clears out completed handles so that calling chpl_comm_nb_handle_is_complete
-// on them returns nonzero.
-void chpl_comm_wait_nb_some(chpl_comm_nb_handle_t* h, size_t nhandles);
-
-// Try handles created by chpl_comm_start_....  ignores completed handles.
-// Clears out completed handles so that calling chpl_comm_nb_handle_is_complete
-// on them returns nonzero.  Returns nonzero iff at least one completion is
-// detected.
-int chpl_comm_try_nb_some(chpl_comm_nb_handle_t* h, size_t nhandles);
-
 // Returns whether or not the passed wide address is known to be in
 // a communicable memory region and known to be readable. That is,
 // GET to that address should succeed without an access violation
@@ -394,7 +365,6 @@ void chpl_comm_impl_put(void* addr, c_nodeid_t node, void* raddr,
 static inline
 void chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
                    size_t size, int32_t commID, int ln, int32_t fn) {
-
   assert(addr != NULL);
   assert(raddr != NULL);
   assert(node >= 0 && node < chpl_numNodes);
@@ -455,6 +425,93 @@ void chpl_comm_get(void *addr, c_nodeid_t node, void* raddr,
 
   chpl_comm_impl_get(addr, node, raddr, size, commId, ln, fn);
 }
+
+// Do a GET in a nonblocking fashion, returning a handle which can be used to
+// wait for the GET to complete. The destination buffer must not be modified
+// before the request completes (after waiting on the returned handle)
+chpl_comm_nb_handle_t chpl_comm_impl_get_nb(void* addr, c_nodeid_t node, void* raddr,
+                                            size_t size, int32_t commID,
+                                            int ln, int32_t fn);
+static inline
+chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t node, void* raddr,
+                                       size_t size, int32_t commID,
+                                       int ln, int32_t fn) {
+  assert(addr != NULL);
+  assert(raddr != NULL);
+  assert(node >= 0 && node < chpl_numNodes);
+
+  if (size == 0) return NULL;
+
+  if (chpl_nodeID == node) {
+    memmove(addr, raddr, size);
+    return NULL;
+  }
+
+  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get_nb)) {
+    chpl_comm_cb_info_t cb_data =
+      {chpl_comm_cb_event_kind_get_nb, chpl_nodeID, node,
+       .iu.comm={addr, raddr, size, commID, ln, fn}};
+    chpl_comm_do_callbacks(&cb_data);
+  }
+
+  chpl_comm_diags_verbose_rdma("non-blocking get", locale, size, ln, fn);
+  chpl_comm_diags_incr(get_nb);
+  
+  return chpl_comm_impl_get_nb(addr, node, raddr, size, commId, ln, fn);
+}
+
+// Do a PUT in a nonblocking fashion, returning a handle which can be used to
+// wait for the PUT to complete. The source buffer must not be modified before
+// the request completes (after waiting on the returned handle)
+chpl_comm_nb_handle_t chpl_comm_impl_put_nb(void *addr, c_nodeid_t node, void* raddr,
+                                            size_t size, int32_t commID,
+                                            int ln, int32_t fn);
+
+static inline
+chpl_comm_nb_handle_t chpl_comm_put_nb(void *addr, c_nodeid_t node, void* raddr,
+                                       size_t size, int32_t commID,
+                                       int ln, int32_t fn) {
+  assert(addr != NULL);
+  assert(raddr != NULL);
+  assert(node >= 0 && node < chpl_numNodes);
+
+  if (size == 0) return NULL;
+
+  if (chpl_nodeID == node) {
+    memmove(raddr, addr, size);
+    return NULL;
+  }
+
+  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put_nb)) {
+    chpl_comm_cb_info_t cb_data =
+      {chpl_comm_cb_event_kind_put_nb, chpl_nodeID, node,
+       .iu.comm={addr, raddr, size, commID, ln, fn}};
+    chpl_comm_do_callbacks(&cb_data);
+  }
+  
+  chpl_comm_diags_verbose_rdma("non-blocking put", locale, size, ln, fn);
+  chpl_comm_diags_incr(put_nb);
+
+  return chpl_comm_impl_put_nb(addr, node, raddr, size, commID, ln, fn);
+}
+
+
+// TODO anything to do to make this more common?
+// Returns nonzero iff the handle has already been waited for and has
+// been cleared out in a call to chpl_comm_{wait,try}_some.
+int chpl_comm_test_nb_complete(chpl_comm_nb_handle_t h);
+
+// Wait on handles created by chpl_comm_start_....  ignores completed handles.
+// Clears out completed handles so that calling chpl_comm_nb_handle_is_complete
+// on them returns nonzero.
+void chpl_comm_wait_nb_some(chpl_comm_nb_handle_t* h, size_t nhandles);
+
+// Try handles created by chpl_comm_start_....  ignores completed handles.
+// Clears out completed handles so that calling chpl_comm_nb_handle_is_complete
+// on them returns nonzero.  Returns nonzero iff at least one completion is
+// detected.
+int chpl_comm_try_nb_some(chpl_comm_nb_handle_t* h, size_t nhandles);
+
 
 //
 // put the number of elements pointed out by count array, with strides pointed
