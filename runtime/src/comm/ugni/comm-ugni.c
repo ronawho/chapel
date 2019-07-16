@@ -6228,11 +6228,11 @@ void chpl_comm_impl_put_strd(void* dstaddr_arg, size_t* dststrides,
 }
 
 
-void chpl_comm_get_strd(void* dstaddr_arg, size_t* dststrides,
-                        int32_t srclocale,
-                        void* srcaddr_arg, size_t* srcstrides,
-                        size_t* count, int32_t stridelevels, size_t elemSize,
-                        int32_t commID, int ln, int32_t fn)
+void chpl_comm_impl_get_strd(void* dstaddr_arg, size_t* dststrides,
+                             int32_t srclocale,
+                             void* srcaddr_arg, size_t* srcstrides,
+                             size_t* count, int32_t stridelevels, size_t elemSize,
+                             int32_t commID, int ln, int32_t fn)
 {
   PERFSTATS_INC(get_strd_cnt);
   get_strd_common(dstaddr_arg, dststrides,
@@ -6336,9 +6336,9 @@ chpl_comm_nb_handle_t chpl_comm_impl_get_nb(void* addr, c_nodeid_t locale,
 }
 
 
-chpl_comm_nb_handle_t chpl_comm_put_nb(void* addr, c_nodeid_t locale,
-                                       void* raddr, size_t size,
-                                       int32_t commID, int ln, int32_t fn)
+chpl_comm_nb_handle_t chpl_comm_impl_put_nb(void* addr, c_nodeid_t locale,
+                                            void* raddr, size_t size,
+                                            int32_t commID, int ln, int32_t fn)
 {
   DBG_P_LP(DBGF_IFACE|DBGF_GETPUT, "IFACE chpl_comm_put_nb(%p, %d, %p, %zd)",
            addr, (int) locale, raddr, size);

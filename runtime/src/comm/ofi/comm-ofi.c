@@ -1443,10 +1443,10 @@ static void fork_nb_wrapper(chpl_comm_on_bundle_t *f) {
 #endif
 
 
-void chpl_comm_execute_on_nb(c_nodeid_t node, c_sublocid_t subloc,
-                             chpl_fn_int_t fid,
-                             chpl_comm_on_bundle_t *arg, size_t argSize,
-                             int ln, int32_t fn) {
+void chpl_comm_impl_execute_on_nb(c_nodeid_t node, c_sublocid_t subloc,
+                                  chpl_fn_int_t fid,
+                                  chpl_comm_on_bundle_t *arg, size_t argSize,
+                                  int ln, int32_t fn) {
   DBG_PRINTF(DBG_INTERFACE,
              "chpl_comm_execute_on_nb(%d, %d, %d, %p, %zd)",
              (int) node, (int) subloc, (int) fid, arg, argSize);
@@ -1455,10 +1455,10 @@ void chpl_comm_execute_on_nb(c_nodeid_t node, c_sublocid_t subloc,
 }
 
 
-void chpl_comm_execute_on_fast(c_nodeid_t node, c_sublocid_t subloc,
-                               chpl_fn_int_t fid,
-                               chpl_comm_on_bundle_t *arg, size_t argSize,
-                               int ln, int32_t fn) {
+void chpl_comm_impl_execute_on_fast(c_nodeid_t node, c_sublocid_t subloc,
+                                    chpl_fn_int_t fid,
+                                    chpl_comm_on_bundle_t *arg, size_t argSize,
+                                    int ln, int32_t fn) {
   DBG_PRINTF(DBG_INTERFACE,
              "chpl_comm_execute_on_fast(%d, %d, %d, %p, %zd)",
              (int) node, (int) subloc, (int) fid, arg, argSize);
@@ -2217,11 +2217,11 @@ void chpl_comm_impl_put_strd(void* dstaddr_arg, size_t* dststrides,
 }
 
 
-void chpl_comm_get_strd(void* dstaddr_arg, size_t* dststrides,
-                        c_nodeid_t srcnode,
-                        void* srcaddr_arg, size_t* srcstrides, size_t* count,
-                        int32_t stridelevels, size_t elemSize,
-                        int32_t commID, int ln, int32_t fn) {
+void chpl_comm_impl_get_strd(void* dstaddr_arg, size_t* dststrides,
+                             c_nodeid_t srcnode,
+                             void* srcaddr_arg, size_t* srcstrides, size_t* count,
+                             int32_t stridelevels, size_t elemSize,
+                             int32_t commID, int ln, int32_t fn) {
   get_strd_common(dstaddr_arg, dststrides,
                   srcnode,
                   srcaddr_arg, srcstrides,
