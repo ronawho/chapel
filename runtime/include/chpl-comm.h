@@ -621,28 +621,94 @@ void chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode,
 // notes:
 //   multiple executeOns to the same locale should be handled concurrently
 //
+void chpl_comm_impl_execute_on(c_nodeid_t node, c_sublocid_t subloc,
+                               chpl_fn_int_t fid,
+                               chpl_comm_on_bundle_t *arg, size_t arg_size,
+                               int ln, int32_t fn);
+
+static inline
 void chpl_comm_execute_on(c_nodeid_t node, c_sublocid_t subloc,
                           chpl_fn_int_t fid,
                           chpl_comm_on_bundle_t *arg, size_t arg_size,
-                          int ln, int32_t fn);
+                          int ln, int32_t fn) {
+  assert(node >= 0 && node < chpl_numNodes && node != chpl_nodeID);
+  // TODO other sanity checks?
+
+  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_executeOn)) {
+    chpl_comm_cb_info_t cb_data =
+      {chpl_comm_cb_event_kind_executeOn, chpl_nodeID, node,
+       .iu.executeOn={subloc, fid, arg, arg_size, ln, fn}};
+    chpl_comm_do_callbacks (&cb_data);
+  }
+
+  chpl_comm_diags_verbose_executeOn("", node, ln, fn);
+  chpl_comm_diags_incr(execute_on);
+
+  chpl_comm_impl_execute_on(node, subloc, fid, arg, arg_size, ln, fn);
+}
+
 
 //
 // non-blocking execute_on
 // arg can be reused immediately after this call completes.
 //
+void chpl_comm_impl_execute_on_nb(c_nodeid_t node, c_sublocid_t subloc,
+                                 chpl_fn_int_t fid,
+                                 chpl_comm_on_bundle_t *arg, size_t arg_size,
+                                 int ln, int32_t fn);
+
+static inline
 void chpl_comm_execute_on_nb(c_nodeid_t node, c_sublocid_t subloc,
                              chpl_fn_int_t fid,
                              chpl_comm_on_bundle_t *arg, size_t arg_size,
-                             int ln, int32_t fn);
+                             int ln, int32_t fn) {
+
+  assert(node >= 0 && node < chpl_numNodes && node != chpl_nodeID);
+  // TODO other sanity checks?
+
+  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_executeOn_nb)) {
+    chpl_comm_cb_info_t cb_data =
+      {chpl_comm_cb_event_kind_executeOn_nb, chpl_nodeID, node,
+       .iu.executeOn={subloc, fid, arg, arg_size, ln, fn}};
+    chpl_comm_do_callbacks (&cb_data);
+  }
+
+  chpl_comm_diags_verbose_executeOn("non-blocking", node, ln, fn);
+  chpl_comm_diags_incr(execute_on_nb);
+
+  chpl_comm_impl_execute_on_nb(node, subloc, fid, arg, arg_size, ln, fn);
+}
 
 //
 // fast execute_on (i.e., run in handler)
 // arg can be reused immediately after this call completes.
 //
+void chpl_comm_impl_execute_on_fast(c_nodeid_t node, c_sublocid_t subloc,
+                                    chpl_fn_int_t fid,
+                                    chpl_comm_on_bundle_t *arg, size_t arg_size,
+                                    int ln, int32_t fn);
+
+static inline
 void chpl_comm_execute_on_fast(c_nodeid_t node, c_sublocid_t subloc,
                                chpl_fn_int_t fid,
                                chpl_comm_on_bundle_t *arg, size_t arg_size,
-                               int ln, int32_t fn);
+                               int ln, int32_t fn) {
+  assert(node >= 0 && node < chpl_numNodes && node != chpl_nodeID);
+  // TODO other sanity checks
+
+  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_executeOn_fast)) {
+    chpl_comm_cb_info_t cb_data =
+      {chpl_comm_cb_event_kind_executeOn_fast, chpl_nodeID, node,
+       .iu.executeOn={subloc, fid, arg, arg_size, ln, fn}};
+    chpl_comm_do_callbacks (&cb_data);
+  }
+
+  chpl_comm_diags_verbose_executeOn("fast", node, ln, fn);
+  chpl_comm_diags_incr(execute_on_fast);
+
+  chpl_comm_impl_execute_on_fast(node, subloc, fid, arg, arg_size, ln, fn);
+}
+
 
 // This is a hook that's called when a task is ending. It allows for things
 // like say flushing task private buffers.
