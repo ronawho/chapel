@@ -415,15 +415,15 @@ void chpl_comm_get(void *addr, c_nodeid_t node, void* raddr,
 
   if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get)) {
     chpl_comm_cb_info_t cb_data =
-      {chpl_comm_cb_event_kind_get, chpl_nodeID, locale,
+      {chpl_comm_cb_event_kind_get, chpl_nodeID, node,
        .iu.comm={addr, raddr, size, commID, ln, fn}};
     chpl_comm_do_callbacks(&cb_data);
   }
 
-  chpl_comm_diags_verbose_rdma("get", locale, size, ln, fn);
+  chpl_comm_diags_verbose_rdma("get", node, size, ln, fn);
   chpl_comm_diags_incr(get);
 
-  chpl_comm_impl_get(addr, node, raddr, size, commId, ln, fn);
+  chpl_comm_impl_get(addr, node, raddr, size, commID, ln, fn);
 }
 
 // Do a GET in a nonblocking fashion, returning a handle which can be used to
@@ -454,10 +454,10 @@ chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t node, void* raddr,
     chpl_comm_do_callbacks(&cb_data);
   }
 
-  chpl_comm_diags_verbose_rdma("non-blocking get", locale, size, ln, fn);
+  chpl_comm_diags_verbose_rdma("non-blocking get", node, size, ln, fn);
   chpl_comm_diags_incr(get_nb);
   
-  return chpl_comm_impl_get_nb(addr, node, raddr, size, commId, ln, fn);
+  return chpl_comm_impl_get_nb(addr, node, raddr, size, commID, ln, fn);
 }
 
 // Do a PUT in a nonblocking fashion, returning a handle which can be used to
@@ -489,7 +489,7 @@ chpl_comm_nb_handle_t chpl_comm_put_nb(void *addr, c_nodeid_t node, void* raddr,
     chpl_comm_do_callbacks(&cb_data);
   }
   
-  chpl_comm_diags_verbose_rdma("non-blocking put", locale, size, ln, fn);
+  chpl_comm_diags_verbose_rdma("non-blocking put", node, size, ln, fn);
   chpl_comm_diags_incr(put_nb);
 
   return chpl_comm_impl_put_nb(addr, node, raddr, size, commID, ln, fn);
@@ -512,6 +512,9 @@ void chpl_comm_wait_nb_some(chpl_comm_nb_handle_t* h, size_t nhandles);
 // detected.
 int chpl_comm_try_nb_some(chpl_comm_nb_handle_t* h, size_t nhandles);
 
+
+#include "chpl-comm-strd-xfer.h"
+#include "chpl-comm-no-warning-macros.h"
 
 //
 // put the number of elements pointed out by count array, with strides pointed
@@ -542,8 +545,8 @@ void chpl_comm_put_strd(void* dstaddr, size_t* dststrides, c_nodeid_t dstnode,
   // TODO other sanity checks? (elemsize, stridelevels, strides, count)?
 
   if (chpl_nodeID == dstnode) {
-    put_strd_common(dstaddr_arg, dststrides, dstnode,
-		    srcaddr_arg, srcstrides,
+    put_strd_common(dstaddr, dststrides, dstnode,
+		    srcaddr, srcstrides,
 		    count, stridelevels, elemSize,
 		    1, NULL, // "nb" xfers block, so no need for yield
 		    commID, ln, fn);
@@ -552,7 +555,7 @@ void chpl_comm_put_strd(void* dstaddr, size_t* dststrides, c_nodeid_t dstnode,
 
   if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put_strd)) {
     chpl_comm_cb_info_t cb_data =
-      {chpl_comm_cb_event_kind_put_strd, chpl_nodeID, dstnode_id,
+      {chpl_comm_cb_event_kind_put_strd, chpl_nodeID, dstnode,
        .iu.comm_strd={srcaddr, srcstrides, dstaddr, dststrides, count,
 		      stridelevels, elemSize, commID, ln, fn}};
     chpl_comm_do_callbacks(&cb_data);
@@ -585,8 +588,8 @@ void chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode,
   // TODO other sanity checks? (elemsize, stridelevels, strides, count)?
 
   if (chpl_nodeID == srcnode) {
-    get_strd_common(dstaddr_arg, dststrides, srcnode,
-		    srcaddr_arg, srcstrides,
+    get_strd_common(dstaddr, dststrides, srcnode,
+		    srcaddr, srcstrides,
 		    count, stridelevels, elemSize,
 		    1, NULL, // "nb" xfers block, so no need for yield
 		    commID, ln, fn);
@@ -595,8 +598,8 @@ void chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode,
 
   if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get_strd)) {
     chpl_comm_cb_info_t cb_data =
-      {chpl_comm_cb_event_kind_get_strd, chpl_nodeID, srclocale,
-       .iu.comm_strd={srcaddr_arg, srcstrides, dstaddr_arg, dststrides, count,
+      {chpl_comm_cb_event_kind_get_strd, chpl_nodeID, srcnode,
+       .iu.comm_strd={srcaddr, srcstrides, dstaddr, dststrides, count,
                       stridelevels, elemSize, commID, ln, fn}};
     chpl_comm_do_callbacks(&cb_data);
   }

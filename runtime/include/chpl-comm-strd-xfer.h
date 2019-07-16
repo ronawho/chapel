@@ -21,6 +21,10 @@
 // Common strided bulk put/get, adapted from comm-none.c
 //
 
+#ifndef _chpl_comm_strd_xfer_h_
+#define _chpl_comm_strd_xfer_h_
+
+
 #include <inttypes.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -378,3 +382,5 @@ void get_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t srclocale,
 
 
 #include "chpl-comm-warning-macros.h"
+
+#endif
