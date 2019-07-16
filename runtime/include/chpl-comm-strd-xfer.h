@@ -123,15 +123,6 @@ void put_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t dstlocale,
   chpl_comm_nb_handle_t handles[maxOutstandingXfers];
   size_t currHandles = 0;
 
-  // Communications callback support
-  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put_strd)) {
-      chpl_comm_cb_info_t cb_data =
-        {chpl_comm_cb_event_kind_put_strd, chpl_nodeID, dstlocale,
-         .iu.comm_strd={srcaddr_arg, srcstrides, dstaddr_arg, dststrides, count,
-                        stridelevels, elemSize, commID, ln, fn}};
-      chpl_comm_do_callbacks (&cb_data);
-  }
-
   //Only count[0] and strides are measured in number of bytes.
   cnt[0]= count[0] * elemSize;
   if (strlvls>0) {
@@ -267,16 +258,6 @@ void get_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t srclocale,
 
   chpl_comm_nb_handle_t handles[maxOutstandingXfers];
   size_t currHandles = 0;
-
-
-  // Communications callback support
-  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get_strd)) {
-    chpl_comm_cb_info_t cb_data =
-      {chpl_comm_cb_event_kind_get_strd, chpl_nodeID, srclocale,
-       .iu.comm_strd={srcaddr_arg, srcstrides, dstaddr_arg, dststrides, count,
-                      stridelevels, elemSize, commID, ln, fn}};
-    chpl_comm_do_callbacks (&cb_data);
-  }
 
   //Only count[0] and strides are measured in number of bytes.
   cnt[0]=count[0] * elemSize;

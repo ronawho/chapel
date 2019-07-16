@@ -151,30 +151,20 @@ void chpl_comm_impl_get(void* addr, c_nodeid_t node, void* raddr,
   chpl_internal_error("Unreachable");
 }
 
-void  chpl_comm_put_strd(void* dstaddr_arg, size_t* dststrides, c_nodeid_t dstnode,
-                         void* srcaddr_arg, size_t* srcstrides, size_t* count,
-                         int32_t stridelevels, size_t elemSize, int32_t commID, 
-                         int ln, int32_t fn)
+void chpl_comm_impl_put_strd(void* dstaddr_arg, size_t* dststrides, c_nodeid_t dstnode,
+                             void* srcaddr_arg, size_t* srcstrides, size_t* count,
+                             int32_t stridelevels, size_t elemSize, int32_t commID, 
+                             int ln, int32_t fn)
 {
-  assert(dstnode==0);
-  put_strd_common(dstaddr_arg, dststrides, dstnode,
-                  srcaddr_arg, srcstrides,
-                  count, stridelevels, elemSize,
-                  1, NULL, // "nb" xfers block, so no need for yield
-                  commID, ln, fn);
+  chpl_internal_error("Unreachable");
 }
 
-void  chpl_comm_get_strd(void* dstaddr_arg, size_t* dststrides, c_nodeid_t srcnode,
-                         void* srcaddr_arg, size_t* srcstrides, size_t* count,
-                         int32_t stridelevels, size_t elemSize, int32_t commID, 
-                         int ln, int32_t fn)
+void chpl_comm_impl_get_strd(void* dstaddr_arg, size_t* dststrides, c_nodeid_t srcnode,
+                             void* srcaddr_arg, size_t* srcstrides, size_t* count,
+                             int32_t stridelevels, size_t elemSize, int32_t commID, 
+                             int ln, int32_t fn)
 {
-  assert(srcnode==0);
-  get_strd_common(dstaddr_arg, dststrides, srcnode,
-                  srcaddr_arg, srcstrides,
-                  count, stridelevels, elemSize,
-                  1, NULL, // "nb" xfers block, so no need for yield
-                  commID, ln, fn);
+  chpl_internal_error("Unreachable");
 }
 
 typedef struct {

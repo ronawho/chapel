@@ -6212,11 +6212,11 @@ void do_nic_get(void* tgt_addr, c_nodeid_t locale, mem_region_t* remote_mr,
 static const size_t strd_maxHandles
                     = (20 < CD_ACTIVE_TRANS_MAX) ? 20 : CD_ACTIVE_TRANS_MAX;
 
-void chpl_comm_put_strd(void* dstaddr_arg, size_t* dststrides,
-                        int32_t dstlocale,
-                        void* srcaddr_arg, size_t* srcstrides,
-                        size_t* count, int32_t stridelevels, size_t elemSize,
-                        int32_t commID, int ln, int32_t fn)
+void chpl_comm_impl_put_strd(void* dstaddr_arg, size_t* dststrides,
+                             int32_t dstlocale,
+                             void* srcaddr_arg, size_t* srcstrides,
+                             size_t* count, int32_t stridelevels, size_t elemSize,
+                             int32_t commID, int ln, int32_t fn)
 {
   PERFSTATS_INC(put_strd_cnt);
   put_strd_common(dstaddr_arg, dststrides,

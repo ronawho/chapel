@@ -2239,11 +2239,11 @@ void chpl_comm_impl_get(void* addr, int32_t node, void* raddr,
 }
 
 
-void chpl_comm_put_strd(void* dstaddr_arg, size_t* dststrides,
-                        c_nodeid_t dstnode,
-                        void* srcaddr_arg, size_t* srcstrides,
-                        size_t* count, int32_t stridelevels, size_t elemSize,
-                        int32_t commID, int ln, int32_t fn) {
+void chpl_comm_impl_put_strd(void* dstaddr_arg, size_t* dststrides,
+                             c_nodeid_t dstnode,
+                             void* srcaddr_arg, size_t* srcstrides,
+                             size_t* count, int32_t stridelevels, size_t elemSize,
+                             int32_t commID, int ln, int32_t fn) {
   put_strd_common(dstaddr_arg, dststrides,
                   dstnode,
                   srcaddr_arg, srcstrides,

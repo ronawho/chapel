@@ -525,18 +525,88 @@ int chpl_comm_try_nb_some(chpl_comm_nb_handle_t* h, size_t nhandles);
 //   Proposal for Extending the UPC Memory Copy Library Functions and Supporting 
 //   Extensions to GASNet, Version 2.0. Author: Dan Bonachea 
 //
-void chpl_comm_put_strd(void* dstaddr, size_t* dststrides, c_nodeid_t dstnode,
+void chpl_comm_impl_put_strd(void* dstaddr, size_t* dststrides, c_nodeid_t dstnode,
                         void* srcaddr, size_t* srcstrides, size_t* count,
                         int32_t stridelevels, size_t elemSize, int32_t commID,
                         int ln, int32_t fn);
+static inline 
+void chpl_comm_put_strd(void* dstaddr, size_t* dststrides, c_nodeid_t dstnode,
+                        void* srcaddr, size_t* srcstrides, size_t* count,
+                        int32_t stridelevels, size_t elemSize, int32_t commID,
+                        int ln, int32_t fn) {
+
+  assert(dstaddr != NULL);
+  assert(srcaddr != NULL);
+  assert(dstnode >= 0 && dstnode < chpl_numNodes);
+
+  // TODO other sanity checks? (elemsize, stridelevels, strides, count)?
+
+  if (chpl_nodeID == dstnode) {
+    put_strd_common(dstaddr_arg, dststrides, dstnode,
+		    srcaddr_arg, srcstrides,
+		    count, stridelevels, elemSize,
+		    1, NULL, // "nb" xfers block, so no need for yield
+		    commID, ln, fn);
+    return;
+  }
+
+  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put_strd)) {
+    chpl_comm_cb_info_t cb_data =
+      {chpl_comm_cb_event_kind_put_strd, chpl_nodeID, dstnode_id,
+       .iu.comm_strd={srcaddr, srcstrides, dstaddr, dststrides, count,
+		      stridelevels, elemSize, commID, ln, fn}};
+    chpl_comm_do_callbacks(&cb_data);
+  }
+
+  chpl_comm_diags_verbose_rdmaStrd("put", dstnode, ln, fn);
+  chpl_comm_diags_incr(put);
+
+ chpl_comm_impl_put_strd(dstaddr, dststrides, dstnode, srcaddr, srcstrides,
+			 count, stridelevels, elemSize, commID, ln, fn);
+}
+
 
 //
 // same as chpl_comm_puts(), but do get instead
 //
+void chpl_comm_impl_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode,
+                             void* srcaddr, size_t* srcstrides, size_t* count,
+                             int32_t stridelevels, size_t elemSize, int32_t commID,
+                             int ln, int32_t fn);
+static inline
 void chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode,
                         void* srcaddr, size_t* srcstrides, size_t* count,
                         int32_t stridelevels, size_t elemSize, int32_t commID,
-                        int ln, int32_t fn);
+                        int ln, int32_t fn) {
+  assert(dstaddr != NULL);
+  assert(srcaddr != NULL);
+  assert(srcnode >= 0 && srcnode < chpl_numNodes);
+  
+  // TODO other sanity checks? (elemsize, stridelevels, strides, count)?
+
+  if (chpl_nodeID == srcnode) {
+    get_strd_common(dstaddr_arg, dststrides, srcnode,
+		    srcaddr_arg, srcstrides,
+		    count, stridelevels, elemSize,
+		    1, NULL, // "nb" xfers block, so no need for yield
+		    commID, ln, fn);
+    return;
+  }
+
+  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get_strd)) {
+    chpl_comm_cb_info_t cb_data =
+      {chpl_comm_cb_event_kind_get_strd, chpl_nodeID, srclocale,
+       .iu.comm_strd={srcaddr_arg, srcstrides, dstaddr_arg, dststrides, count,
+                      stridelevels, elemSize, commID, ln, fn}};
+    chpl_comm_do_callbacks(&cb_data);
+  }
+
+  chpl_comm_diags_verbose_rdmaStrd("get", srcnode, ln, fn);
+  chpl_comm_diags_incr(get);
+
+  chpl_comm_impl_get_strd(dstaddr, dststrides, srcnode, srcaddr, srcstrides,
+			  count, stridelevels, elemSize, commID, ln, fn);
+}
 
 //
 // Runs a function f on a remote locale, passing it

@@ -1203,10 +1203,10 @@ void chpl_comm_impl_get(void* addr, c_nodeid_t node, void* raddr,
 // * convert count[0] and all of 'srcstr' and 'dststr' from counts of element
 //   to counts of bytes,
 //
-void  chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode_id, 
-                         void* srcaddr, size_t* srcstrides, size_t* count,
-                         int32_t stridelevels, size_t elemSize, int32_t commID,
-                         int ln, int32_t fn) {
+void chpl_comm_impl_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode_id, 
+                             void* srcaddr, size_t* srcstrides, size_t* count,
+                             int32_t stridelevels, size_t elemSize, int32_t commID,
+                             int ln, int32_t fn) {
   int i;
   const size_t strlvls = (size_t)stridelevels;
   const gasnet_node_t srcnode = (gasnet_node_t)srcnode_id;
@@ -1229,30 +1229,15 @@ void  chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode_i
     cnt[strlvls] = count[strlvls];
   }
 
-  // Communications callback support
-  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_get_strd)) {
-    chpl_comm_cb_info_t cb_data =
-      {chpl_comm_cb_event_kind_get_strd, chpl_nodeID, srcnode_id,
-       .iu.comm_strd={srcaddr, srcstrides, dstaddr, dststrides, count,
-                      stridelevels, elemSize, commID, ln, fn}};
-    chpl_comm_do_callbacks (&cb_data);
-  }
-  
-  // the case (chpl_nodeID == srcnode) is internally managed inside gasnet
-  chpl_comm_diags_verbose_rdmaStrd("get", srcnode, ln, fn);
-  if (chpl_nodeID != srcnode) {
-    chpl_comm_diags_incr(get);
-  }
-
   // TODO -- handle strided get for non-registered memory
   gasnet_gets_bulk(dstaddr, dststr, srcnode, srcaddr, srcstr, cnt, strlvls); 
 }
 
 // See the comment for chpl_comm_gets().
-void  chpl_comm_put_strd(void* dstaddr, size_t* dststrides, c_nodeid_t dstnode_id, 
-                         void* srcaddr, size_t* srcstrides, size_t* count,
-                         int32_t stridelevels, size_t elemSize, int32_t commID, 
-                         int ln, int32_t fn) {
+void chpl_comm_impl_put_strd(void* dstaddr, size_t* dststrides, c_nodeid_t dstnode_id, 
+                             void* srcaddr, size_t* srcstrides, size_t* count,
+                             int32_t stridelevels, size_t elemSize, int32_t commID, 
+                             int ln, int32_t fn) {
   int i;
   const size_t strlvls = (size_t)stridelevels;
   const gasnet_node_t dstnode = (gasnet_node_t)dstnode_id;
@@ -1272,21 +1257,6 @@ void  chpl_comm_put_strd(void* dstaddr, size_t* dststrides, c_nodeid_t dstnode_i
       cnt[i] = count[i];
     }
     cnt[strlvls] = count[strlvls];
-  }
-
-  // Communications callback support
-  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put_strd)) {
-      chpl_comm_cb_info_t cb_data =
-        {chpl_comm_cb_event_kind_put_strd, chpl_nodeID, dstnode_id,
-         .iu.comm_strd={srcaddr, srcstrides, dstaddr, dststrides, count,
-                        stridelevels, elemSize, commID, ln, fn}};
-      chpl_comm_do_callbacks (&cb_data);
-  }
-
-  // the case (chpl_nodeID == dstnode) is internally managed inside gasnet
-  chpl_comm_diags_verbose_rdmaStrd("put", dstnode, ln, fn);
-  if (chpl_nodeID != dstnode) {
-    chpl_comm_diags_incr(put);
   }
 
   // TODO -- handle strided put for non-registered memory
