@@ -82,6 +82,18 @@ module UnorderedAtomics {
     if isUint(T) then return "chpl_comm_atomic_" + s + "_uint" + numBits(T):string;
     if isReal(T) then return "chpl_comm_atomic_" + s + "_real" + numBits(T):string;
   }
+  /* Unordered atomic fetchAdd. */
+  inline proc AtomicT.unorderedFetchAdd(ref ret: T, value:T): void {
+    ret = this.fetchAdd(value);
+  }
+  pragma "no doc"
+  inline proc RAtomicT.unorderedFetchAdd(ref ret: T, value:T): void {
+    pragma "insert line file info" extern externFunc("fetch_add_unordered", T)
+      proc atomic_fetch_add_unordered(ref op:T, l:int(32), obj:c_void_ptr, ref result:T): void;
+
+    var v = value;
+    atomic_fetch_add(v, _localeid(), _addr(), ret);
+  }
 
   /* Unordered atomic add. */
   inline proc AtomicT.unorderedAdd(value:T): void {

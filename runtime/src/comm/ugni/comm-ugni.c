@@ -6968,6 +6968,16 @@ DEFINE_CHPL_COMM_ATOMIC_CMPXCHG(real64, cmpxchg_64, int_least64_t)
             do_nic_amo(opnd, NULL, loc, obj, sizeof(_t),                \
                        amo_cmd_2_nic_op(_c, 1), res, remote_mr);        \
           }                                                             \
+        }                                                               \
+        void chpl_comm_atomic_fetch_##_o##_unordered_##_f(void* opnd,   \
+                                                int32_t loc,            \
+                                                void* obj,              \
+                                                void* res,              \
+                                                int ln, int32_t fn)     \
+        {                                                               \
+          chpl_comm_atomic_fetch_##_o##_##_f(opnd, loc, obj, res,       \
+                                             memory_order_seq_cst,      \
+                                             ln, fn);                   \
         }
 
 DEFINE_CHPL_COMM_ATOMIC_INT_OP(int32, and, and_i32, int_least32_t)
@@ -7107,7 +7117,17 @@ DEFINE_CHPL_COMM_ATOMIC_INT_OP(uint64, add, add_i64, uint_least64_t)
             else                                                        \
               do_fork_amo_##_c##_##_f(obj, res, opnd, NULL, loc);       \
           }                                                             \
+        }                                                               \
+        void chpl_comm_atomic_fetch_add_unordered_##_f(void* opnd,      \
+                                             int32_t loc,               \
+                                             void* obj,                 \
+                                             void* res,                 \
+                                             int ln, int32_t fn)        \
+        {                                                               \
+          chpl_comm_atomic_fetch_add_##_f(opnd, loc, obj, res,          \
+                                          memory_order_seq_cst, ln, fn);\
         }
+
 
 DEFINE_CHPL_COMM_ATOMIC_REAL_OP(real32, add_r32, float)
 DEFINE_CHPL_COMM_ATOMIC_REAL_OP(real64, add_r64, double)
@@ -7172,6 +7192,22 @@ DEFINE_CHPL_COMM_ATOMIC_REAL_OP(real64, add_r64, double)
                                                                         \
           chpl_comm_atomic_fetch_add_##_f(&nopnd, loc, obj, res, order, \
                                           ln, fn);                      \
+        }                                                               \
+        void chpl_comm_atomic_fetch_sub_unordered_##_f(void* opnd,      \
+                                             int32_t loc,               \
+                                             void* obj,                 \
+                                             void* res,                 \
+                                             int ln, int32_t fn)        \
+        {                                                               \
+          _t nopnd = _negate(*(_t*) opnd);                              \
+                                                                        \
+          DBG_P_LP(DBGF_IFACE|DBGF_AMO,                                 \
+                   "IFACE chpl_comm_atomic_fetch_sub_unordered"#_f      \
+                   "(%p, %d, %p, %p)",                                  \
+                   opnd, (int) loc, obj, res);                          \
+                                                                        \
+          chpl_comm_atomic_fetch_add_unordered_##_f(&nopnd, loc, obj,   \
+                                                    res, order, ln, fn);\
         }
 
 #define NEGATE_I32(x) ((x) == INT_LEAST32_MIN ? (x) : -(x))
