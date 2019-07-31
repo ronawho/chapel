@@ -148,7 +148,7 @@ void put_strd_common(void* dstaddr_arg, size_t* dststrides, int32_t dstlocale,
 
   switch (strlvls) {
   case 0:
-    chpl_comm_put(srcaddr_arg, dstlocale, dstaddr_arg, cnt[0], commID, ln, fn);
+    chpl_comm_put(srcaddr_arg, dstlocale, dstaddr_arg, cnt[0], commID, /*stats=*/false, ln, fn);
     break;
 
   case 1:

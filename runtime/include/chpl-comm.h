@@ -391,9 +391,10 @@ void chpl_comm_exit(int all, int status);
 void chpl_comm_remote_put(void* addr, c_nodeid_t node, void* raddr,
 			  size_t size, int32_t commID, int ln, int32_t fn);
 
+// TODO make stats an enum so intent is more obvious at callsite?
 static inline
-void chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
-                   size_t size, int32_t commID, int ln, int32_t fn) {
+void chpl_comm_put(void* addr, c_nodeid_t node, void* raddr, size_t size,
+                   int32_t commID, chpl_bool stats, int ln, int32_t fn) {
   assert(addr != NULL);
   assert(raddr != NULL);
   assert(node >= 0 && node < chpl_numNodes);
@@ -405,15 +406,17 @@ void chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
     return;
   }
 
-  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put)) {
-    chpl_comm_cb_info_t cb_data =
-      {chpl_comm_cb_event_kind_put, chpl_nodeID, node,
-       .iu.comm={addr, raddr, size, commID, ln, fn}};
-    chpl_comm_do_callbacks(&cb_data);
-  }
+  if (stats) {
+    if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put)) {
+      chpl_comm_cb_info_t cb_data =
+        {chpl_comm_cb_event_kind_put, chpl_nodeID, node,
+         .iu.comm={addr, raddr, size, commID, ln, fn}};
+      chpl_comm_do_callbacks(&cb_data);
+    }
 
-  chpl_comm_diags_verbose_rdma("put", node, size, ln, fn);
-  chpl_comm_diags_incr(put);
+    chpl_comm_diags_verbose_rdma("put", node, size, ln, fn);
+    chpl_comm_diags_incr(put);
+  }
 
   chpl_comm_remote_put(addr, node, raddr, size, commID, ln, fn);
 }

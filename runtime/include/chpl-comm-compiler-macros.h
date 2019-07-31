@@ -94,7 +94,7 @@ void chpl_gen_comm_put(void* addr, c_nodeid_t node, void* raddr,
     chpl_cache_comm_put(addr, node, raddr, size, commID, ln, fn);
 #endif
   } else {
-    chpl_comm_put(addr, node, raddr, size, commID, ln, fn);
+    chpl_comm_put(addr, node, raddr, size, commID, /*stats=*/true, ln, fn);
   }
 }
 
