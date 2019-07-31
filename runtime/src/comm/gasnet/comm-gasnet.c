@@ -616,7 +616,7 @@ chpl_comm_nb_handle_t chpl_comm_put_nb(void *addr, c_nodeid_t node, void* raddr,
 #endif
 
   if(!remote_in_segment) {
-    chpl_comm_put(addr, node, raddr, size, commID, ln, fn);
+    chpl_comm_remote_put(addr, node, raddr, size, commID, ln, fn);
     ret = NULL;
     return (chpl_comm_nb_handle_t) ret;
   }
@@ -1053,21 +1053,11 @@ void chpl_comm_exit(int all, int status) {
   gasnet_exit(status);
 }
 
-void  chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
-                    size_t size, int32_t commID, int ln, int32_t fn) {
+void chpl_comm_remote_put(void* addr, c_nodeid_t node, void* raddr,
+                          size_t size, int32_t commID, int ln, int32_t fn) {
   int remote_in_segment;
 
-  if (chpl_nodeID == node) {
-    memmove(raddr, addr, size);
-  } else {
-    // Communications callback support
-    if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put)) {
-      chpl_comm_cb_info_t cb_data =
-        {chpl_comm_cb_event_kind_put, chpl_nodeID, node,
-         .iu.comm={addr, raddr, size, commID, ln, fn}};
-      chpl_comm_do_callbacks (&cb_data);
-    }
-
+  {
     chpl_comm_diags_verbose_rdma("put", node, size, ln, fn);
     chpl_comm_diags_incr(put);
 

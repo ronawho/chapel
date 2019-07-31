@@ -5261,32 +5261,11 @@ void consume_all_outstanding_cq_events(int cdi)
 }
 
 
-void chpl_comm_put(void* addr, c_nodeid_t locale, void* raddr,
-                   size_t size, int32_t commID, int ln, int32_t fn)
+void chpl_comm_remote_put(void* addr, c_nodeid_t locale, void* raddr,
+                          size_t size, int32_t commID, int ln, int32_t fn)
 {
-  DBG_P_LP(DBGF_IFACE|DBGF_GETPUT, "IFACE chpl_comm_put(%p, %d, %p, %zd)",
+  DBG_P_LP(DBGF_IFACE|DBGF_GETPUT, "IFACE chpl_comm_remote_put(%p, %d, %p, %zd)",
            addr, (int) locale, raddr, size);
-
-  assert(addr != NULL);
-  assert(raddr != NULL);
-  if (size == 0)
-    return;
-
-  if (locale == chpl_nodeID) {
-    memmove(raddr, addr, size);
-    return;
-  }
-
-  // Communications callback support
-  if (chpl_comm_have_callbacks(chpl_comm_cb_event_kind_put)) {
-      chpl_comm_cb_info_t cb_data =
-        {chpl_comm_cb_event_kind_put, chpl_nodeID, locale,
-         .iu.comm={addr, raddr, size, commID, ln, fn}};
-      chpl_comm_do_callbacks (&cb_data);
-  }
-
-  chpl_comm_diags_verbose_rdma("put", locale, size, ln, fn);
-  chpl_comm_diags_incr(put);
 
   do_remote_put(addr, locale, raddr, size, NULL, may_proxy_true);
 }
@@ -5769,13 +5748,13 @@ void chpl_comm_getput_unordered(c_nodeid_t dst_locale, void* dst_addr,
     if (size <= MAX_UNORDERED_TRANS_SZ) {
       char buf[MAX_UNORDERED_TRANS_SZ];
       chpl_comm_get(buf, src_locale, src_addr, size, commID, ln, fn);
-      chpl_comm_put(buf, dst_locale, dst_addr, size, commID, ln, fn);
+      chpl_comm_remote_put(buf, dst_locale, dst_addr, size, commID, ln, fn);
     } else {
       // Note, we do not expect this case to trigger, but if it does we may
       // want to do on-stmt to src locale and then transfer
       char* buf = chpl_mem_alloc(size, CHPL_RT_MD_COMM_PER_LOC_INFO, 0, 0);
       chpl_comm_get(buf, src_locale, src_addr, size, commID, ln, fn);
-      chpl_comm_put(buf, dst_locale, dst_addr, size, commID, ln, fn);
+      chpl_comm_remote_put(buf, dst_locale, dst_addr, size, commID, ln, fn);
       chpl_mem_free(buf, 0, 0);
     }
   }
@@ -6414,7 +6393,7 @@ chpl_comm_nb_handle_t chpl_comm_put_nb(void* addr, c_nodeid_t locale,
   // it do a real nonblocking implementation, but right now we don't
   // have time.
   //
-  chpl_comm_put(addr, locale, raddr, size, commID, ln, fn);
+  chpl_comm_remote_put(addr, locale, raddr, size, commID, ln, fn);
   return NULL;
 
 #if 0

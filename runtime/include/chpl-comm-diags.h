@@ -24,7 +24,9 @@
 #include <stdio.h>
 
 #include "chpl-atomics.h"
-#include "chpl-comm.h"
+#include "chpl-linefile-support.h"
+
+extern c_nodeid_t chpl_nodeID;
 
 ////////////////////
 //
