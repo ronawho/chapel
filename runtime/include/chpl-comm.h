@@ -381,6 +381,11 @@ void chpl_comm_pre_task_exit(int all);
 //
 void chpl_comm_exit(int all, int status);
 
+typedef enum {
+  stats_disabled = false,
+  stats_enabled = true
+} chpl_comm_stats;
+
 //
 // put 'size' bytes of local data at 'addr' to remote data at
 // 'raddr' on locale 'locale'
@@ -391,10 +396,9 @@ void chpl_comm_exit(int all, int status);
 void chpl_comm_remote_put(void* addr, c_nodeid_t node, void* raddr,
 			  size_t size, int32_t commID, int ln, int32_t fn);
 
-// TODO make stats an enum so intent is more obvious at callsite?
 static inline
 void chpl_comm_put(void* addr, c_nodeid_t node, void* raddr, size_t size,
-                   int32_t commID, chpl_bool stats, int ln, int32_t fn) {
+                   int32_t commID, chpl_comm_stats stats, int ln, int32_t fn) {
   assert(addr != NULL);
   assert(raddr != NULL);
   assert(node >= 0 && node < chpl_numNodes);
