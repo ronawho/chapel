@@ -704,6 +704,33 @@ void chpl_track_free(void* memAlloc, int32_t lineno, int32_t filename) {
   }
 }
 
+void chpl_track_free_sized(void* memAlloc, size_t size, int32_t lineno, int32_t filename) {
+  memTableEntry* memEntry = NULL;
+  if (chpl_memTrack) {
+    memTrack_lock();
+    memEntry = removeMemTableEntry(memAlloc);
+    if (memEntry) {
+      if (size != memEntry->size) {
+        chpl_error("Mismatched size -- TODO better error", lineno, filename);
+      }
+
+      if (chpl_verbose_mem) {
+        fprintf(memLogFile, "%" PRI_c_nodeid_t ": %s:%" PRId32
+                            ": free %zuB of %s at %p\n",
+                chpl_nodeID, (filename ? chpl_lookupFilename(filename) : "--"),
+                lineno, memEntry->number * memEntry->size,
+                chpl_mem_descString(memEntry->description), memAlloc);
+      }
+      sys_free(memEntry);
+    }
+    memTrack_unlock();
+  } else if (chpl_verbose_mem && !memEntry) {
+    fprintf(memLogFile, "%" PRI_c_nodeid_t ": %s:%" PRId32 ": free at %p\n",
+            chpl_nodeID, (filename ? chpl_lookupFilename(filename) : "--"),
+            lineno, memAlloc);
+  }
+}
+
 
 void chpl_track_realloc_pre(void* memAlloc, size_t size,
                          chpl_mem_descInt_t description,
