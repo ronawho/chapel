@@ -500,6 +500,10 @@ guess_my_weight:
     return ret;
 }                                      /*}}} */
 
+void INTERNAL qt_affinity_unset(void) {
+    hwloc_set_cpubind(topology, mccoy_thread_bindings, HWLOC_CPUBIND_THREAD);
+}
+
 void INTERNAL qt_affinity_set(qthread_worker_t *me,
                               unsigned int      nworkerspershep)
 {                                                                                                /*{{{ */

@@ -2403,6 +2403,18 @@ void API_FUNC qthread_flushsc(void)
  */
 #define QTHREAD_SPAWN_MASK_TEAMS (QTHREAD_SPAWN_NEW_TEAM | QTHREAD_SPAWN_NEW_SUBTEAM)
 
+void API_FUNC qthread_chpl_affinity_set(void) {
+    if (qaffinity) {
+        qthread_worker_t *worker = qthread_internal_getworker();
+        qt_affinity_set(worker, qlib->nworkerspershep);
+    }
+}
+void API_FUNC qthread_chpl_affinity_unset(void) {
+    if (qaffinity) {
+        qt_affinity_unset();
+    }
+}
+
 void API_FUNC qthread_chpl_reset_spawn_order(void) {
     assert(qthread_library_initialized);
     qthread_t            *me = qthread_internal_self();

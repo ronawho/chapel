@@ -288,6 +288,9 @@ enum _qthread_features {
 #define QTHREAD_SPAWN_LOCAL_PRIORITY (1 << SPAWN_LOCAL_PRIORITY)
 #define QTHREAD_SPAWN_NETWORK (1 << SPAWN_NETWORK)
 
+void qthread_chpl_affinity_set(void);
+void qthread_chpl_affinity_unset(void);
+
 void qthread_chpl_reset_spawn_order(void);
 
 int qthread_spawn(qthread_f             f,

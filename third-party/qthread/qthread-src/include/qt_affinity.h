@@ -69,6 +69,8 @@ void INTERNAL qt_affinity_init(qthread_shepherd_id_t *nbshepherds,
  *
  * TODO: remove `nworkerspershep` in favor of qt_topo structure.
  */
+void INTERNAL qt_affinity_unset();
+
 void INTERNAL qt_affinity_set(qthread_worker_t * me,
                               unsigned int nworkerspershep);
 

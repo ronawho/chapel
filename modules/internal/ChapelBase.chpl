@@ -1044,6 +1044,27 @@ module ChapelBase {
       chpl_rt_reset_task_spawn();
   }
 
+  // Helpers to dynamically pin/unpin threads at runtime
+  proc chpl_enableAffinity() {
+    pragma "fn synchronization free"
+    extern proc qthread_chpl_affinity_set(): void;
+     coforall 1..here.maxTaskPar {
+      // pin (TODO ideally we wouldn't create tasks to do this, but just tell
+      // them to pin on their next wakeup.)
+      qthread_chpl_affinity_set();
+    }
+  }
+  proc chpl_disableAffinity() {
+    pragma "fn synchronization free"
+    extern proc qthread_chpl_affinity_unset(): void;
+     coforall 1..here.maxTaskPar {
+      // unpin (TODO ideally we want to put the thread to sleep and ideally no
+      // task creation, just a function call that's similar to task-spawning
+      // code used to wake up worker threads)
+      qthread_chpl_affinity_unset();
+    }
+  }
+
   config param useAtomicTaskCnt =  CHPL_NETWORK_ATOMICS!="none";
 
   // Parent class for _EndCount instances so that it's easy
