@@ -18,7 +18,6 @@ Initializing Modules:
     Atomics
     NetworkAtomics
     ChapelLocks
-    ChapelThreads
     ChapelTuple
     ChapelRange
     ChapelTaskDataHelp

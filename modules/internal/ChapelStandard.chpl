@@ -40,7 +40,6 @@ module ChapelStandard {
   use AtomicsCommon;
   use ChapelLocks;
   use ChapelIteratorSupport;
-  use ChapelThreads;
   use ChapelThreadsInternal;
   use ChapelTasksInternal;
   use ChapelTuple;
