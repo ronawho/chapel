@@ -1,2 +1,2 @@
 #! /bin/sh
-grep -v 'Reduced numThreadsPerLocale' < $2 > $2.prediff.tmp && mv $2.prediff.tmp $2
+grep -v 'Reduced CHPL_RT_NUM_THREADS_PER_LOCALE' < $2 > $2.prediff.tmp && mv $2.prediff.tmp $2

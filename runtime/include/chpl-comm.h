@@ -160,8 +160,8 @@ int chpl_comm_addr_gettable(c_nodeid_t node, void* start, size_t len);
 
 //
 // returns the maximum number of threads that can be handled
-// by this communication layer (used to ensure numThreadsPerLocale is
-// legal); should return the sentinel value of 0 if the communication
+// by this communication layer (used to ensure CHPL_RT_NUM_THREADS_PER_LOCALE
+// is legal); should return the sentinel value of 0 if the communication
 // layer imposes no particular limit on the number of threads.
 //
 int32_t chpl_comm_getMaxThreads(void);
