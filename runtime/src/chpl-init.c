@@ -92,19 +92,14 @@ static void recordExecutionCommand(int argc, char *argv[]) {
 // code.  The call on non-0 locales is made from chpl_main(), above.
 //
 void chpl_rt_preUserCodeHook(void) {
-  chpl_comm_barrier("pre-user-code hook begin");
-
-  chpl_taskRunningCntReset(0, 0);
-  if (chpl_nodeID == 0) {
-    chpl_taskRunningCntInc(0, 0);
-  }
+//  chpl_comm_barrier("pre-user-code hook begin");
 
   //
   // Set up any memory tracking requested.
   //
-  chpl_setMemFlags();
+//  chpl_setMemFlags();
 
-  chpl_comm_barrier("pre-user-code hook end");
+//  chpl_comm_barrier("pre-user-code hook end");
 }
 
 

@@ -460,6 +460,9 @@ module ChapelLocale {
           yield locIdx;
           chpl_localesBarrier();
           chpl_rootLocaleInitPrivate(locIdx);
+//TODO
+//          extern proc chpl_setMemFlags();
+//          chpl_setMemFlags();
         }
       }
     }
@@ -520,6 +523,12 @@ module ChapelLocale {
       __primitive("move", Locales, tmp);
     }
     rootLocaleInitialized = true;
+    // Make the running task count 1 on each locale. This function is called
+    // within an on-stmt and non-0 locales will decrement this as the on-stmt
+    // finishes so they wil have a running task count of 0. Locale 0 is a local
+    // on, so there is no adjustment, so it will correctly count 1 running task
+    // (the main task)
+    chpl_taskRunningCntInc();
   }
 
   // We need a temporary value for "here" before the architecture is defined.
@@ -635,13 +644,10 @@ module ChapelLocale {
   // Increment and decrement the task count.
   //
   // Elsewhere in the module code we adjust the running task count
-  // directly, but at least for now the runtime also needs to be
-  // able to do so.  These functions support that.
+  // directly, but the compiler needs to insert calls to this too.
   //
   pragma "no doc"
-  pragma "insert line file info"
   pragma "inc running task"
-  export
   proc chpl_taskRunningCntInc() {
     if rootLocaleInitialized {
       here.runningTaskCntAdd(1);
@@ -649,20 +655,11 @@ module ChapelLocale {
   }
 
   pragma "no doc"
-  pragma "insert line file info"
   pragma "dec running task"
-  export
   proc chpl_taskRunningCntDec() {
     if rootLocaleInitialized {
       here.runningTaskCntSub(1);
     }
-  }
-
-  pragma "no doc"
-  pragma "insert line file info"
-  export
-  proc chpl_taskRunningCntReset() {
-    here.runningTaskCntSet(0);
   }
 
   //
