@@ -164,7 +164,7 @@ void chpl_mem_array_free(void* p,
   // layer.
   //
   const size_t size = nmemb * eltSize;
-  chpl_memhook_free_sized_pre(p, size, lineno, filename);
+  chpl_memhook_sized_free_pre(p, size, lineno, filename);
 
   if (chpl_mem_size_justifies_comm_alloc(size)
       && chpl_comm_regMemFree(p, size)) {

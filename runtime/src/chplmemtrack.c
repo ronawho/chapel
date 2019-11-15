@@ -680,57 +680,42 @@ void chpl_track_malloc(void* memAlloc, size_t number, size_t size,
   }
 }
 
+static
+void track_free_common(void* memAlloc, size_t size, chpl_bool checkSize,
+                       int32_t lineno, int32_t filename) {
+  memTableEntry* memEntry = NULL;
+  if (chpl_memTrack) {
+    memTrack_lock();
+    memEntry = removeMemTableEntry(memAlloc);
+    if (memEntry) {
+      if (checkSize && (size != memEntry->number * memEntry->size)) {
+        chpl_error("Sized free did not match allocation size", lineno, filename);
+      }
+
+      if (chpl_verbose_mem) {
+        fprintf(memLogFile, "%" PRI_c_nodeid_t ": %s:%" PRId32
+                            ": free %zuB of %s at %p\n",
+                chpl_nodeID, (filename ? chpl_lookupFilename(filename) : "--"),
+                lineno, memEntry->number * memEntry->size,
+                chpl_mem_descString(memEntry->description), memAlloc);
+      }
+      sys_free(memEntry);
+    }
+    memTrack_unlock();
+  } else if (chpl_verbose_mem && !memEntry) {
+    fprintf(memLogFile, "%" PRI_c_nodeid_t ": %s:%" PRId32 ": free at %p\n",
+            chpl_nodeID, (filename ? chpl_lookupFilename(filename) : "--"),
+            lineno, memAlloc);
+  }
+}
 
 void chpl_track_free(void* memAlloc, int32_t lineno, int32_t filename) {
-  memTableEntry* memEntry = NULL;
-  if (chpl_memTrack) {
-    memTrack_lock();
-    memEntry = removeMemTableEntry(memAlloc);
-    if (memEntry) {
-      if (chpl_verbose_mem) {
-        fprintf(memLogFile, "%" PRI_c_nodeid_t ": %s:%" PRId32
-                            ": free %zuB of %s at %p\n",
-                chpl_nodeID, (filename ? chpl_lookupFilename(filename) : "--"),
-                lineno, memEntry->number * memEntry->size,
-                chpl_mem_descString(memEntry->description), memAlloc);
-      }
-      sys_free(memEntry);
-    }
-    memTrack_unlock();
-  } else if (chpl_verbose_mem && !memEntry) {
-    fprintf(memLogFile, "%" PRI_c_nodeid_t ": %s:%" PRId32 ": free at %p\n",
-            chpl_nodeID, (filename ? chpl_lookupFilename(filename) : "--"),
-            lineno, memAlloc);
-  }
+  track_free_common(memAlloc, /*size=*/0, /*checkSize=*/false, lineno, filename);
 }
 
-void chpl_track_free_sized(void* memAlloc, size_t size, int32_t lineno, int32_t filename) {
-  memTableEntry* memEntry = NULL;
-  if (chpl_memTrack) {
-    memTrack_lock();
-    memEntry = removeMemTableEntry(memAlloc);
-    if (memEntry) {
-      if (size != memEntry->size) {
-        chpl_error("Mismatched size -- TODO better error", lineno, filename);
-      }
-
-      if (chpl_verbose_mem) {
-        fprintf(memLogFile, "%" PRI_c_nodeid_t ": %s:%" PRId32
-                            ": free %zuB of %s at %p\n",
-                chpl_nodeID, (filename ? chpl_lookupFilename(filename) : "--"),
-                lineno, memEntry->number * memEntry->size,
-                chpl_mem_descString(memEntry->description), memAlloc);
-      }
-      sys_free(memEntry);
-    }
-    memTrack_unlock();
-  } else if (chpl_verbose_mem && !memEntry) {
-    fprintf(memLogFile, "%" PRI_c_nodeid_t ": %s:%" PRId32 ": free at %p\n",
-            chpl_nodeID, (filename ? chpl_lookupFilename(filename) : "--"),
-            lineno, memAlloc);
-  }
+void chpl_track_sized_free(void* memAlloc, size_t size, int32_t lineno, int32_t filename) {
+  track_free_common(memAlloc, size, /*checkSize=*/true, lineno, filename);
 }
-
 
 void chpl_track_realloc_pre(void* memAlloc, size_t size,
                          chpl_mem_descInt_t description,

@@ -105,12 +105,11 @@ void chpl_memhook_free_pre(void* memAlloc,
 }
 
 static inline
-void chpl_memhook_free_sized_pre(void* memAlloc, size_t size,
-                           int32_t lineno, int32_t filename) {
+void chpl_memhook_sized_free_pre(void* memAlloc, size_t size,
+                                 int32_t lineno, int32_t filename) {
   if (CHPL_MEMHOOKS_ACTIVE) {
-    // call this one just to check heap is initialized.
     chpl_memhook_check_pre(0, 0, 0, lineno, filename);
-    chpl_track_free_sized(memAlloc, size, lineno, filename);
+    chpl_track_sized_free(memAlloc, size, lineno, filename);
   }
 }
 
