@@ -420,6 +420,10 @@ extern void chpl_taskRunningCntInc(int64_t _ln, int32_t _fn);
 extern void chpl_taskRunningCntDec(int64_t _ln, int32_t _fn);
 extern void chpl_taskRunningCntReset(int64_t _ln, int32_t _fn);
 
+
+void chpl_task_signal_shutdown(void);
+void chpl_task_wait_for_shutdown(void);
+
 #ifdef __cplusplus
 } // end extern "C"
 #endif

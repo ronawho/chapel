@@ -119,13 +119,21 @@ static void profile_print(void)
 # define PROFILE_INCR(counter,count)
 #endif /* CHAPEL_PROFILE */
 
+
+static aligned_t canexit = 0;
+void chpl_task_signal_shutdown(void) {
+  qthread_fill(&canexit);
+}
+void chpl_task_wait_for_shutdown(void) {
+  qthread_purge(&canexit);
+  qthread_readFF(NULL, &canexit);
+}
+
 //
 // Startup and shutdown control.  The mutex is used just for the side
 // effect of its (very portable) memory fence.
 //
 volatile int chpl_qthread_done_initializing;
-static aligned_t canexit = 0;
-static pthread_mutex_t init_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Make qt env sizes uniform. Same as qt, but they use the literal everywhere
 #define QT_ENV_S 100
@@ -140,8 +148,6 @@ struct chpl_task_list {
 };
 
 static aligned_t next_task_id = 1;
-
-static pthread_t initer;
 
 pthread_t chpl_qthread_process_pthread;
 pthread_t chpl_qthread_comm_pthread;
@@ -287,32 +293,6 @@ static void SIGINT_handler(int sig)
     }
 
     chpl_exit_any(1);
-}
-
-// We call this routine in a separate pthread for 2 main reasons:
-// 1) qthread_initialize() converts the current thread into a shepherd (the
-//    "real mccoy" shepherd) and creates a qthread on top of that. If we called
-//    this from the main process we'd have to be very careful about using
-//    pthread mutexes, sched_yield, and other similar constructs that don't
-//    play well with qthreads in the rest of the runtime. That's a lot of
-//    effort and easy to forget about, so we want to avoid that.
-//
-// 2) qthread_finalize() only does anything when called from the original
-//    context that called qthread_initialize, so this is an easy way to ensure
-//    that.
-static void *initializer(void *junk)
-{
-    qthread_initialize();
-    qthread_purge(&canexit);
-    (void) pthread_mutex_lock(&init_mutex);
-    chpl_qthread_done_initializing = 1;
-    (void) pthread_mutex_unlock(&init_mutex);
-
-    qthread_readFF(NULL, &canexit);
-
-    qthread_finalize();
-
-    return NULL;
 }
 
 //
@@ -701,9 +681,8 @@ void chpl_task_init(void)
     if (verbosity >= 2) { chpl_qt_setenv("INFO", "1", 0); }
 
     // Initialize qthreads
-    pthread_create(&initer, NULL, initializer, NULL);
-    while (chpl_qthread_done_initializing == 0)
-        sched_yield();
+    qthread_initialize();
+    chpl_qthread_done_initializing = 1;
 
     // Now that Qthreads is up and running, do a sanity check and make sure
     // that the number of workers is less than any comm layer limit. This is
@@ -725,16 +704,7 @@ void chpl_task_exit(void)
     profile_print();
 #endif /* CHAPEL_PROFILE */
 
-    if (qthread_shep() == NO_SHEPHERD) {
-        /* sometimes, tasking is told to shutdown even though it hasn't been
-         * told to start yet */
-        if (chpl_qthread_done_initializing == 1) {
-            qthread_fill(&canexit);
-            pthread_join(initer, NULL);
-        }
-    } else {
-        qthread_fill(&exit_ret);
-    }
+    qthread_finalize();
 }
 
 static inline void wrap_callbacks(chpl_task_cb_event_kind_t event_kind,

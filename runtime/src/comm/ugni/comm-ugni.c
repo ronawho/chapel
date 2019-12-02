@@ -3962,7 +3962,7 @@ void chpl_comm_pre_task_exit(int all)
         fork_shutdown(i);
       }
     } else {
-      chpl_wait_for_shutdown();
+      chpl_task_wait_for_shutdown();
     }
 
     chpl_comm_barrier("chpl_comm_pre_task_exit");
@@ -4225,7 +4225,7 @@ void rf_handler(gni_cq_entry_t* ev)
 
     {
       release_req_buf(req_li, req_cdi, req_rbi);
-      chpl_signal_shutdown();
+      chpl_task_signal_shutdown();
     }
     break;
 

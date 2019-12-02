@@ -527,7 +527,7 @@ static void AM_free(gasnet_token_t token, gasnet_handlerarg_t a0, gasnet_handler
 }
 
 static void AM_shutdown(gasnet_token_t token) {
-  chpl_signal_shutdown();
+  chpl_task_signal_shutdown();
 }
 
 //
@@ -1028,7 +1028,7 @@ void chpl_comm_pre_task_exit(int all) {
         GASNET_Safe(gasnet_AMRequestShort0(node, SHUTDOWN));
       }
     } else {
-      chpl_wait_for_shutdown();
+      chpl_task_wait_for_shutdown();
     }
 
     chpl_comm_barrier("stop polling");
