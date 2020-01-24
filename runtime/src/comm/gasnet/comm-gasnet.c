@@ -809,6 +809,16 @@ void chpl_comm_init(int *argc_p, char ***argv_p) {
   gasnet_init(argc_p, argv_p);
   chpl_nodeID = gasnet_mynode();
   chpl_numNodes = gasnet_nodes();
+#if defined(GASNET_CONDUIT_SMP)
+  if (chpl_topo_getNumNumaDomains() == chpl_numNodes) {
+    chpl_topo_setThreadLocality(chpl_nodeID);
+    // TODO this disable core-pinning, but without doing this qthreads will
+    // reset affinity and pin all threads to numa-domain 0. We need qthreads to
+    // respect previously set bindings so that it binds threads to cores within
+    // the numa domain it has affinity to instead of ignoring that.
+    chpl_env_set("QT_AFFINITY", "no", 0);
+  }
+#endif
   GASNET_Safe(gasnet_attach(ftable, 
                             sizeof(ftable)/sizeof(gasnet_handlerentry_t),
                             gasnet_getMaxLocalSegmentSize(),
