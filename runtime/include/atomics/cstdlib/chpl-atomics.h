@@ -63,10 +63,6 @@
 typedef Atomic(_real64) atomic__real64;
 typedef Atomic(_real32) atomic__real32;
 
-static inline memory_order _defaultOfMemoryOrder(void) {
-  return memory_order_seq_cst;
-}
-
 static inline void chpl_atomic_thread_fence(memory_order order)
 {
   atomic_thread_fence(order);

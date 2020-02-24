@@ -105,10 +105,6 @@ typedef enum {
  memory_order_seq_cst
 } memory_order;
 
-static inline memory_order _defaultOfMemoryOrder(void) {
-  return memory_order_seq_cst;
-}
-
 static inline
 void chpl_atomic_thread_fence(memory_order order)
 {

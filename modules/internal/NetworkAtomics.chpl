@@ -20,6 +20,7 @@
 pragma "atomic module"
 module NetworkAtomics {
   private use ChapelStandard;
+  private use Atomics;
   private use MemConsistency;
 
   private proc externFunc(param s: string, type T) param {

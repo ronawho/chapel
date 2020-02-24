@@ -18,23 +18,20 @@
  */
 
 module MemConsistency {
+  private use Atomics;
+
   pragma "c memory order type"
   extern type memory_order;
 
-  // When I finish removing PRIM_INIT before initialization to a known
-  // value, then this method should work.  Until then, my stopgap will be
-  // an external function in the runtime.
+  extern const memory_order_relaxed:memory_order;
+  extern const memory_order_acquire:memory_order;
+  extern const memory_order_release:memory_order;
+  extern const memory_order_acq_rel:memory_order;
+  extern const memory_order_seq_cst:memory_order;
 
-  //inline proc _defaultOf(type t:memory_order): memory_order
-  //  return memory_order_seq_cst;
-
-  pragma "last resort"
-  pragma "no doc"
-  inline proc _defaultOf(type t:memory_order) {
-    pragma "no doc"
-    extern proc _defaultOfMemoryOrder(): memory_order;
-
-    return _defaultOfMemoryOrder();
+  inline proc _defaultOf(type t:memory_order): memory_order {
+    extern const memory_order_seq_cst:memory_order;
+    return memory_order_seq_cst;
   }
 
   proc ==(a:memory_order, b:memory_order):bool {
@@ -50,8 +47,6 @@ module MemConsistency {
   proc memory_order.writeThis(ch) throws {
     if this == memory_order_relaxed then
       ch <~> "memory_order_relaxed";
-    else if this == memory_order_consume then
-      ch <~> "memory_order_consume";
     else if this == memory_order_acquire then
       ch <~> "memory_order_acquire";
     else if this == memory_order_release then
@@ -63,16 +58,6 @@ module MemConsistency {
     else
       ch <~> "memory_order_unknown";
   }
-
-  extern const memory_order_relaxed:memory_order;
-  extern const memory_order_consume:memory_order;
-  extern const memory_order_acquire:memory_order;
-  extern const memory_order_release:memory_order;
-  extern const memory_order_acq_rel:memory_order;
-  extern const memory_order_seq_cst:memory_order;
-
-  pragma "memory order type"
-  enum memoryOrder {seqCst, acqRel, release, acquire, relaxed}
 
 
   // Given an input memory order, return an order that can be used for an

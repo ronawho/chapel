@@ -68,23 +68,21 @@
    Atomic variables are variables that support atomic operations. Chapel
    currently supports atomic operations for bools, all supported sizes of
    signed and unsigned integers, as well as all supported sizes of reals.
-
-   Most atomic methods accept an optional argument named ``order`` of type
-   ``memoryOrder``. The ``order`` argument is used to specify the ordering
-   constraints of atomic operations. The supported values are:
-
-     * memoryOrder.relaxed
-     * memoryOrder.acquire
-     * memoryOrder.release
-     * memoryOrder.acqRel
-     * memoryOrder.seqCst
 */
 pragma "atomic module"
 module Atomics {
 
   private use ChapelBase;
-  use MemConsistency;
-  use ChapelEnv;
+  private use MemConsistency;
+  private use ChapelEnv;
+
+  /*
+   Most atomic methods accept an optional argument named ``order`` of type
+   ``memoryOrder``. The ``order`` argument is used to specify the ordering
+   constraints of atomic operations.
+  */
+  pragma "memory order type"
+  enum memoryOrder {seqCst, acqRel, release, acquire, relaxed}
 
   pragma "no doc"
   extern proc chpl_atomic_thread_fence(order:memory_order);

@@ -1184,6 +1184,7 @@ module ChapelBase {
       // note that this on statement does not have the usual
       // remote memory fence because of pragma "no remote memory fence"
       // above. So we do an acquire fence before it.
+      use MemConsistency;
       chpl_rmem_consist_fence(memoryOrder.release);
       on e {
         e.i.add(1, memoryOrder.release);

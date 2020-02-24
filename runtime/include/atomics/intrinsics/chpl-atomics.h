@@ -60,10 +60,6 @@ typedef enum {
  memory_order_seq_cst
 } memory_order;
 
-static inline memory_order _defaultOfMemoryOrder(void) {
-  return memory_order_seq_cst;
-}
-
 // __sync_synchronize is missing for cce < 8.4
 #if RT_COMP_CC == RT_COMP_CRAY
   #include <intrinsics.h>
