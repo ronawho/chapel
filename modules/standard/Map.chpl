@@ -35,7 +35,7 @@ module Map {
   // Lock code lifted from modules/standard/Lists.chpl.
   // Maybe they should be combined into a Locks module.
   pragma "no doc"
-  type _lockType = ChapelLocks.chpl_LocalSpinlock;
+  type _lockType = chpl_LocalSpinlock;
 
   pragma "no doc"
   class _LockWrapper {

@@ -679,6 +679,45 @@ module Atomics {
 
   }
 
+  private proc externSpinlock type {
+    extern type atomic_spinlock_t;
+    return atomic_spinlock_t;
+  }
+
+  /*
+   * Local processor atomic spinlock. Intended for situations with minimal
+   * contention or very short critical sections.
+   */
+  pragma "default intent is ref"
+  pragma "atomic type"
+  pragma "ignore noinit"
+  pragma "no doc"
+  record chpl_LocalSpinlock {
+    var l: externSpinlock;
+
+    proc init() {
+      pragma "fn synchronization free"
+      extern proc atomic_init_spinlock_t(ref l: externSpinlock);
+      this.complete();
+      atomic_init_spinlock_t(l);
+    }
+
+    proc deinit() {
+      extern proc atomic_destroy_spinlock_t(ref l: externSpinlock);
+      on this do atomic_destroy_spinlock_t(l);
+    }
+
+    inline proc lock() {
+      extern proc atomic_lock_spinlock_t(ref l: externSpinlock);
+      on this do atomic_lock_spinlock_t(l);
+    }
+
+    inline proc unlock() {
+      extern proc atomic_unlock_spinlock_t(ref l: externSpinlock);
+      on this do atomic_unlock_spinlock_t(l);
+    }
+  }
+
   //
   // For the first cut, we will be making assignment and other normal
   // operations illegal.  In addition, we are also punting on

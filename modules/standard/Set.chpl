@@ -65,7 +65,7 @@ module Set {
   // contention.
   //
   pragma "no doc"
-  type _lockType = ChapelLocks.chpl_LocalSpinlock;
+  type _lockType = chpl_LocalSpinlock;
 
   //
   // Use a wrapper class to let set methods have a const ref receiver even

@@ -82,7 +82,7 @@ module List {
   // list, or any operation that is O(n)).
   //
   pragma "no doc"
-  type _lockType = ChapelLocks.chpl_LocalSpinlock;
+  type _lockType = chpl_LocalSpinlock;
 
   //
   // Use a wrapper class to let list methods have a const ref receiver even

@@ -22,24 +22,4 @@
  * Collection of mutexes/locks.
  */
 module ChapelLocks {
-  private use Atomics, ChapelBase;
-  private use MemConsistency;
-  /*
-   * Local processor atomic spinlock. Intended for situations with minimal
-   * contention or very short critical sections.
-   */
-  pragma "default intent is ref"
-  record chpl_LocalSpinlock {
-    var l: chpl__processorAtomicType(bool);
-
-    inline proc lock() {
-      on this do
-        while l.read() || l.testAndSet(memoryOrder.acquire) do
-          chpl_task_yield();
-    }
-
-    inline proc unlock() {
-      l.clear(memoryOrder.release);
-    }
-  }
 }
