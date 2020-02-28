@@ -702,6 +702,10 @@ module Atomics {
       atomic_init_spinlock_t(l);
     }
 
+    proc init=(other:chpl_LocalSpinlock) {
+      halt("Can't init=");
+    }
+
     proc deinit() {
       extern proc atomic_destroy_spinlock_t(ref l: externSpinlock);
       on this do atomic_destroy_spinlock_t(l);
@@ -716,6 +720,12 @@ module Atomics {
       extern proc atomic_unlock_spinlock_t(ref l: externSpinlock);
       on this do atomic_unlock_spinlock_t(l);
     }
+    proc const writeThis(x) throws {
+    }
+
+  }
+  inline proc =(ref a:chpl_LocalSpinlock, const ref b:chpl_LocalSpinlock) {
+      halt("Can't assign");
   }
 
   //
