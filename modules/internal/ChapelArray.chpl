@@ -3378,9 +3378,8 @@ module ChapelArray {
   }
 
   proc _deinitElementsIsParallel(type eltType) param {
-    // TODO: Would anything be hurt if this always returned true?
-    // one guess: arrays of arrays where all inner arrays share a domain?
-    return false;
+    // TODO should this be based on the array size?
+    return true;
   }
 
   proc _deinitElements(array: _array) {
