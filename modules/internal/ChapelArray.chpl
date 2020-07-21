@@ -3377,9 +3377,9 @@ module ChapelArray {
     _do_destroy_arr(array._unowned, array._instance, deinitElts);
   }
 
-  proc _deinitElementsIsParallel(type eltType) param {
-    // TODO should this be based on the array size?
-    return true;
+  proc _deinitElementsIsParallel(type eltType) {
+    // TODO check size?
+    return rootLocaleInitialized;
   }
 
   proc _deinitElements(array: _array) {
