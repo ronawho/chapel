@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -27,8 +28,6 @@
 #include "LoopExpr.h"
 #include "stmt.h"
 #include "astutil.h"
-
-static bool mightBeSyncSingleExpr(DefExpr* field);
 
 static bool isAssignment(CallExpr* callExpr);
 static bool isSimpleAssignment(CallExpr* callExpr);
@@ -69,7 +68,8 @@ InitNormalize::InitNormalize(BlockStmt* block, const InitNormalize& curr) {
                blockInfo->isPrimitive(PRIM_BLOCK_COFORALL_ON) == true) {
       mBlockType = cBlockCoforall;
 
-    } else if (blockInfo->isPrimitive(PRIM_BLOCK_ON) == true) {
+    } else if (blockInfo->isPrimitive(PRIM_BLOCK_ON) == true ||
+               blockInfo->isPrimitive(PRIM_BLOCK_ELIDED_ON)) {
       mBlockType = cBlockOn;
 
     } else {
@@ -350,8 +350,8 @@ Expr* InitNormalize::genericFieldInitTypeWoutInit(Expr*    insertBefore,
 
   VarSymbol* tmp      = newTemp("tmp", type);
   DefExpr*   tmpDefn  = new DefExpr(tmp);
-  CallExpr*  tmpExpr  = new CallExpr(PRIM_INIT, field->exprType->copy());
-  CallExpr*  tmpInit  = new CallExpr(PRIM_MOVE, tmp, tmpExpr);
+  CallExpr*  tmpInit  = new CallExpr(PRIM_DEFAULT_INIT_VAR,
+                                     tmp, field->exprType->copy());
 
   tmp->addFlag(FLAG_PARAM);
 
@@ -363,7 +363,7 @@ Expr* InitNormalize::genericFieldInitTypeWoutInit(Expr*    insertBefore,
   insertBefore->insertBefore(tmpInit);
   insertBefore->insertBefore(fieldSet);
 
-  return tmpExpr;
+  return tmpInit;
 }
 
 /************************************* | **************************************
@@ -492,14 +492,18 @@ Expr* InitNormalize::genericFieldInitTypeInference(Expr*    insertBefore,
 
 Expr* InitNormalize::fieldInitTypeWoutInit(Expr*    insertBefore,
                                            DefExpr* field) const {
+
+  if (field->sym->hasFlag(FLAG_NO_INIT))
+    return NULL;
+
   SET_LINENO(insertBefore);
 
   Type* type = field->sym->type;
 
   VarSymbol* tmp      = newTemp("tmp", type);
   DefExpr*   tmpDefn  = new DefExpr(tmp);
-  CallExpr*  tmpExpr  = new CallExpr(PRIM_INIT, field->exprType->copy());
-  CallExpr*  tmpInit  = new CallExpr(PRIM_MOVE, tmp, tmpExpr);
+  CallExpr*  tmpInit  = new CallExpr(PRIM_DEFAULT_INIT_VAR,
+                                     tmp, field->exprType->copy());
 
   Symbol*    _this    = mFn->_this;
   Symbol*    name     = new_CStringSymbol(field->sym->name);
@@ -509,7 +513,7 @@ Expr* InitNormalize::fieldInitTypeWoutInit(Expr*    insertBefore,
   insertBefore->insertBefore(tmpInit);
   insertBefore->insertBefore(fieldSet);
 
-  return tmpExpr;
+  return tmpInit;
 }
 
 /************************************* | **************************************
@@ -529,33 +533,7 @@ Expr* InitNormalize::fieldInitTypeWithInit(Expr*    insertBefore,
     // For default-initializers, copy happens at the callsite
     Symbol* _this = mFn->_this;
     Symbol* name = new_CStringSymbol(field->sym->name);
-    PrimitiveTag tag = PRIM_SET_MEMBER;
-    if (mightBeSyncSingleExpr(field)) {
-      tag = PRIM_INIT_FIELD;
-    }
-    CallExpr* fieldSet = new CallExpr(tag, _this, name, initExpr);
-
-    insertBefore->insertBefore(fieldSet);
-
-    return initExpr;
-
-  } else if (theFn()->hasFlag(FLAG_COMPILER_GENERATED) == true &&
-             field->init                               == NULL &&
-             mightBeSyncSingleExpr(field)              == true) {
-    // The type of the field depends on something that hasn't been determined
-    // yet.  It is entirely possible that the type will end up as a sync or
-    // single and so we need to flag this field initialization for resolution
-    // to handle
-
-    // TODO -- is this necessary anymore? It came from PR #7913.
-    // try the test named syncFieldTypeOnlyTypeFunc2.chpl
-
-    Symbol*   _this    = mFn->_this;
-    Symbol*   name     = new_CStringSymbol(field->sym->name);
-    CallExpr* fieldSet = new CallExpr(PRIM_INIT_MAYBE_SYNC_SINGLE_FIELD,
-                                      _this,
-                                      name,
-                                      initExpr);
+    CallExpr* fieldSet = new CallExpr(PRIM_INIT_FIELD, _this, name, initExpr);
 
     insertBefore->insertBefore(fieldSet);
 
@@ -625,104 +603,6 @@ Expr* InitNormalize::fieldInitTypeInference(Expr*    insertBefore,
   }
 
   return initExpr;
-}
-
-/************************************* | **************************************
-*                                                                             *
-*                                                                             *
-*                                                                             *
-************************************** | *************************************/
-
-void InitNormalize::updateFieldsMember(Expr* expr) const {
-  if (SymExpr* symExpr = toSymExpr(expr)) {
-    Symbol* sym = symExpr->symbol();
-
-    if (DefExpr* field = toLocalField(symExpr)) {
-      if (isFieldInitialized(field) == true) {
-        SymExpr* _this = new SymExpr(mFn->_this);
-        SymExpr* name  = new SymExpr(new_CStringSymbol(sym->name));
-
-        if (field->sym->hasFlag(FLAG_PARAM) ||
-            field->sym->hasFlag(FLAG_TYPE_VARIABLE)) {
-          symExpr->replace(new CallExpr(PRIM_GET_MEMBER_VALUE, _this, name));
-        } else {
-          symExpr->replace(new CallExpr(PRIM_GET_MEMBER, _this, name));
-        }
-
-      } else {
-        USR_FATAL(expr,
-                  "'%s' used before defined (first used here)",
-                  field->sym->name);
-      }
-
-    } else if (DefExpr* field = toSuperField(symExpr)) {
-      if (isPhase0() == true) {
-        USR_FATAL(expr,
-                  "Cannot access parent field \"%s\" before super.init() or this.init()",
-                  field->sym->name);
-      } else {
-        SymExpr* _this = new SymExpr(mFn->_this);
-        SymExpr* name  = new SymExpr(new_CStringSymbol(sym->name));
-
-        if (field->sym->hasFlag(FLAG_PARAM)         == true ||
-            field->sym->hasFlag(FLAG_TYPE_VARIABLE) == true) {
-          symExpr->replace(new CallExpr(PRIM_GET_MEMBER_VALUE, _this, name));
-
-        } else {
-          symExpr->replace(new CallExpr(PRIM_GET_MEMBER,       _this, name));
-        }
-      }
-    }
-
-  } else if (CallExpr* callExpr = toCallExpr(expr)) {
-    if (isFieldAccess(callExpr) == false) {
-
-      for_actuals(actual, callExpr) {
-        updateFieldsMember(actual);
-      }
-    }
-  } else if (IfExpr* ie = toIfExpr(expr)) {
-    updateFieldsMember(ie->getCondition());
-    updateFieldsMember(ie->getThenStmt());
-    updateFieldsMember(ie->getElseStmt());
-  } else if (LoopExpr* fe = toLoopExpr(expr)) {
-    updateFieldsMember(fe->iteratorExpr);
-    if (fe->cond) updateFieldsMember(fe->cond);
-    updateFieldsMember(fe->loopBody);
-
-  } else if (BlockStmt* block = toBlockStmt(expr)) {
-    for_alist(stmt, block->body) {
-      updateFieldsMember(stmt);
-    }
-
-  } else if (NamedExpr* named = toNamedExpr(expr)) {
-    updateFieldsMember(named->actual);
-
-  } else if (isUnresolvedSymExpr(expr) == true) {
-
-  } else {
-    INT_ASSERT(false);
-  }
-}
-
-/************************************* | **************************************
-*                                                                             *
-*                                                                             *
-*                                                                             *
-************************************** | *************************************/
-
-bool InitNormalize::isFieldAccess(CallExpr* callExpr) const {
-  bool retval = false;
-
-  if (callExpr->isNamed(".") == true) {
-    if (SymExpr* lhs = toSymExpr(callExpr->get(1))) {
-      if (ArgSymbol* arg = toArgSymbol(lhs->symbol())) {
-        retval = arg->hasFlag(FLAG_ARG_THIS);
-      }
-    }
-  }
-
-  return retval;
 }
 
 /************************************* | **************************************
@@ -946,24 +826,6 @@ DefExpr* InitNormalize::firstField(FnSymbol* fn) const {
   return retval;
 }
 
-void InitNormalize::makeOuterArg() {
-  AggregateType* at        = type();
-  Type*          outerType = at->outer->type;
-
-  outerType->methods.add(mFn);
-
-  mFn->_outer = new ArgSymbol(INTENT_BLANK, "outer", outerType);
-
-  mFn->_outer->addFlag(FLAG_GENERIC);
-
-  mFn->_this->defPoint->insertAfter(new DefExpr(mFn->_outer));
-
-  mFn->insertAtHead(new CallExpr(PRIM_SET_MEMBER,
-                                 mFn->_this,
-                                 new_CStringSymbol("outer"),
-                                 mFn->_outer));
-}
-
 //
 // Initialize the 'mThisAsParent' field
 //
@@ -973,6 +835,10 @@ void InitNormalize::makeOuterArg() {
 // the parent.
 //
 void InitNormalize::makeThisAsParent(CallExpr* call) {
+  if (type()->symbol->hasFlag(FLAG_NO_OBJECT)) {
+    return;
+  }
+
   // type parentType = this.super.type;
   // var thisAsParent : parentType = (_cast parentType this);
 
@@ -1047,7 +913,7 @@ static bool typeHasMethod(AggregateType* type, const char* methodName) {
 
   if (type != dtObject) {
     forv_Vec(FnSymbol, method, type->methods) {
-      if (strcmp(method->name, methodName) == 0) {
+      if (method && strcmp(method->name, methodName) == 0) {
         retval = true;
         break;
       }
@@ -1082,26 +948,34 @@ void ProcessThisUses::visitSymExpr(SymExpr* node) {
   DefExpr* field = NULL;
 
   if (node->symbol()->hasFlag(FLAG_ARG_THIS)) {
-    CallExpr* call = NULL;
-    Expr* cur = node;
-    while (call == NULL && cur->parentExpr != NULL) {
-      if (CallExpr* parent = toCallExpr(cur->parentExpr)) {
-        call = parent;
+    if (DefExpr* parentDef = toDefExpr(node->parentExpr)) {
+      if (parentDef->sym->hasFlag(FLAG_REF_VAR)) {
+        USR_FATAL_CONT(node, "cannot take a reference to \"this\" before this.complete()");
       } else {
-        cur = cur->parentExpr;
+        USR_FATAL_CONT(node, "cannot initialize a variable from \"this\" before this.complete()");
       }
-    }
-
-    if (call->isPrimitive() == false) {
-      if (state->isPhase0()) {
-        USR_FATAL_CONT(node, "cannot pass \"this\" to a function before calling super.init() or this.init()");
-      } else if (state->type()->isRecord()) {
-        USR_FATAL_CONT(node, "cannot pass a record to a function before this.complete()");
+    } else {
+      CallExpr* call = NULL;
+      Expr* cur = node;
+      while (call == NULL && cur->parentExpr != NULL) {
+        if (CallExpr* parent = toCallExpr(cur->parentExpr)) {
+          call = parent;
+        } else {
+          cur = cur->parentExpr;
+        }
       }
-    }
 
-    if (isClass(state->type())) {
-      node->setSymbol(state->getThisAsParent());
+      if (call && call->isPrimitive() == false) {
+        if (state->isPhase0()) {
+          USR_FATAL_CONT(node, "cannot pass \"this\" to a function before calling super.init() or this.init()");
+        } else if (state->type()->isRecord()) {
+          USR_FATAL_CONT(node, "cannot pass a record to a function before this.complete()");
+        }
+      }
+
+      if (isClass(state->type())) {
+        node->setSymbol(state->getThisAsParent());
+      }
     }
   } else if (DefExpr* local = state->type()->toLocalField(node)) {
     field = local;
@@ -1155,12 +1029,17 @@ bool ProcessThisUses::enterCallExpr(CallExpr* node) {
       USR_FATAL_CONT(node,
                      "cannot access parent field \"%s\" before super.init() or this.init()",
                      field->sym->name);
+    } else if (state->isPhase1()) {
+      node->baseExpr->remove();
+      node->baseExpr = NULL;
+      node->primitive = primitives[PRIM_GET_MEMBER];
     }
     return false;
   } else if (isAssignment(node)) {
     if (CallExpr* LHS = toCallExpr(node->get(1))) {
       if (isThisDot(LHS)) {
         if (LHS->square == false) {
+          node->get(1)->accept(this);
           // Regular 'this.x = ' , just look at the RHS
           node->get(2)->accept(this);
           return false;
@@ -1305,41 +1184,6 @@ InitNormalize::phaseToString(InitNormalize::InitPhase phase) const {
   return retval;
 }
 
-/************************************* | **************************************
-*                                                                             *
-*                                                                             *
-*                                                                             *
-************************************** | *************************************/
-
-// The type of the field is not yet determined either due to being entirely a
-// type alias, or due to being a call to a function that returns a type.
-// Therefore, we must be cautious and marking this field initialization as
-// potentially a sync or single, so that when we know its type at resolution,
-// we can respond appropriately.
-static bool mightBeSyncSingleExpr(DefExpr* field) {
-  bool retval = false;
-
-  if (SymExpr* typeSym = toSymExpr(field->exprType)) {
-    if (typeSym->symbol()->hasFlag(FLAG_TYPE_VARIABLE)) {
-      retval = true;
-    }
-
-  } else if (CallExpr* typeCall = toCallExpr(field->exprType)) {
-    /*if (typeCall->isPrimitive(PRIM_QUERY_TYPE_FIELD)) { // might be necessary
-      retval = true;
-    } else */
-
-    if (typeCall->isPrimitive() == false) {
-      // The call is not a known primitive.
-      // We have to assume that it is a type function being called,
-      // and type functions could return a sync or single type.
-      retval = true;
-    }
-  }
-
-  return retval;
-}
-
 static bool isAssignment(CallExpr* callExpr) {
   bool retval = false;
 
@@ -1354,7 +1198,7 @@ static bool isAssignment(CallExpr* callExpr) {
 static bool isSimpleAssignment(CallExpr* callExpr) {
   bool retval = false;
 
-  if (callExpr->isNamedAstr(astrSequals) == true) {
+  if (callExpr->isNamedAstr(astrSassign) == true) {
     retval = true;
   }
 

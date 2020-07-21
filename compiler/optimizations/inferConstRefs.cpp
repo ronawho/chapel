@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -271,7 +272,8 @@ static bool isSafeRefPrimitive(SymExpr* use) {
     case PRIM_LOCAL_CHECK:
     case PRIM_PTR_EQUAL:
     case PRIM_PTR_NOTEQUAL:
-    case PRIM_SIZEOF:
+    case PRIM_SIZEOF_BUNDLE:
+    case PRIM_SIZEOF_DDATA_ELEMENT:
     case PRIM_WIDE_GET_NODE:
       return true;
     default:
@@ -466,7 +468,7 @@ static bool passedToInitOrRetarg(SymExpr* use,
   if (form->hasFlag(FLAG_RETARG))
     return true;
 
-  if (calledFn->isInitializer()  &&
+  if ((calledFn->isInitializer() || calledFn->isCopyInit())  &&
       form->hasFlag(FLAG_ARG_THIS))
     return true;
 

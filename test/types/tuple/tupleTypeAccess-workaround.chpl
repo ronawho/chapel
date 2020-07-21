@@ -14,8 +14,8 @@ class AdvancedBasketWeaving {
   var acceptableStudentTypes = (new borrowed GoodStudent(), new borrowed ExcellentStudent());
 
   proc accept(student: borrowed Student) {
-    for param i in 1..acceptableStudentTypes.size {
-      if student: acceptableStudentTypes(i).type != nil then return "YES!";
+    for param i in 0..acceptableStudentTypes.size-1 {
+      if student: acceptableStudentTypes(i).type? != nil then return "YES!";
     }
     return "Computer says 'No'";
   }

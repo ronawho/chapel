@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -25,12 +26,54 @@
 #include <stdint.h>
 #include "chplcgfns.h"
 #include "chpltypes.h"
+#include "chpl-comm-task-decls.h"
 #include "chpl-tasks-impl.h"
-#include "chpl-tasks-prvdata.h"
 
-// chpl-tasks-impl.h must define the task bundle header type,
-// chpl_task_bundle_t.
+//
+// This holds per-runtime-task information the tasking layer maintains
+// on behalf of other runtime layers.  Its components are intended to
+// be accessed only by the layers that define them.  Because this info
+// has to do with runtime tasks, which are intra-node entities, there
+// is not an expectation that it will be retained when the Chapel task
+// hosted by a runtime task moves to another node due to an on-stmt.
+//
+typedef struct {
+  chpl_comm_taskPrvData_t comm_data;
+} chpl_task_infoRuntime_t;
+
+//
+// This holds per-Chapel-task information the tasking layer maintains
+// on behalf of Chapel module code, such as the task's serial state.
+// Because this is Chapel-centric information, it must be carried
+// along as a Chapel task moves by means of on-stmts.
+//
+typedef struct {
+  unsigned char data[32];
+} chpl_task_infoChapel_t;
+
+//
+// Task argument bundle header.
+//
+typedef struct chpl_task_bundle {
+  chpl_arg_bundle_kind_t kind;  // 'kind' indicator must be first in any bundle
+  chpl_bool is_executeOn;
+  int lineno;
+  int filename;
+  c_sublocid_t requestedSubloc;
+  chpl_fn_int_t requested_fid;
+  chpl_fn_p requested_fn;
+  chpl_taskID_t id;
+  chpl_task_infoChapel_t infoChapel;
+  uint64_t payload[0];
+} chpl_task_bundle_t;
+
 typedef chpl_task_bundle_t* chpl_task_bundle_p;
+
+//
+// Interface functions
+//
+
+#include "chpl-tasks-impl-fns.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -169,7 +212,7 @@ void chpl_task_executeTasksInList(void**);
 // as it cannot assume anything about the lifetime of that memory.
 //
 void chpl_task_taskCallFTable(chpl_fn_int_t fid,      // ftable[] entry to call
-                              chpl_task_bundle_t* arg,// function arg
+                              void* arg,              // function arg
                               size_t arg_size,        // length of arg
                               c_sublocid_t subloc,    // desired sublocale
                               int lineno,             // source line
@@ -193,7 +236,7 @@ void chpl_task_taskCallFTable(chpl_fn_int_t fid,      // ftable[] entry to call
 // the comms layer can use task-wrapper functions.
 void chpl_task_startMovedTask(chpl_fn_int_t,      // ftable[] entry
                               chpl_fn_p,          // function to call
-                              chpl_task_bundle_t*,// function arg
+                              void*,              // function arg
                               size_t,             // length of arg in bytes
                               c_sublocid_t,       // desired sublocale
                               chpl_taskID_t      // task identifier
@@ -218,6 +261,17 @@ void chpl_task_setSubloc(c_sublocid_t);
 #ifndef CHPL_TASK_GETREQUESTEDSUBLOC_IMPL_DECL
 c_sublocid_t chpl_task_getRequestedSubloc(void);
 #endif
+
+// For tasking layers that support task affinity/placement, this
+// resets any automatic placement order
+#ifndef CHPL_TASK_IMPL_RESET_SPAWN_ORDER
+#define CHPL_TASK_IMPL_RESET_SPAWN_ORDER()
+#endif
+static inline
+void chpl_task_reset_spawn_order(void) {
+  CHPL_TASK_IMPL_RESET_SPAWN_ORDER();
+}
+
 
 //
 // Get ID.
@@ -249,53 +303,28 @@ void chpl_task_yield(void);
 //
 void chpl_task_sleep(double);
 
-// The type for task private data, chpl_task_prvData_t,
-// is defined in chpl-tasks-prvdata.h in order to support
-// proper initialization order with a task model .h
-
-// Get pointer to task private data.
-#ifndef CHPL_TASK_GET_PRVDATA_IMPL_DECL
-chpl_task_prvData_t* chpl_task_getPrvData(void);
+//
+// Get the current task's runtime-related per-task information.
+//
+#ifndef CHPL_TASK_GET_INFO_RUNTIME_IMPL_DECL
+chpl_task_infoRuntime_t* chpl_task_getInfoRuntime(void);
 #endif
 
-#ifndef CHPL_TASK_GET_PRVBUNDLE_IMPL_DECL
-chpl_task_bundle_t* chpl_task_getPrvBundle(void);
+//
+// Get the current task's Chapel-related per-task information.
+//
+#ifndef CHPL_TASK_GET_INFO_CHAPEL_IMPL_DECL
+chpl_task_infoChapel_t* chpl_task_getInfoChapel(void);
 #endif
 
 // Get the Chapel module-code managed task private data portion
 // of a task bundle.
 static inline
-chpl_task_ChapelData_t* chpl_task_getBundleChapelData(chpl_task_bundle_t* b)
+chpl_task_infoChapel_t* chpl_task_getInfoChapelInBundle(chpl_task_bundle_t* b)
 {
-  // this code assumes each chpl_task_bundle_t has a state field
-  // of type chpl_task_ChapelData_t.
-  return &b->state;
+  return &b->infoChapel;
 }
 
-//
-// Get Chapel module-code managed task private data
-//
-static inline
-chpl_task_ChapelData_t* chpl_task_getChapelData(void)
-{
-  chpl_task_bundle_t* prv = chpl_task_getPrvBundle();
-  return chpl_task_getBundleChapelData(prv);
-}
-
-
-//
-// Can this tasking layer support remote caching?
-//
-// (In practice this answers: "Are tasks bound to specific pthreads
-// or, if not, does the tasking layer make memory consistency calls
-// whenever it might move a task from one pthread to another?"  Remote
-// caching uses pthread-specific data (TLS) extensively, so it turns
-// itself off when it's used with a tasking layer that can't support
-// that.)
-//
-#ifndef CHPL_TASK_SUPPORTS_REMOTE_CACHE_IMPL_DECL
-int chpl_task_supportsRemoteCache(void);
-#endif
 
 //
 // Returns the maximum width of parallelism the tasking layer expects
@@ -308,17 +337,16 @@ int chpl_task_supportsRemoteCache(void);
 uint32_t chpl_task_getMaxPar(void);
 
 //
-// Returns the number of sublocales the tasking layer knows about,
-// within the span of hardware it is managing tasks on.
-//
-c_sublocid_t chpl_task_getNumSublocales(void);
-
-//
 // returns the value of the call stack size limit being used in
 // practice; the value returned may potentially differ from one locale
 // to the next
 //
 size_t chpl_task_getCallStackSize(void);
+
+//
+// This returns whether guard pages (stack checks) are in use
+//
+chpl_bool chpl_task_guardPagesInUse(void);
 
 //
 // returns the number of tasks that are ready to run on the current locale,
@@ -337,6 +365,50 @@ int32_t chpl_task_getNumBlockedTasks(void);
 
 
 // Threads
+
+//
+// If the tasking layer runs tasks on a fixed number of threads, this
+// returns the number of such threads.  Otherwise it returns 0 (zero).
+// As examples, for CHPL_TASKS=qthreads it returns the number of worker
+// threads, while for CHPL_TASKS=fifo it returns 0.  If this is called
+// prior to tasking layer initialization the result is unpredictable.
+//
+#ifndef CHPL_TASK_IMPL_GET_FIXED_NUM_THREADS
+#define CHPL_TASK_IMPL_GET_FIXED_NUM_THREADS() 0
+#endif
+static inline
+uint32_t chpl_task_getFixedNumThreads(void) {
+  return CHPL_TASK_IMPL_GET_FIXED_NUM_THREADS();
+}
+
+//
+// If the tasking layer runs tasks on a fixed number of threads and
+// the calling thread is one of those, this returns true.  Otherwise,
+// it returns false.
+//
+#ifndef CHPL_TASK_IMPL_IS_FIXED_THREAD
+#define CHPL_TASK_IMPL_IS_FIXED_THREAD() 0
+#endif
+static inline
+uint32_t chpl_task_isFixedThread(void) {
+  return CHPL_TASK_IMPL_IS_FIXED_THREAD();
+}
+
+//
+// If the tasking layer will always execute tasks on the same thread
+// they started on, this returns true.  Otherwise, it returns false.
+// For example CHPL_TASKS=fifo a task is a thread, so tasks can't
+// migrate.  For CHPL_TASKS=qthreads some schedulers support
+// work-stealing where tasks can be stolen and moved to a different
+// thread than they started on.
+//
+#ifndef CHPL_TASK_IMPL_CAN_MIGRATE_THREADS
+#define CHPL_TASK_IMPL_CAN_MIGRATE_THREADS() 1
+#endif
+static inline
+uint32_t chpl_task_canMigrateThreads(void) {
+  return CHPL_TASK_IMPL_CAN_MIGRATE_THREADS();
+}
 
 //
 // returns the total number of threads that currently exist, whether running,

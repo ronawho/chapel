@@ -6,8 +6,8 @@
  * This file is used by gasnet_atomicops.h and configure.
  */
 
-#if !defined(_IN_GASNET_TOOLS_H) && !defined(_IN_GASNET_H) && !defined(GASNETI_IN_CONFIGURE)
-  #error This file is not meant to be included directly- clients should include gasnet.h or gasnet_tools.h
+#if !defined(_IN_GASNET_TOOLS_H) && !defined(_IN_GASNETEX_H) && !defined(GASNETI_IN_CONFIGURE)
+  #error This file is not meant to be included directly- clients should include gasnetex.h or gasnet_tools.h
 #endif
 
 #ifndef _GASNET_ATOMIC_FWD_H
@@ -36,7 +36,6 @@
 #if GASNETI_IN_CONFIGURE
   // When in configure provide what gasnet_asm.h would otherwise
   #define GASNETI_HAVE_GCC_ASM           GASNETI_HAVE_CC_GCC_ASM
-  #define GASNETI_HAVE_XLC_ASM           GASNETI_HAVE_CC_XLC_ASM
   #define GASNETI_HAVE_SIMPLE_ASM        GASNETI_HAVE_CC_SIMPLE_ASM
   #define GASNETI_HAVE_SYNC_ATOMICS_32   GASNETI_HAVE_CC_SYNC_ATOMICS_32
   #define GASNETI_HAVE_SYNC_ATOMICS_64   GASNETI_HAVE_CC_SYNC_ATOMICS_64
@@ -59,7 +58,8 @@
 #elif defined(GASNETI_FORCE_OS_ATOMICOPS) /* for debugging */
   #define GASNETI_USE_OS_ATOMICOPS 1
 #elif defined(GASNETI_FORCE_COMPILER_ATOMICOPS) || /* for debugging */ \
-    (PLATFORM_COMPILER_XLC && !GASNETI_HAVE_XLC_ASM && GASNETI_HAVE_SYNC_ATOMICS_32) || \
+    (PLATFORM_COMPILER_XLC && GASNETI_HAVE_SYNC_ATOMICS_32) || \
+    (PLATFORM_ARCH_SPARC && PLATFORM_COMPILER_CLANG /* TODO: not using GCC ASM due to Bug 3805 */) || \
     PLATFORM_ARCH_AARCH64 || \
     PLATFORM_ARCH_S390 || \
     PLATFORM_ARCH_TILE
@@ -137,7 +137,7 @@
     #endif
   #endif
 #elif PLATFORM_ARCH_POWERPC
-  #if GASNETI_HAVE_GCC_ASM || GASNETI_HAVE_XLC_ASM
+  #if GASNETI_HAVE_GCC_ASM
     #define GASNETI_ATOMIC32_IMPL GASNETI_ATOMIC_IMPL_NATIVE
     #if PLATFORM_ARCH_64
       #define GASNETI_ATOMIC64_IMPL GASNETI_ATOMIC_IMPL_NATIVE

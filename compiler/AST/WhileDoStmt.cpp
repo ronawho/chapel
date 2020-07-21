@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -39,7 +40,7 @@ BlockStmt* WhileDoStmt::build(Expr* cond, BlockStmt* body)
     retval = CForLoop::buildCForLoop(toCallExpr(cond), body);
   }
 
-  else if (fUseIPE == false)
+  else
   {
     VarSymbol*   condVar       = newTemp();
     CallExpr*    condTest      = new CallExpr("_cond_test", cond);
@@ -61,13 +62,6 @@ BlockStmt* WhileDoStmt::build(Expr* cond, BlockStmt* body)
     retval->insertAtTail(new CallExpr(PRIM_MOVE, condVar, condTest->copy()));
     retval->insertAtTail(loop);
     retval->insertAtTail(new DefExpr(breakLabel));
-  }
-
-  else
-  {
-    CallExpr* condTest = new CallExpr("_cond_test", cond);
-
-    retval = new WhileDoStmt(condTest, body);
   }
 
   return retval;

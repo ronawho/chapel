@@ -1,3 +1,1 @@
-Invalid read of size 8
-Address xxx is 72 bytes inside a block of size 80 free'd
-Block was alloc'd at
+skyline.chpl:3: error: creating an array of arrays using a for- or forall-expression is not supported, except when using a for-expression over a range

@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -24,16 +25,22 @@
 
 #include <limits>
 #include <pthread.h>
+#include <stdlib.h>
+#include <stdio.h>
 
-  #include <stdlib.h>
-  #include <stdio.h>
+// We have run into issues when using our chpl-atomics.h file from C++ code
+// under CHPL_ATOMICS=cstdlib. As a workaround, just use std::atomic and avoid
+// bringing in the Chapel implementation. We know this is safe in this case
+// because re2 itself requires std::atomics, and won't build without them.
+#define QIO_USE_STD_ATOMICS_REF_CNT 1
+
 #ifndef CHPL_RT_UNIT_TEST
-  #include "stdchplrt.h"
+#include "stdchplrt.h"
 #endif
-  #include "qio_regexp.h"
-  #include "qbuffer.h" // qio_strdup, refcount functions, qio_ptr_diff, etc
-  #include "qio.h" // for channel operations
-  #undef printf
+#include "qio_regexp.h"
+#include "qbuffer.h" // qio_strdup, refcount functions, qio_ptr_diff, etc
+#include "qio.h" // for channel operations
+#undef printf
 
 #include "re2/re2.h"
 
@@ -313,7 +320,7 @@ qio_bool qio_regexp_match(qio_regexp_t* regexp, const char* text, int64_t text_l
   else if( anchor == QIO_REGEXP_ANCHOR_BOTH ) ranchor = RE2::ANCHOR_BOTH;
 
   MAYBE_STACK_ALLOC(StringPiece, nsubmatch, spPtr, onstack);
-  memset(spPtr, 0, sizeof(StringPiece)*nsubmatch);
+  memset((void*)spPtr, 0, sizeof(StringPiece)*nsubmatch);
 
   ret = re->Match(textp, startpos, endpos, ranchor, spPtr, nsubmatch);
   // Now set submatch based on StringPieces
@@ -495,7 +502,7 @@ qioerr qio_regexp_channel_match(const qio_regexp_t* regexp, const int threadsafe
 
   if( ncaptures == 0 ) use_captures = 1;
   MAYBE_STACK_ALLOC(FilePiece, use_captures, locs, caps_onstack);
-  memset(locs, 0, sizeof(FilePiece) * use_captures);
+  memset((void*)locs, 0, sizeof(FilePiece) * use_captures);
 
   found = re->MatchFile(text, buffer, ranchor, locs, ncaptures);
 

@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -27,7 +28,7 @@
 // duplication. If necessary, a locale model using this file
 // should feel free to reimplement them in some other way.
 module LocaleModelHelpRuntime {
-  use ChapelStandard;
+  private use ChapelStandard, SysCTypes;
 
   // The chpl_localeID_t type is used internally.  It should not be exposed to
   // the user.  The runtime defines the actual type, as well as a functional
@@ -52,24 +53,29 @@ module LocaleModelHelpRuntime {
 
   extern type chpl_task_bundle_p;
 
+  pragma "fn synchronization free"
   extern proc chpl_comm_on_bundle_task_bundle(bundle:chpl_comm_on_bundle_p):chpl_task_bundle_p;
 
   // We need an explicit copy constructor because the compiler cannot create
   // a correct one for a record type whose members are not known to it.
   pragma "init copy fn"
+  pragma "fn synchronization free"
   extern "chpl__initCopy_chpl_rt_localeID_t"
   proc chpl__initCopy(initial: chpl_localeID_t): chpl_localeID_t;
 
   // Runtime interface for manipulating global locale IDs.
+  pragma "fn synchronization free"
   extern
     proc chpl_rt_buildLocaleID(node: chpl_nodeID_t,
                                subloc: chpl_sublocID_t): chpl_localeID_t;
 
+  pragma "fn synchronization free"
   extern
-    proc chpl_rt_nodeFromLocaleID(loc: chpl_localeID_t): chpl_nodeID_t;
+    proc chpl_rt_nodeFromLocaleID(in loc: chpl_localeID_t): chpl_nodeID_t;
 
+  pragma "fn synchronization free"
   extern
-    proc chpl_rt_sublocFromLocaleID(loc: chpl_localeID_t): chpl_sublocID_t;
+    proc chpl_rt_sublocFromLocaleID(in loc: chpl_localeID_t): chpl_sublocID_t;
 
   // Compiler (and module code) interface for manipulating global locale IDs..
   pragma "insert line file info"
@@ -79,12 +85,12 @@ module LocaleModelHelpRuntime {
 
   pragma "insert line file info"
   export
-  proc chpl_nodeFromLocaleID(loc: chpl_localeID_t)
+  proc chpl_nodeFromLocaleID(in loc: chpl_localeID_t)
     return chpl_rt_nodeFromLocaleID(loc);
 
   pragma "insert line file info"
   export
-  proc chpl_sublocFromLocaleID(loc: chpl_localeID_t)
+  proc chpl_sublocFromLocaleID(in loc: chpl_localeID_t)
     return chpl_rt_sublocFromLocaleID(loc);
 
   //////////////////////////////////////////
@@ -95,10 +101,13 @@ module LocaleModelHelpRuntime {
   //
   // runtime interface
   //
+  pragma "insert line file info"
   extern proc chpl_comm_execute_on(loc_id: int, subloc_id: int, fn: int,
                                    args: chpl_comm_on_bundle_p, arg_size: size_t);
+  pragma "insert line file info"
   extern proc chpl_comm_execute_on_fast(loc_id: int, subloc_id: int, fn: int,
                                         args: chpl_comm_on_bundle_p, args_size: size_t);
+  pragma "insert line file info"
   extern proc chpl_comm_execute_on_nb(loc_id: int, subloc_id: int, fn: int,
                                       args: chpl_comm_on_bundle_p, args_size: size_t);
   pragma "insert line file info"
@@ -123,6 +132,7 @@ module LocaleModelHelpRuntime {
                                       ref tlist: c_void_ptr, tlist_node_id: int,
                                       is_begin: bool);
   extern proc chpl_task_executeTasksInList(ref tlist: c_void_ptr);
+  extern proc chpl_task_yield();
 
   //
   // add a task to a list of tasks being built for a begin statement
@@ -136,7 +146,7 @@ module LocaleModelHelpRuntime {
                              ref tlist: c_void_ptr, // task list
                              tlist_node_id: int     // task list owner node
                             ) {
-    var tls = chpl_task_getChapelData();
+    var tls = chpl_task_getInfoChapel();
     var isSerial = chpl_task_data_getSerial(tls);
     if isSerial {
       chpl_ftable_call(fn, args);
@@ -160,7 +170,7 @@ module LocaleModelHelpRuntime {
                               ref tlist: c_void_ptr, // task list
                               tlist_node_id: int     // task list owner node
                              ) {
-    var tls = chpl_task_getChapelData();
+    var tls = chpl_task_getInfoChapel();
     var isSerial = chpl_task_data_getSerial(tls);
     if isSerial {
       chpl_ftable_call(fn, args);

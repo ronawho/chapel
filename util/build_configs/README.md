@@ -3,10 +3,10 @@
 This directory contains scripts to build customizable Chapel binaries
 in multiple configurations.
 
-The `cray-internal` subdirectory adds scripts to package Chapel binaries
-(already pre-built with `setenv-example3.bash` from this directory) into an
-RPM suitable for installation on a Cray-XC. See `./cray-internal/README.md`
-for more info.
+The `cray-internal` subdirectory contains scripts to build and package
+Chapel binaries into RPM modules suitable for installation on a Cray-XC
+Those scripts are Cray-specific applications of the more general patterns
+presented in this directory. See `./cray-internal/README.md` for more info.
 
 ### Files in this directory:
 
@@ -166,8 +166,3 @@ Components
     possibly the Cray module packaging script.
 
     Example: cray-internal/chapel_build.sh
-
-  * For Cray-internal Jenkins build script replacement:
-    A script to build a new (or unroll a previously-built) Chapel release tarball;
-    call a different setenv project, depending on Cray-XC or XE; and
-    call the Cray module packaging script.

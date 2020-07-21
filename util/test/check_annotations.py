@@ -85,15 +85,16 @@ def try_parsing_annotations(ann_data, graph_list):
 def check_graph_names(ann_data, graph_list):
     """Check that graph names in the annotation file are listed in GRAPHFILES"""
     for graph in ann_data:
-        if graph != 'all' and graph not in graph_list:
+        if graph != 'all' and 'arkouda' not in graph and graph not in graph_list:
             warnings.warn('Warning: no .graph file found for "{0}"'.format(graph))
 
 def check_configs(ann_data):
     """Check that all the configs used in the annotation file are 'known'"""
     known_configs = {'shootout', 'chap03', 'chap04', 'bradc-lnx', 'chapcs',
-                     '16 node XC', 'Single node XC'}
+                     '16-node-xc', '1-node-xc', '16-node-cs',
+                     'chapcs.comm-counts'}
     for graph in ann_data:
-        for _, annotations in ann_data[graph].iteritems():
+        for _, annotations in ann_data[graph].items():
             for ann in annotations:
                 if isinstance(ann, dict) and 'config' in ann:
                     configs = ann['config'].split(',')
@@ -109,6 +110,8 @@ def compute_pr_to_dates():
     git_cmd = 'git log --grep "^Merge pull request #" --date=short-local --pretty=format:"%ad ::: %s"'
     p = subprocess.Popen(git_cmd, stdout=subprocess.PIPE, shell=True)
     git_log = p.communicate()[0]
+    if sys.version_info[0] >= 3 and not isinstance(git_log, str):
+        git_log = str(git_log, 'utf-8')
     for line in git_log.splitlines():
         split_line = line.split(' ::: ')
         date = split_line[0]
@@ -124,7 +127,7 @@ def check_pr_number_dates(ann_data):
     """
     pr_to_date_dict = compute_pr_to_dates()
     for graph in ann_data:
-        for date, annotations in ann_data[graph].iteritems():
+        for date, annotations in ann_data[graph].items():
             for ann in annotations:
                 if isinstance(ann, dict):
                     text = ann.get('text')

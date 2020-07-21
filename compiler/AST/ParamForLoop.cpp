@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -21,6 +22,7 @@
 
 #include "AstVisitor.h"
 #include "build.h"
+#include "passes.h"
 #include "resolution.h"
 #include "resolveFunction.h"
 #include "stringutil.h"
@@ -46,6 +48,7 @@ BlockStmt* ParamForLoop::buildParamForLoop(VarSymbol* indexVar,
   Expr*        low        = NULL;
   Expr*        high       = NULL;
   Expr*        stride     = NULL;
+  Expr*        count      = NULL;
 
   BlockStmt*   outer      = new BlockStmt();
 
@@ -59,23 +62,70 @@ BlockStmt* ParamForLoop::buildParamForLoop(VarSymbol* indexVar,
     stride = new SymExpr(new_IntSymbol(1));
   }
 
-  if (call && call->isNamed("chpl_build_bounded_range"))
+  if (call && call->isNamed("#"))
   {
-    low    = call->get(1)->remove();
-    high   = call->get(1)->remove();
+    count       = new CallExpr("chpl_compute_count_param_loop", call->get(2)->remove());
+    call        = toCallExpr(call->get(1));
   }
-  else
+
+  if(call) {
+    if(count == NULL)
+    {
+      // high..low
+      if (call->isNamed("chpl_build_bounded_range"))
+      {
+        low    = call->get(1)->remove();
+        high   = call->get(1)->remove();
+      }
+    }
+    else
+    {
+      // high..low#count
+      if(call->isNamed("chpl_build_bounded_range"))
+      {
+        Expr* temp_low  = call->get(1)->remove();
+        Expr* temp_high = call->get(1)->remove();
+
+        // It is necessary that low is calculated first, because it also applies check for bound size.
+        low  = new CallExpr("chpl_bounded_count_for_param_loop_low", temp_low->copy(), temp_high->copy(), count->copy());
+        high = new CallExpr("chpl_bounded_count_for_param_loop_high", temp_low->copy(), temp_high->copy(), count);
+      }
+      // low..#count
+      else if (call->isNamed("chpl_build_low_bounded_range"))
+      {
+        low  = call->get(1)->remove();
+        high = new CallExpr("chpl_high_bound_count_for_param_loop", low->copy(), count);
+      }
+      // ..high#count
+      else if (call->isNamed("chpl_build_high_bounded_range"))
+      {
+        high = call->get(1)->remove();
+        low  = new CallExpr("chpl_low_bound_count_for_param_loop", high->copy(), count);
+      }
+    }
+  }
+
+  // When no case is satisfied, then show error
+  if(high == NULL || low == NULL)
   {
-    USR_FATAL(range, "iterators for param-for-loops must be bounded literal ranges");
+    USR_FATAL(range, "param for-loops currently only support range expressions with well-defined param integral bounds");
   }
 
   outer->insertAtTail(new DefExpr(indexVar, new_IntSymbol((int64_t) 0)));
 
   outer->insertAtTail(new DefExpr(lowVar));
-  outer->insertAtTail(new CallExpr(PRIM_MOVE, lowVar,    low));
+  // Allows for proper coercion rules for param loops, and eliminates types like
+  // string from consideration (which had caused internal errors in the past)
+  CallExpr* computeLow = new CallExpr("chpl_compute_low_param_loop_bound", low,
+                                      high);
+  outer->insertAtTail(new CallExpr(PRIM_MOVE, lowVar, computeLow));
 
   outer->insertAtTail(new DefExpr(highVar));
-  outer->insertAtTail(new CallExpr(PRIM_MOVE, highVar,   high));
+  // Allows for proper coercion rules for param loops, and eliminates types like
+  // string from consideration (which had caused internal errors in the past)
+  CallExpr* computeHigh = new CallExpr("chpl_compute_high_param_loop_bound",
+                                       low->copy(), high->copy());
+  outer->insertAtTail(new CallExpr(PRIM_MOVE, highVar, computeHigh));
 
   outer->insertAtTail(new DefExpr(strideVar));
   outer->insertAtTail(new CallExpr(PRIM_MOVE, strideVar, stride));
@@ -300,9 +350,6 @@ void ParamForLoop::verify()
 
   if (byrefVars                 != NULL)
     INT_FATAL(this, "ParamForLoop::verify. byrefVars is not NULL");
-
-  if (forallIntents             != NULL)
-    INT_FATAL(this, "ParamForLoop::verify. forallIntents is not NULL");
 }
 
 GenRet ParamForLoop::codegen()
@@ -378,28 +425,24 @@ CallExpr* ParamForLoop::foldForResolve()
   SymExpr*   hse       = highExprGet();
   SymExpr*   sse       = strideExprGet();
 
-  if (!lse             || !hse             || !sse)
-    USR_FATAL(this, "param for loop must be defined over a bounded param range");
-
   VarSymbol* lvar      = toVarSymbol(lse->symbol());
   VarSymbol* hvar      = toVarSymbol(hse->symbol());
   VarSymbol* svar      = toVarSymbol(sse->symbol());
 
   CallExpr*  noop      = new CallExpr(PRIM_NOOP);
 
-  if (!lvar            || !hvar            || !svar)
-    USR_FATAL(this, "param for loop must be defined over a bounded param range");
-
-  if (!lvar->immediate || !hvar->immediate || !svar->immediate)
-    USR_FATAL(this, "param for loop must be defined over a bounded param range");
+  validateLoop(lvar, hvar, svar);
 
   Symbol*      idxSym  = idxExpr->symbol();
   Symbol*      continueSym = continueLabelGet();
   Type*        idxType = indexType();
-  IF1_int_type idxSize = (get_width(idxType) == 32) ? INT_SIZE_32 : INT_SIZE_64;
+  IF1_int_type idxSize = (is_bool_type(idxType) || get_width(idxType) == 32)
+                           ? INT_SIZE_32 : INT_SIZE_64;
 
   // Insert an "insertion marker" for loop unrolling
   insertAfter(noop);
+
+  bool emptyLoop = true;
 
   if (is_int_type(idxType))
   {
@@ -415,6 +458,7 @@ CallExpr* ParamForLoop::foldForResolve()
 
         map.put(idxSym, new_IntSymbol(i, idxSize));
         copyBodyHelper(noop, i, &map, this, continueSym);
+        emptyLoop = false;
       }
     }
     else
@@ -424,8 +468,8 @@ CallExpr* ParamForLoop::foldForResolve()
         SymbolMap map;
 
         map.put(idxSym, new_IntSymbol(i, idxSize));
-
         copyBodyHelper(noop, i, &map, this, continueSym);
+        emptyLoop = false;
       }
     }
   }
@@ -450,6 +494,7 @@ CallExpr* ParamForLoop::foldForResolve()
         }
 
         copyBodyHelper(noop, i, &map, this, continueSym);
+        emptyLoop = false;
       }
     }
     else
@@ -465,9 +510,13 @@ CallExpr* ParamForLoop::foldForResolve()
         }
 
         copyBodyHelper(noop, i, &map, this, continueSym);
+        emptyLoop = false;
       }
     }
   }
+
+  if (emptyLoop)
+    addMentionToEndOfStatement(this, NULL);
 
   // Remove the "insertion marker"
   noop->remove();
@@ -476,6 +525,26 @@ CallExpr* ParamForLoop::foldForResolve()
   replace(noop);
 
   return noop;
+}
+
+// Checks things like bounding and paramness of the range.
+// The calls to chpl_compute_low_param_loop_bound and
+// chpl_compute_high_param_loop_bound in buildParamForLoop should ensure that
+// the appropriate type is used for these loops
+void ParamForLoop::validateLoop(VarSymbol* lvar,
+                                VarSymbol* hvar,
+                                VarSymbol* svar) {
+  if (!lvar            || !hvar            || !svar)
+    USR_FATAL(this,
+              "param for-loops must be defined over a bounded param range");
+
+  if (!lvar->immediate || !hvar->immediate || !svar->immediate)
+    USR_FATAL(this,
+              "param for-loops must be defined over a bounded param range");
+
+  if (!is_int_type(svar->type) && !is_uint_type(svar->type)) {
+    USR_FATAL(this, "Range stride must be an int");
+  }
 }
 
 //

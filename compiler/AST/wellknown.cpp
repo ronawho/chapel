@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -27,16 +28,17 @@
 AggregateType* dtArray;
 AggregateType* dtBaseArr;
 AggregateType* dtBaseDom;
+AggregateType* dtCFI_cdesc_t;
 AggregateType* dtDist;
 AggregateType* dtError;
 AggregateType* dtExternalArray;
-AggregateType* dtLocale;
 AggregateType* dtLocaleID;
 AggregateType* dtMainArgument;
 AggregateType* dtOnBundleRecord;
-AggregateType* dtOwned;
+AggregateType* dtOpaqueArray;
 AggregateType* dtTaskBundleRecord;
 AggregateType* dtTuple;
+AggregateType* dtRef;
 
 
 // The well-known functions
@@ -57,6 +59,11 @@ FnSymbol *gChplUncaughtError;
 FnSymbol *gChplPropagateError;
 FnSymbol *gChplSaveTaskError;
 FnSymbol *gChplForallError;
+FnSymbol *gAtomicFenceFn;
+FnSymbol *gChplAfterForallFence;
+FnSymbol *gChplCreateStringWithLiteral;
+FnSymbol *gChplCreateBytesWithLiteral;
+FnSymbol *gChplBuildLocaleId;
 
 /************************************* | **************************************
 *                                                                             *
@@ -90,7 +97,7 @@ void gatherIteratorTags() {
 }
 
 // This structure and the following array provide a list of types that must be
-// defined in module code.  At this point, they are all classes.
+// defined in module code.
 struct WellKnownType
 {
   const char*     name;
@@ -104,16 +111,31 @@ static WellKnownType sWellKnownTypes[] = {
   { "BaseArr",               &dtBaseArr,          true  },
   { "BaseDom",               &dtBaseDom,          true  },
   { "BaseDist",              &dtDist,             true  },
+  { "CFI_cdesc_t",           &dtCFI_cdesc_t,      false },
   { "chpl_external_array",   &dtExternalArray,    false },
-  { "locale",                &dtLocale,           true  },
   { "chpl_localeID_t",       &dtLocaleID,         false },
   { "chpl_main_argument",    &dtMainArgument,     false },
   { "chpl_comm_on_bundle_t", &dtOnBundleRecord,   false },
-  { "_owned",                &dtOwned,            false },
+  { "chpl_opaque_array",     &dtOpaqueArray,      false },
   { "chpl_task_bundle_t",    &dtTaskBundleRecord, false },
   { "_tuple",                &dtTuple,            false },
+  { "_ref",                  &dtRef,              true  },
   { "Error",                 &dtError,            true  }
 };
+
+static void removeIfUndefinedGlobalType(AggregateType*& t) {
+  if (t->symbol == NULL || t->symbol->defPoint == NULL) {
+    // This means there was no declaration of this type
+    if (t->symbol)
+      gTypeSymbols.remove(gTypeSymbols.index(t->symbol));
+
+    gAggregateTypes.remove(gAggregateTypes.index(t));
+
+    delete t;
+
+    t = NULL;
+  }
+}
 
 // Gather well-known types from among types known at this point.
 void gatherWellKnownTypes() {
@@ -153,23 +175,50 @@ void gatherWellKnownTypes() {
       WellKnownType& wkt = sWellKnownTypes[i];
 
       if (*wkt.type_ == NULL) {
-        USR_FATAL_CONT("Type '%s' must be defined in the "
-                       "Chapel internal modules.",
-                       wkt.name);
+        if (wkt.type_ == &dtCFI_cdesc_t && !fLibraryFortran) {
+          // This should only be defined when --library-fortran is used
+        } else {
+          USR_FATAL_CONT("Type '%s' must be defined in the "
+                         "Chapel internal modules.",
+                         wkt.name);
+        }
       }
     }
 
     USR_STOP();
 
   } else {
-    if (dtString->symbol == NULL) {
-      // This means there was no declaration of the string type.
-      gAggregateTypes.remove(gAggregateTypes.index(dtString));
+    removeIfUndefinedGlobalType(dtString);
+    removeIfUndefinedGlobalType(dtBytes);
+    removeIfUndefinedGlobalType(dtLocale);
+    removeIfUndefinedGlobalType(dtOwned);
+    removeIfUndefinedGlobalType(dtShared);
+  }
+}
 
-      delete dtString;
+std::vector<Type*> getWellKnownTypes()
+{
+  std::vector<Type*> types;
 
-      dtString = NULL;
-    }
+  int nEntries = sizeof(sWellKnownTypes) / sizeof(sWellKnownTypes[0]);
+
+  for (int i = 0; i < nEntries; ++i) {
+    WellKnownType& wkt = sWellKnownTypes[i];
+    if (*wkt.type_ != NULL)
+      types.push_back(*wkt.type_);
+  }
+
+  return types;
+}
+
+void clearGenericWellKnownTypes()
+{
+  int nEntries = sizeof(sWellKnownTypes) / sizeof(sWellKnownTypes[0]);
+
+  for (int i = 0; i < nEntries; ++i) {
+    WellKnownType& wkt = sWellKnownTypes[i];
+    if (*wkt.type_ != NULL && (*wkt.type_)->isGeneric())
+      *wkt.type_ = NULL;
   }
 }
 
@@ -288,6 +337,35 @@ static WellKnownFn sWellKnownFns[] = {
     FLAG_UNKNOWN
   },
 
+  {
+    "atomic_fence",
+    &gAtomicFenceFn,
+    FLAG_UNKNOWN
+  },
+
+  {
+    "chpl_after_forall_fence",
+    &gChplAfterForallFence,
+    FLAG_UNKNOWN
+  },
+
+  {
+    "chpl_createStringWithLiteral",
+    &gChplCreateStringWithLiteral,
+    FLAG_UNKNOWN
+  },
+
+  {
+    "chpl_createBytesWithLiteral",
+    &gChplCreateBytesWithLiteral,
+    FLAG_UNKNOWN
+  },
+
+  {
+    "chpl_buildLocaleID",
+    &gChplBuildLocaleId,
+    FLAG_UNKNOWN
+  },
 };
 
 void gatherWellKnownFns() {
@@ -359,7 +437,7 @@ void clearGenericWellKnownFunctions()
 
   for (int i = 0; i < nEntries; ++i) {
     WellKnownFn& wkfn = sWellKnownFns[i];
-    if (*wkfn.fn != NULL && (*wkfn.fn)->hasFlag(FLAG_GENERIC))
+    if (*wkfn.fn != NULL && (*wkfn.fn)->isGeneric())
       *wkfn.fn = NULL;
   }
 }

@@ -29,14 +29,14 @@ var unionBag : domain(SparseDom.idxType);
 var intersectionBag : domain(SparseDom.idxType);
 
 for i in SparseDom do {
-  containsAll &= SparseDom.member( i );
+  containsAll &= SparseDom.contains( i );
   fullBag += i;
 }
 writeln( containsAll );
 
 for onLocale in Locales {
   on onLocale {
-    for localIndex in SparseDom.dsiLocalSubdomain() {
+    for localIndex in SparseDom.dsiLocalSubdomain(here) {
       localBag[ onLocale.id ] += localIndex;
     }
   }

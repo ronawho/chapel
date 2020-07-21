@@ -1,1 +1,1 @@
-error_default_field_init.chpl:7: error: type mismatch in assignment from real(64) to int(64)
+error_default_field_init.chpl:7: error: Cannot initialize 'xx' of type int(64) from a 'real(64)'

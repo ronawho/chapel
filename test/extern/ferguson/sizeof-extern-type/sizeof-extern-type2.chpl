@@ -1,6 +1,6 @@
 {
+  use SysCTypes;
 
-  pragma "no prototype"
   extern proc sizeof(type t): size_t;
 
   // We just want to check that this gets code

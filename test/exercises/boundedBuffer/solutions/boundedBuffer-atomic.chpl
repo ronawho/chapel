@@ -6,6 +6,7 @@
  */
 
 use Random, Time;                  // get a RNG and sleep() to introduce noise
+use IO;                            // allow use of stderr
 
 config const numProducers = 5,     // the number of producers to create
              numConsumers = 5,     // the number of consumers to create
@@ -26,7 +27,7 @@ config const numProducers = 5,     // the number of producers to create
 
 proc main() {
   // a shared bounded buffer with the requested capacity
-  var buffer = new unmanaged BoundedBuffer(capacity=bufferSize);
+  var buffer = new owned BoundedBuffer(capacity=bufferSize);
 
   // per-producer/consumer counts of the number of items they processed
   var prodCounts: [1..numProducers] int,
@@ -72,8 +73,6 @@ proc main() {
                   consTot, numItems);
   else
     stderr.writef("Producers/consumers processed %i items total.\n", numItems);
-
-  delete buffer;
 }
 
 
@@ -81,7 +80,7 @@ proc main() {
 // produce 1/numProducers of the requested 'numItems' items using an
 // aligned strided range.  Return the number of items we produced.
 //
-proc producer(b: unmanaged BoundedBuffer, pid: int) {
+proc producer(b: BoundedBuffer, pid: int) {
   var myItems = 0..#numItems by numProducers align pid-1;
 
   for i in myItems {
@@ -96,7 +95,7 @@ proc producer(b: unmanaged BoundedBuffer, pid: int) {
 // consume items greedily until a sentinel value is found.  Return
 // the number of items we successfully consumed.
 //
-proc consumer(b: unmanaged BoundedBuffer, cid: int) {
+proc consumer(b: BoundedBuffer, cid: int) {
   var count = 0;
   do {
     const (data, more) = b.consume();
@@ -123,7 +122,7 @@ class BoundedBuffer {
   var buff$: [0..#capacity] sync eltType,  // the sync values, empty by default
       head, tail: atomic int;             // the cursor positions, 0 by default
 
-  var rng = new unmanaged RandomStream(real);
+  var rng = new owned RandomStream(real);
 
   //
   // Place an item at the head position of the buffer, assuming
@@ -167,15 +166,8 @@ class BoundedBuffer {
     do {
       prevPos = pos.read();
       const nextPos = (prevPos + 1) % capacity;
-    } while (!pos.compareExchange(prevPos, nextPos));
+    } while (!pos.compareAndSwap(prevPos, nextPos));
 
     return prevPos;
-  }
-
-  //
-  // Clean up after ourselves
-  //
-  proc deinit() {
-    delete rng;
   }
 }

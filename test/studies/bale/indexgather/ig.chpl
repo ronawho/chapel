@@ -10,8 +10,10 @@ config const printStats = true,
 config const useRandomSeed = true,
              seed = if useRandomSeed then SeedGenerator.oddCurrentTime else 314159265;
 
+config const useUnorderedCopy = false;
 
-const numTasksPerLocale = here.maxTaskPar;
+const numTasksPerLocale = if dataParTasksPerLocale > 0 then dataParTasksPerLocale
+                                                       else here.maxTaskPar;
 const numTasks = numLocales * numTasksPerLocale;
 config const N = 1000000; // number of updates per task
 config const M = 10000; // number of entries in the table per task
@@ -20,7 +22,6 @@ const numUpdates = N * numTasks;
 const tableSize = M * numTasks;
 
 // The intuitive implementation of indexgather that uses fine-grained GETs
-
 proc main() {
   const Mspace = {0..tableSize-1};
   const D = Mspace dmapped Cyclic(startIdx=Mspace.low);
@@ -35,32 +36,33 @@ proc main() {
     r = mod(r, tableSize);
   }
 
-  var tmp: [D2] int;
+  var tmp: [D2] int = -1;
 
   var t: Timer;
   t.start();
 
-  // TODO investigate perf of cleaner ways to write this
-  // - forall (t, r) in zip(tmp, rindex) do t = A[r];
-  // - forall i in D2 do tmp[i] = A[rindex[i]];
-  // - tmp[rindex] = A[rindex];
-  forall i in D2 {
-    tmp.localAccess[i] = A[rindex.localAccess[i]];
+  if useUnorderedCopy {
+    use UnorderedCopy;
+    forall i in D2 do
+      unorderedCopy(tmp[i], A[rindex[i]]);
+  } else {
+    forall i in D2 do
+      tmp[i] = A[rindex[i]];
   }
 
   t.stop();
 
   if printStats {
-    writeln("Time: " + t.elapsed());
+    writeln("Time: ", t.elapsed());
 
     const bytesPerTask = N * numBytes(int);
     const mbPerTask = bytesPerTask:real / (1<<20):real;
-    writeln("MB/s per task: " + mbPerTask / t.elapsed());
-    writeln("MB/s per node: " + mbPerTask * numTasksPerLocale / t.elapsed());
+    writeln("MB/s per task: ", mbPerTask / t.elapsed());
+    writeln("MB/s per node: ", mbPerTask * numTasksPerLocale / t.elapsed());
   }
 
   if verify {
-    // TODO not really sure what to do for verification here
+    [t in tmp] assert (t >= 0 && t < tableSize);
   }
 
   if printArrays {

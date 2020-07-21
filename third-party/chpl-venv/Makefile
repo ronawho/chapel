@@ -36,14 +36,13 @@ $(PIP): $(CHPL_VENV_INSTALL_DIR)
 	  { echo "Failed on command: curl -O $(GETPIP)."; \
 	    echo "Try setting CHPL_PIP to $$(which pip) and trying again"; \
 	    exit 1; } && \
-	  export PYTHONUSERBASE=$(CHPL_VENV_INSTALL_DIR) && \
-	  python get-pip.py --user --no-warn-conflicts) \
+	  $(GET_PIP_COMMAND) ) \
 	fi
 
 # Install virtualenv program.
 $(CHPL_VENV_VIRTUALENV): check-exes $(PIP)
 	export PYTHONPATH="$$CHPL_PYTHONPATH:$(PIPLIBS):$$PYTHONPATH" && \
-	python -S $(PIP) install -U --force-reinstall --ignore-installed $(LOCAL_PIP_FLAGS) \
+	python $(PIP) install -U --force-reinstall --ignore-installed $(LOCAL_PIP_FLAGS) \
 	 --prefix=$(CHPL_VENV_INSTALL_DIR) $(CHPL_PIP_INSTALL_PARAMS) $(shell cat virtualenv.txt)
 
 # Phony convenience target for installing virtualenv.
@@ -71,20 +70,16 @@ create-virtualenv: $(CHPL_VENV_VIRTUALENV_DIR)
 # By calling `python .../path/to/pip ...`, this issue is circumvented.
 $(CHPL_VENV_TEST_REQS): $(CHPL_VENV_VIRTUALENV_DIR)
 	export PYTHONPATH="$(PIPLIBS):$$PYTHONPATH" && \
-	export PATH=$(CHPL_VENV_VIRTUALENV_BIN):$$PATH && \
+	export PATH="$(CHPL_VENV_VIRTUALENV_BIN):$$PATH" && \
 	export VIRTUAL_ENV=$(CHPL_VENV_VIRTUALENV_DIR) && \
 	python $(CHPL_VENV_VIRTUALENV_BIN)/pip install \
 	-U --force-reinstall $(CHPL_PIP_INSTALL_PARAMS) $(LOCAL_PIP_FLAGS) -r test-requirements.txt && \
-	if [ "$(PYTHON_MAJOR_VERSION)" = "2" ] ; then \
-	python $(CHPL_VENV_VIRTUALENV_BIN)/pip install \
-	-U --force-reinstall $(CHPL_PIP_INSTALL_PARAMS) $(LOCAL_PIP_FLAGS) -r test-requirements-python2.txt ; \
-	fi && \
 	python $(CHPL_VENV_VIRTUALENV) --relocatable $(CHPL_VENV_VIRTUALENV_DIR) && \
 	touch $(CHPL_VENV_TEST_REQS)
 
 $(CHPL_VENV_SPHINX_BUILD): $(CHPL_VENV_VIRTUALENV_DIR)
 	export PYTHONPATH="$(PIPLIBS):$$PYTHONPATH" && \
-	export PATH=$(CHPL_VENV_VIRTUALENV_BIN):$$PATH && \
+	export PATH="$(CHPL_VENV_VIRTUALENV_BIN):$$PATH" && \
 	export VIRTUAL_ENV=$(CHPL_VENV_VIRTUALENV_DIR) && \
 	python $(CHPL_VENV_VIRTUALENV_BIN)/pip install \
 	-U --force-reinstall $(CHPL_PIP_INSTALL_PARAMS) $(LOCAL_PIP_FLAGS) -r chpldoc-requirements.txt && \
@@ -92,7 +87,7 @@ $(CHPL_VENV_SPHINX_BUILD): $(CHPL_VENV_VIRTUALENV_DIR)
 
 $(CHPL_VENV_CHPLSPELL_REQS): $(CHPL_VENV_VIRTUALENV_DIR)
 	export PYTHONPATH="$(PIPLIBS):$$PYTHONPATH" && \
-	export PATH=$(CHPL_VENV_VIRTUALENV_BIN):$$PATH && \
+	export PATH="$(CHPL_VENV_VIRTUALENV_BIN):$$PATH" && \
 	export VIRTUAL_ENV=$(CHPL_VENV_VIRTUALENV_DIR) && \
 	python $(CHPL_VENV_VIRTUALENV_BIN)/pip install \
 	-U --force-reinstall $(CHPL_PIP_INSTALL_PARAMS) $(LOCAL_PIP_FLAGS) -r chplspell-requirements.txt && \

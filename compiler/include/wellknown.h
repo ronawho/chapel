@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -23,11 +24,15 @@
 #include <vector>
 
 class AggregateType;
+class Type;
 class FnSymbol;
 
 void gatherIteratorTags();
 void gatherWellKnownTypes();
 void gatherWellKnownFns();
+
+std::vector<Type*> getWellKnownTypes();
+void clearGenericWellKnownTypes();
 
 std::vector<FnSymbol*> getWellKnownFunctions();
 void clearGenericWellKnownFunctions();
@@ -36,16 +41,17 @@ void clearGenericWellKnownFunctions();
 extern AggregateType* dtArray;
 extern AggregateType* dtBaseArr;
 extern AggregateType* dtBaseDom;
+extern AggregateType* dtCFI_cdesc_t;
 extern AggregateType* dtDist;
 extern AggregateType* dtError;
 extern AggregateType* dtExternalArray;
-extern AggregateType* dtLocale;
 extern AggregateType* dtLocaleID;
 extern AggregateType* dtMainArgument;
 extern AggregateType* dtOnBundleRecord;
-extern AggregateType* dtOwned;
+extern AggregateType* dtOpaqueArray;
 extern AggregateType* dtTaskBundleRecord;
 extern AggregateType* dtTuple;
+extern AggregateType* dtRef;
 
 // The well-known functions
 extern FnSymbol *gChplHereAlloc;
@@ -65,5 +71,10 @@ extern FnSymbol *gChplUncaughtError;
 extern FnSymbol *gChplPropagateError;
 extern FnSymbol *gChplSaveTaskError;
 extern FnSymbol *gChplForallError;
+extern FnSymbol *gAtomicFenceFn;
+extern FnSymbol *gChplAfterForallFence;
+extern FnSymbol *gChplCreateStringWithLiteral;
+extern FnSymbol *gChplCreateBytesWithLiteral;
+extern FnSymbol *gChplBuildLocaleId;
 
 #endif

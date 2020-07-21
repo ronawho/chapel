@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -45,12 +46,30 @@
 
 #define MALLOCX_NO_FLAGS 0
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+extern unsigned get_num_arenas(void);
+extern unsigned set_arena(unsigned);
+#ifdef __cplusplus
+}
+#endif
+
 static inline void* chpl_calloc(size_t n, size_t size) {
   return CHPL_JE_CALLOC(n,size);
 }
 
 static inline void* chpl_malloc(size_t size) {
-  return CHPL_JE_MALLOC(size);
+  void* ret;
+  // To limit fragmentation for large allocations use a dedicated arena
+  if (size >= (32*1024*1024)) {
+    unsigned old_arena = set_arena(get_num_arenas()-1);
+    ret = CHPL_JE_MALLOC(size);
+    set_arena(old_arena);
+  } else {
+    ret = CHPL_JE_MALLOC(size);
+  }
+  return ret;
 }
 
 static inline void* chpl_memalign(size_t boundary, size_t size) {

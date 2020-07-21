@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -22,14 +23,17 @@
 #include "passes.h"
 
 #include "astutil.h"
+#include "CatchStmt.h"
+#include "DecoratedClassType.h"
 #include "driver.h"
 #include "expr.h"
+#include "iterator.h"
 #include "stmt.h"
 #include "stlUtil.h"
+#include "stringutil.h"
+#include "type.h"
 #include "TryStmt.h"
-#include "CatchStmt.h"
-
-#include "iterator.h"
+#include "wellknown.h"
 
 #include <set>
 
@@ -56,9 +60,24 @@ checkConstLoops() {
   }
 }
 
+static void checkForClassAssignOps(FnSymbol* fn) {
+  if (fn->getModule()->modTag == MOD_USER) {
+    if (strcmp(fn->name, "=") == 0 &&
+        fn->formals.head) {
+      ArgSymbol* formal = toArgSymbol(toDefExpr(fn->formals.head)->sym);
+      Type* formalType = formal->type->getValType();
+      if (isOwnedOrSharedOrBorrowed(formalType) ||
+          isUnmanagedClass(formalType)) {
+        USR_FATAL_CONT(fn, "Can't overload assignments for class types");
+      }
+    }
+  }
+}
+
 void
 checkResolved() {
   forv_Vec(FnSymbol, fn, gFnSymbols) {
+    checkForClassAssignOps(fn);
     checkReturnPaths(fn);
     if (fn->retType->symbol->hasFlag(FLAG_ITERATOR_RECORD) &&
         !fn->isIterator()) {
@@ -80,13 +99,26 @@ checkResolved() {
 
   forv_Vec(TypeSymbol, type, gTypeSymbols) {
     if (EnumType* et = toEnumType(type->type)) {
+      std::set<std::string> enumVals;
       for_enums(def, et) {
         if (def->init) {
           SymExpr* sym = toSymExpr(def->init);
           if (!sym || (!sym->symbol()->hasFlag(FLAG_PARAM) &&
-                       !toVarSymbol(sym->symbol())->immediate))
+                       !toVarSymbol(sym->symbol())->immediate)) {
             USR_FATAL_CONT(def, "enumerator '%s' is not an integer param value",
                            def->sym->name);
+          } else if (fWarnUnstable) {
+            Immediate* imm = toVarSymbol(sym->symbol())->immediate;
+            std::string enumVal = imm->to_string();
+            if (enumVals.count(enumVal) != 0) {
+              USR_WARN(sym, "it has been suggested that support for enums "
+                       "with duplicate integer values should be deprecated, "
+                       "so this enum could be considered unstable; if you "
+                       "value such enums, please let the Chapel team know.");
+              break;
+            }
+            enumVals.insert(enumVal);
+          }
         }
       }
     }
@@ -99,8 +131,17 @@ checkResolved() {
 }
 
 
-// Returns the smallest number of definitions of ret on any path through the
-// given expression.
+// This routine returns '0' if we can find a path through the given
+// expression that does not return (assign to 'ret'), halt, throw,
+// etc.  I.e., if there is a path that would constitute an error for a
+// function that was meant to return something and is not.  It returns
+// non-zero if all paths are covered, and the result _may_ indicate
+// something about the smallest number of definitions of 'ret' along
+// any path through the expression (though the behavior of throws,
+// halts, etc. may influence that number...).  In the only use-case in
+// our compiler, we are currently only relying on zero / non-zero
+// behavior and care should be taken before reading too much into the
+// non-zero value.
 static int
 isDefinedAllPaths(Expr* expr, Symbol* ret, RefSet& refs)
 {
@@ -113,11 +154,21 @@ isDefinedAllPaths(Expr* expr, Symbol* ret, RefSet& refs)
   if (isSymExpr(expr))
     return 0;
 
+  if (ret == gNone)
+    return 1;
+
   if (CallExpr* call = toCallExpr(expr))
   {
     if (call->isResolved() &&
         call->resolvedFunction()->hasFlag(FLAG_FUNCTION_TERMINATES_PROGRAM))
       return 1;
+
+    if (call->isPrimitive(PRIM_RT_ERROR))
+      return 1;
+
+    if (call->isPrimitive(PRIM_THROW)) {
+      return 1;
+    }
 
     if (call->isPrimitive(PRIM_MOVE) ||
         call->isPrimitive(PRIM_ASSIGN))
@@ -161,8 +212,7 @@ isDefinedAllPaths(Expr* expr, Symbol* ret, RefSet& refs)
     return 0;
   }
 
-  if (CondStmt* cond = toCondStmt(expr))
-  {
+  if (CondStmt* cond = toCondStmt(expr)) {
     return std::min(isDefinedAllPaths(cond->thenStmt, ret, refs),
                     isDefinedAllPaths(cond->elseStmt, ret, refs));
   }
@@ -178,30 +228,48 @@ isDefinedAllPaths(Expr* expr, Symbol* ret, RefSet& refs)
   if (TryStmt* tryStmt = toTryStmt(expr))
   {
     int result = INT_MAX;
-    for_alist(c, tryStmt->_catches)
-      result = std::min(result, isDefinedAllPaths(c, ret, refs));
 
-    return std::min(result, isDefinedAllPaths(tryStmt->body(), ret, refs));
+    // This indicates whether or not we find a catch-all case, in
+    // which case nothing can escape us unless the individual clauses
+    // let it; if this is a try! statement, it doesn't need a
+    // catch-all case, so set it to true
+    //
+    bool foundCatchall = tryStmt->tryBang();
+    for_alist(c, tryStmt->_catches) {
+      result = std::min(result, isDefinedAllPaths(c, ret, refs));
+      if (toCatchStmt(c)->isCatchall()) {
+        foundCatchall = true;
+      }
+    }
+
+    result = std::min(result, isDefinedAllPaths(tryStmt->body(), ret, refs));
+
+    // even if the try and all catches are air-tight, if there's no
+    // catch-all, we can escape via an uncaught error, and will need
+    // for our parent statement to contain returns as well...
+    if (result == 1 && !foundCatchall) {
+      result = 0;
+    }
+    return result;
   }
 
-  if (CatchStmt* catchStmt = toCatchStmt(expr))
-    return isDefinedAllPaths(catchStmt->body(), ret, refs);
+  if (CatchStmt* catchStmt = toCatchStmt(expr)) {
+    return isDefinedAllPaths(catchStmt->bodyWithoutTest(), ret, refs);
+  }
 
   if (BlockStmt* block = toBlockStmt(expr))
   {
     // NOAKES 2014/11/25 Transitional.  Ensure we don't call blockInfoGet()
-    if (block->isWhileDoStmt()  == true ||
-        block->isForLoop()      == true ||
-        block->isCForLoop()     == true ||
-        block->isParamForLoop() == true)
+    if (block->isWhileDoStmt() ||
+        block->isForLoop()     ||
+        block->isCForLoop()    ||
+        block->isParamForLoop())
     {
       return 0;
     }
-
-    else if (block->isDoWhileStmt() == true ||
-             block->blockInfoGet()  == NULL ||
-             block->blockInfoGet()->isPrimitive(PRIM_BLOCK_LOCAL))
-    {
+    else if (block->isDoWhileStmt()        ||
+             block->blockInfoGet() == NULL ||
+             block->blockInfoGet()->isPrimitive(PRIM_BLOCK_LOCAL)) {
       int result = 0;
 
       for_alist(e, block->body)
@@ -209,7 +277,6 @@ isDefinedAllPaths(Expr* expr, Symbol* ret, RefSet& refs)
 
       return result;
     }
-
     else
     {
       return 0;
@@ -386,9 +453,7 @@ checkReturnPaths(FnSymbol* fn) {
       fn->retType == dtVoid ||
       fn->retTag == RET_TYPE ||
       fn->hasFlag(FLAG_EXTERN) ||
-      fn->hasFlag(FLAG_DEFAULT_CONSTRUCTOR) ||
       fn->hasFlag(FLAG_INIT_TUPLE) ||
-      fn->hasFlag(FLAG_TYPE_CONSTRUCTOR) ||
       fn->hasFlag(FLAG_AUTO_II))
     return; // No.
 
@@ -449,6 +514,10 @@ checkBadAddrOf(CallExpr* call)
 
         bool rhsType = rhs->symbol()->hasFlag(FLAG_TYPE_VARIABLE);
         bool rhsParam = rhs->symbol()->isParameter();
+
+        bool rhsExprTemp = rhs->symbol()->hasFlag(FLAG_EXPR_TEMP) &&
+                           !rhs->symbol()->type->symbol->hasFlag(FLAG_ARRAY);
+
         // Also detect runtime type variables
         if (rhs->symbol()->type->symbol->hasFlag(FLAG_RUNTIME_TYPE_VALUE))
           rhsType = true;
@@ -458,8 +527,7 @@ checkBadAddrOf(CallExpr* call)
         } else if (lhsRef && rhsParam) {
           USR_FATAL_CONT(call, "Cannot set a reference to a param variable.");
         } else if (lhsRef && !lhsConst) {
-          if (rhs->symbol()->hasFlag(FLAG_EXPR_TEMP) ||
-              rhs->symbol()->isConstant()) {
+          if (rhsExprTemp || rhs->symbol()->isConstant()) {
             USR_FATAL_CONT(call, "Cannot set a non-const reference to a const variable.");
           }
         }
@@ -477,27 +545,162 @@ checkCalls()
 }
 
 
+static bool isExternType(Type* t) {
+  // narrow references are OK but not wide references
+  if (t->isWideRef())
+    return false;
+
+  ClassTypeDecorator d = CLASS_TYPE_UNMANAGED_NONNIL;
+  // unmanaged or borrowed classes are OK
+  if (isClassLikeOrManaged(t) || isClassLikeOrPtr(t))
+    d = removeNilableFromDecorator(classTypeDecorator(t));
+
+  TypeSymbol* ts = t->symbol;
+
+  EnumType* et = toEnumType(t);
+
+  return t->isRef() ||
+         d == CLASS_TYPE_BORROWED ||
+         d == CLASS_TYPE_UNMANAGED ||
+         (et && et->isConcrete()) ||
+         (ts->hasFlag(FLAG_TUPLE) && ts->hasFlag(FLAG_STAR_TUPLE)) ||
+         ts->hasFlag(FLAG_GLOBAL_TYPE_SYMBOL) ||
+         ts->hasFlag(FLAG_DATA_CLASS) ||
+         ts->hasFlag(FLAG_C_PTR_CLASS) ||
+         ts->hasFlag(FLAG_C_ARRAY) ||
+         ts->hasFlag(FLAG_EXTERN) ||
+         ts->hasFlag(FLAG_EXPORT); // these don't exist yet
+}
+
+static bool isExportableType(Type* t) {
+
+  if (t == dtString || t == dtBytes) {
+    // string/bytes are OK in export functions
+    // because they are converted to wrapper
+    // functions
+    return true;
+  }
+
+  return isExternType(t);
+}
+
+// This function checks that the passed type is an acceptable
+// argument/return type for an extern/export function.
+//
+// Note that some export functions use wrappers (e.g. for string arguments)
+// that will have already been processed by this point in compilation.
+// In that event, this code serves to check that a case has not been
+// missed in the wrapper generation.
+static void externExportTypeError(FnSymbol* fn, Type* t) {
+  INT_ASSERT(fn->hasFlag(FLAG_EXTERN) || fn->hasFlag(FLAG_EXPORT));
+
+  bool isExtern = fn->hasFlag(FLAG_EXTERN);
+
+  if (!fn->hasFlag(FLAG_INSTANTIATED_GENERIC)) {
+    if (t == dtString) {
+      if (isExtern)
+        USR_FATAL_CONT(fn, "extern procedures should not take arguments of "
+                           "type string, use c_string instead");
+      else
+        USR_FATAL_CONT(fn, "export procedures should not take arguments of "
+                           "type string, use c_string instead");
+    } else {
+      if (isExtern)
+        USR_FATAL_CONT(fn, "extern procedure argument types should be "
+                           "extern types - '%s' is not",
+                           toString(t));
+      else
+        USR_FATAL_CONT(fn, "export procedure argument types should be "
+                           "exportable types - '%s' is not",
+                           toString(t));
+    }
+  } else {
+    // This is a generic instantiation of an extern proc that is using
+    // string, so we want to report the call sites causing this
+    if (t == dtString) {
+      if (isExtern)
+        USR_FATAL_CONT(fn, "extern procedure has arguments of type string");
+      else
+        USR_FATAL_CONT(fn, "export procedure has arguments of type string");
+    } else {
+      if (isExtern)
+        USR_FATAL_CONT(fn, "extern procedure argument types should be "
+                           "extern types - '%s' is not",
+                           toString(t));
+      else
+        USR_FATAL_CONT(fn, "export procedure argument types should be "
+                           "exportable types - '%s' is not",
+                           toString(t));
+    }
+
+    forv_Vec(CallExpr, call, *fn->calledBy) {
+      USR_PRINT(call, "when instantiated from here");
+    }
+
+    if (t == dtString)
+      USR_PRINT(fn, "use c_string instead");
+  }
+}
+
+static bool isErroneousExternExportArgIntent(ArgSymbol* formal) {
+
+  Type* valType = formal->getValType();
+
+  // workaround for issue #15917
+  if (valType == dtExternalArray || valType == dtOpaqueArray)
+    return false;
+
+  return isRecord(valType) &&
+         (formal->originalIntent == INTENT_BLANK ||
+          formal->originalIntent == INTENT_CONST);
+}
+
+
+
+static void externExportIntentError(FnSymbol* fn, ArgSymbol* arg) {
+  INT_ASSERT(fn->hasFlag(FLAG_EXTERN) || fn->hasFlag(FLAG_EXPORT));
+
+  bool isExtern = fn->hasFlag(FLAG_EXTERN);
+
+  USR_FATAL_CONT(arg, "a concrete intent is required for the "
+                      "%s function formal %s "
+                      "which has record type %s",
+                      isExtern ? "extern" : "exported",
+                      arg->name,
+                      toString(arg->getValType()));
+}
+
 static void checkExternProcs() {
+  const char* sizeof_ = astr("sizeof");
+  const char* alignof_ = astr("alignof");
+  const char* offsetof_ = astr("offsetof");
+  const char* c_pointer_return = astr("c_pointer_return");
+
   forv_Vec(FnSymbol, fn, gFnSymbols) {
     if (!fn->hasFlag(FLAG_EXTERN))
       continue;
 
+    // Don't worry about passing Chapel types to sizeof etc.
+    if (fn->cname == sizeof_ ||
+        fn->cname == alignof_ ||
+        fn->cname == offsetof_ ||
+        fn->cname == c_pointer_return)
+      continue;
+
     for_formals(formal, fn) {
-      if (formal->typeInfo() == dtString) {
-        if (!fn->hasFlag(FLAG_INSTANTIATED_GENERIC)) {
-          USR_FATAL_CONT(fn, "extern procedures should not take arguments of "
-                             "type string, use c_string instead");
-        } else {
-          // This is a generic instantiation of an extern proc that is using
-          // string, so we want to report the call sites causing this
-          USR_FATAL_CONT(fn, "extern procedure has arguments of type string");
-          forv_Vec(CallExpr, call, *fn->calledBy) {
-            USR_PRINT(call, "when instantiated from here");
-          }
-          USR_PRINT(fn, "use c_string instead");
-        }
-        break;
+      if (!isExternType(formal->type)) {
+        externExportTypeError(fn, formal->type);
+      } else if (isErroneousExternExportArgIntent(formal)) {
+        externExportIntentError(fn, formal);
       }
+    }
+
+    if (!isExternType(fn->retType)) {
+      externExportTypeError(fn, fn->retType);
+    }
+
+    if (fn->retType->symbol->hasFlag(FLAG_C_ARRAY)) {
+      USR_FATAL_CONT(fn, "extern procedures should not return c_array");
     }
   }
 }
@@ -508,15 +711,19 @@ static void checkExportedProcs() {
       continue;
 
     for_formals(formal, fn) {
-      if (formal->typeInfo() == dtString) {
-        USR_FATAL_CONT(fn, "exported procedures should not take arguments of "
-                       "type string, use c_string instead");
+      if (!isExportableType(formal->type)) {
+        externExportTypeError(fn, formal->type);
+      } else if (isErroneousExternExportArgIntent(formal)) {
+        externExportIntentError(fn, formal);
       }
     }
 
-    if (fn->retType == dtString) {
-      USR_FATAL_CONT(fn, "exported procedures should not return strings, use "
-                     "c_strings instead");
+    if (!isExportableType(fn->retType)) {
+      externExportTypeError(fn, fn->retType);
+    }
+
+    if (fn->retType->symbol->hasFlag(FLAG_C_ARRAY)) {
+      USR_FATAL_CONT(fn, "exported procedures should not return c_array");
     }
   }
 }

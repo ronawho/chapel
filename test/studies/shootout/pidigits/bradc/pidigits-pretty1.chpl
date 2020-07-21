@@ -20,7 +20,7 @@ proc main() {
 
   const leftover = n%digitsPerLine;
   if (leftover) {
-    for leftover..digitsPerLine do
+    for leftover..digitsPerLine-1 do
       write(" ");
     writeln("\t:", n);
   }
@@ -28,6 +28,8 @@ proc main() {
 
 
 iter gen_digits(numDigits) {
+  use SysCTypes;
+
   var numer, accum, denom, tmp1, tmp2: mpz_t;
   //
   // TODO: would be nice to support overloads of assignment to

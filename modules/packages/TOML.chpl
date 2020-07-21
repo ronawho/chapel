@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -34,8 +35,11 @@ pragma "error mode fatal"
 module TOML {
 
 
-use TomlParser;
-use TomlReader;
+private use List;
+private use Map;
+public use TomlParser;
+private use TomlReader;
+use IO;
 
 
 /* Receives a TOML file as a parameter and outputs a Toml object.
@@ -90,7 +94,7 @@ proc parseToml(input: channel) : unmanaged Toml {
  /* Receives a string of TOML format as a parameter and outputs a Toml object */
 proc parseToml(input: string) : unmanaged Toml {
   var D: domain(string);
-  var table: [D] unmanaged Toml;
+  var table: [D] unmanaged Toml?;
   var rootTable = new unmanaged Toml(table);
   const source = new unmanaged Source(input);
   const parser = new unmanaged Parser(source, rootTable);
@@ -117,9 +121,12 @@ Parser module with the Toml class for the Chapel TOML library.
 */
 module TomlParser {
 
-  use Regexp;
+  private use Regexp;
   use DateTime;
-
+  use Map, List;
+  import IO.channel;
+  import TOML.TomlReader.Source;
+  import TOML.TomlError;
 
   /* Prints a line by line output of parsing process */
   config const debugTomlParser = false;
@@ -144,6 +151,8 @@ module TomlParser {
       kv = compile('|'.join(doubleQuotes, singleQuotes, digit, keys)),
       dt = compile('^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2}$'),
       realNum = compile("\\+\\d*\\.\\d+|\\-\\d*\\.\\d+|\\d*\\.\\d+"),
+      ld = compile('^\\d{4}-\\d{2}-\\d{2}$'),
+      ti = compile('^\\d{2}:\\d{2}:\\d{2}(.\\d{6,})?$'),
       ints = compile("(\\d+|\\+\\d+|\\-\\d+)"),
       inBrackets = compile("(\\[.*?\\])"),
       corner = compile("(\\[.+\\])"),
@@ -160,8 +169,7 @@ module TomlParser {
         if !source.isEmpty() {
           while(readLine(source)) {
             var token = top(source);
-
-            if token == '#' {
+            if comment.match(token) {
               parseComment();
             }
             else if inBrackets.match(token) {
@@ -173,8 +181,11 @@ module TomlParser {
             else if kv.match(token) {
               parseAssign();
             }
+            else if token == "\n" {
+              getToken(source);
+            }
             else {
-              throw new TomlError("Line "+ debugCounter +": Unexpected Token -> " + getToken(source));
+              throw new owned TomlError("Line "+ debugCounter:string +": Unexpected Token -> " + getToken(source));
             }
             debugCounter += 1;
             if debugTomlParser {
@@ -194,9 +205,9 @@ module TomlParser {
       var toke = getToken(source);
       var tablename = brackets.sub('', toke);
       var tblD: domain(string);
-      var tbl: [tblD] unmanaged Toml;
+      var tbl: [tblD] unmanaged Toml?;
       if !rootTable.pathExists(tablename) {
-        rootTable[tablename] = tbl;
+        rootTable.set(tablename, tbl);
       }
       curTable = tablename;
     }
@@ -206,10 +217,10 @@ module TomlParser {
       var tblname = getToken(source);
       skipNext(source);
       var tblD: domain(string);
-      var tbl: [tblD] unmanaged Toml;
+      var tbl: [tblD] unmanaged Toml?;
       var (tblPath, tblLeaf) = splitTblPath(tblname);
       if !rootTable.pathExists(tblPath) then makePath(tblPath);
-      rootTable[tblPath][tblLeaf] = tbl;
+      rootTable[tblPath]!.set(tblLeaf, tbl);
       curTable = tblname;
     }
 
@@ -222,15 +233,15 @@ module TomlParser {
       for parent in path {
         if first {
           var tblD: domain(string);
-          var tbl: [tblD] unmanaged Toml;
-          rootTable[parent] = tbl;
+          var tbl: [tblD] unmanaged Toml?;
+          rootTable.set(parent, tbl);
           first = false;
         }
         else {
           var tblD: domain(string);
-          var tbl: [tblD] unmanaged Toml;
+          var tbl: [tblD] unmanaged Toml?;
           var grandParent = '.'.join(path[..firstIn+i]);
-          rootTable[grandParent][parent] = tbl;
+          rootTable[grandParent]!.set(parent, tbl);
           i+=1;
         }
       }
@@ -239,15 +250,15 @@ module TomlParser {
     proc parseInlineTbl(key: string) {
       var tblname: string;
       var tblD: domain(string);
-      var tbl: [tblD] unmanaged Toml;
-      if curTable.isEmptyString() {
+      var tbl: [tblD] unmanaged Toml?;
+      if curTable.isEmpty() {
         tblname = key;
-        rootTable[key] = tbl;
+        rootTable.set(key, tbl);
       }
       else {
         tblname = '.'.join(curTable, key);
         var (tblPath, tblLeaf) = splitTblPath(tblname);
-        rootTable[tblPath][tblLeaf] = tbl;
+        rootTable[tblPath]!.set(tblLeaf, tbl);
       }
       var temp = curTable;
       curTable = tblname;
@@ -271,8 +282,8 @@ module TomlParser {
         }
         else {
           var value = parseValue();
-          if curTable.isEmptyString() then rootTable[key] = value;
-          else rootTable[curTable][key] = value;
+          if curTable.isEmpty() then rootTable[key] = value;
+          else rootTable[curTable]![key] = value;
         }
       }
       catch e: TomlError {
@@ -303,23 +314,21 @@ module TomlParser {
         // Array
         if val == '['  {
           skipNext(source);
-          var Dom: domain(1);
-          var array: [Dom] unmanaged Toml;
+          var array: list(unmanaged Toml);
           while top(source) != ']' {
             if comma.match(top(source)) {
               skipNext(source);
             }
             else if comment.match(top(source)) {
-              skipLine(source);
+              skipNext(source);
             }
             else {
               var toParse = parseValue();
-              array.push_back(toParse);
+              array.append(toParse);
             }
           }
           skipNext(source);
-          var tomlArray: unmanaged Toml = array;
-          return tomlArray;
+          return new unmanaged Toml(array);
         }
         // Strings (includes multi-line)
         else if Str.match(val) {
@@ -329,56 +338,63 @@ module TomlParser {
             while toStr.endsWith('"""') == false {
               toStr += " " + getToken(source);
             }
-            var mlString: unmanaged Toml;
-            mlString = toStr.strip('"""');
-            return mlString;
+            return new unmanaged Toml(toStr.strip('"""'));
           }
           else if val.startsWith("'''") {
             toStr += getToken(source).strip("'''", true, false);
             while toStr.endsWith("'''") == false {
               toStr += " " + getToken(source);
             }
-            var mlString: unmanaged Toml;
-            mlString = toStr.strip("'''");
-            return mlString;
+            return new unmanaged Toml(toStr.strip("'''"));
           }
           else {
             toStr = getToken(source).strip('"').strip("'");
-            var tomlStr: unmanaged Toml;
-            tomlStr = toStr;
-            return tomlStr;
+            return new unmanaged Toml(toStr);
           }
         }
         // DateTime
         else if dt.match(val) {
           var date = datetime.strptime(getToken(source), "%Y-%m-%dT%H:%M:%SZ");
-          var Datetime: unmanaged Toml;
-          Datetime = date;
-          return Datetime;
+          return new unmanaged Toml(date);
+        }
+        // Date
+        else if ld.match(val) {
+          var raw = getToken(source).split("-");
+          var d = new date(raw[0]: int,
+                           raw[1]: int,
+                           raw[2]: int);
+          return new unmanaged Toml(d);
+        }
+        // Time
+        else if ti.match(val) {
+          var raw = getToken(source).split(":");
+          var sec = '%.6dr'.format(raw[2]: real).split('.');
+          var t: time;
+
+          t = new time(raw[0]: int,
+                       raw[1]: int,
+                       sec[0]: int,
+                       sec[1]: int);
+
+          return new unmanaged Toml(t);
         }
         // Real
         else if realNum.match(val) {
          var token = getToken(source);
          var toReal = token: real;
-         var realToml: unmanaged Toml;
-         realToml = toReal;
-         return realToml;
+         return new unmanaged Toml(toReal);
         }
         // Int
         else if ints.match(val) {
           var token = getToken(source);
           var toInt = token: int;
-          var intToml: unmanaged Toml;
-          intToml = toInt;
-          return intToml;
+          return new unmanaged Toml(toInt);
         }
         // Boolean
         else if val == "true" || val ==  "false" {
           var token = getToken(source);
           var toBool = token: bool;
-          var boolToml: unmanaged Toml;
-          boolToml = toBool;
-          return boolToml;
+          return new unmanaged Toml(toBool);
         }
         // Comments within arrays
         else if val == '#' {
@@ -394,12 +410,12 @@ module TomlParser {
         }
         // Error
         else {
-          throw new TomlError("Line "+ debugCounter +": Unexpected Token -> " + getToken(source));
-          return val;
+          throw new owned TomlError("Line "+ debugCounter:string +": Unexpected Token -> " + getToken(source));
+          return new unmanaged Toml(val);
         }
       }
       catch e: IllegalArgumentError {
-        writeln("Line "+ debugCounter +": Illegal Value -> " + val);
+        writeln("Line "+ debugCounter:string +": Illegal Value -> " + val);
         exit(1);
       }
       catch e: TomlError {
@@ -430,11 +446,14 @@ pragma "no doc"
    fieldReal,
    fieldString,
    fieldEmpty,
-   fieldDate };
- use fieldtag;
+   fieldDate,
+   fieldTime,
+   fieldDateTime };
+ private use fieldtag;
 
  pragma "no doc"
  proc =(ref t: unmanaged Toml, s: string) {
+   compilerWarning("= overloads for Toml are deprecated");
    if t == nil {
      t = new unmanaged Toml(s);
    } else {
@@ -445,6 +464,7 @@ pragma "no doc"
 
  pragma "no doc"
  proc =(ref t: unmanaged Toml, i: int) {
+   compilerWarning("= overloads for Toml are deprecated");
    if t == nil {
      t = new unmanaged Toml(i);
    } else {
@@ -455,6 +475,7 @@ pragma "no doc"
 
  pragma "no doc"
  proc =(ref t: unmanaged Toml, b: bool) {
+   compilerWarning("= overloads for Toml are deprecated");
    if t == nil {
      t = new unmanaged Toml(b);
    } else {
@@ -465,6 +486,7 @@ pragma "no doc"
 
  pragma "no doc"
  proc =(ref t: unmanaged Toml, r: real) {
+   compilerWarning("= overloads for Toml are deprecated");
    if t == nil {
      t = new unmanaged Toml(r);
    } else {
@@ -474,17 +496,45 @@ pragma "no doc"
  }
 
  pragma "no doc"
+ proc =(ref t: unmanaged Toml, ld: date) {
+   compilerWarning("= overloads for Toml are deprecated");
+   if t == nil {
+     t = new unmanaged Toml(ld);
+   } else {
+     t.tag = fieldDate;
+     t.ld = ld;
+   }
+ }
+
+ pragma "no doc"
+ proc =(ref t: unmanaged Toml, ti: time) {
+   compilerWarning("= overloads for Toml are deprecated");
+   if t == nil {
+     t = new unmanaged Toml(ti);
+   } else {
+     t.tag = fieldTime;
+     t.ti = ti;
+   }
+ }
+
+ pragma "no doc"
  proc =(ref t: unmanaged Toml, dt: datetime) {
+   compilerWarning("= overloads for Toml are deprecated");
    if t == nil {
      t = new unmanaged Toml(dt);
    } else {
-     t.tag = fieldDate;
+     t.tag = fieldDateTime;
      t.dt = dt;
    }
  }
 
  pragma "no doc"
  proc =(ref t: unmanaged Toml, A: [?D] unmanaged Toml) where isAssociativeDom(D) {
+   compilerWarning("= overloads for Toml are deprecated");
+   setupToml(t, A);
+ }
+ pragma "no doc"
+ proc setupToml(ref t: unmanaged Toml, A: [?D] unmanaged Toml) where isAssociativeDom(D) {
    if t == nil {
      t = new unmanaged Toml(A);
    } else {
@@ -495,7 +545,7 @@ pragma "no doc"
  }
 
  pragma "no doc"
- proc =(ref t: unmanaged Toml, arr: [?dom] unmanaged Toml) where !isAssociativeDom(dom){
+ proc setupToml(ref t: unmanaged Toml, arr: [?dom] unmanaged Toml) where !isAssociativeDom(dom){
    if t == nil {
      t = new unmanaged Toml(arr);
    } else {
@@ -503,6 +553,13 @@ pragma "no doc"
      t.dom = dom;
      t.arr = arr;
    }
+ }
+
+
+ pragma "no doc"
+ proc =(ref t: unmanaged Toml, arr: [?dom] unmanaged Toml) where !isAssociativeDom(dom){
+   compilerWarning("= overloads for Toml are deprecated");
+   setupToml(t, arr);
  }
 
 
@@ -517,11 +574,12 @@ used to recursively hold tables and respective values
       boo: bool,
       re: real,
       s: string,
+      ld: date,
+      ti: time,
       dt: datetime,
       dom: domain(1),
-      arr: [dom] unmanaged Toml,
-      D: domain(string),
-      A: [D] unmanaged Toml,
+      arr: [dom] unmanaged Toml?,
+      A: map(string, unmanaged Toml?, false),
       tag: fieldtag;
 
     // Empty
@@ -537,15 +595,34 @@ used to recursively hold tables and respective values
 
     // Toml
     proc init(A: [?D] unmanaged Toml) where isAssociativeDom(D) {
-      this.D = D;
-      this.A = A;
+      this.complete();
+      for i in D do this.A[i] = A[i];
       this.tag = fieldToml;
+    }
+
+    pragma "no doc"
+    proc init(A: [?D] unmanaged Toml?) where isAssociativeDom(D) {
+      this.complete();
+      for i in D do this.A[i] = A[i];
+      this.tag = fieldToml;
+    }
+
+    // Date
+    proc init(ld: date) {
+      this.ld = ld;
+      this.tag = fieldDate;
+    }
+
+    // Time
+    proc init(ti: time) {
+       this.ti = ti;
+       this.tag = fieldTime;
     }
 
     // Datetime
     proc init(dt: datetime) {
       this.dt = dt;
-      this.tag = fieldDate;
+      this.tag = fieldDateTime;
     }
 
     // Int
@@ -573,6 +650,26 @@ used to recursively hold tables and respective values
       this.tag = fieldArr;
     }
 
+    pragma "no doc"
+    proc init(arr: [?dom] unmanaged Toml?) where isAssociativeDom(dom) == false  {
+      this.dom = dom;
+      this.arr = arr;
+      this.tag = fieldArr;
+    }
+
+    // List
+    proc init(lst: list(unmanaged Toml)) {
+      // Cheat by translating directly into an array for now.
+      this.init(lst.toArray());
+    }
+
+    pragma "no doc"
+    proc init(lst: list(unmanaged Toml?)) {
+      // Cheat by translating directly into an array for now.
+      this.init(lst.toArray());
+    }
+
+
     // Clone
     proc init(root: unmanaged Toml) {
       // INIT TODO: Can this be written in phase one?
@@ -581,28 +678,35 @@ used to recursively hold tables and respective values
       this.i = root.i;
       this.re = root.re;
       this.dom = root.dom;
-      for idx in root.dom do this.arr[idx] = new unmanaged Toml(root.arr[idx]);
+      for idx in root.dom do this.arr[idx] = new unmanaged Toml(root.arr[idx]!)?;
+      this.ld = root.ld;
+      this.ti = root.ti;
       this.dt = root.dt;
       this.s = root.s;
-      this.D = root.D;
-      for idx in root.D do this.A[idx] = new unmanaged Toml(root.A[idx]);
+      for idx in root.A do this.A[idx] = new unmanaged Toml(root.A[idx]!)?;
       this.tag = root.tag;
     }
 
 
     /* Returns the index of the table path given as a parameter */
-    proc this(tbl: string) ref : unmanaged Toml throws {
+    proc this(tbl: string) ref : unmanaged Toml? throws {
       const indx = tbl.split('.');
       var top = indx.domain.first;
+
+      //
+      // TODO: This is a bug when the return type of this routine is a
+      // non-nilable class, see #14367/#14861. So for now, we have to make
+      // `Toml.this` return `Toml?`, which makes it a lot less pleasant
+      // to use.
+      //
       if indx.size < 2 {
         return this.A[tbl];
-      }
-      else {
+      } else {
         var next = '.'.join(indx[top+1..]);
-        if !this.A.domain.member(indx[top]) {
-          throw new TomlError("No index found for " + tbl);
+        if !this.A.contains(indx[top]) {
+          throw new owned TomlError("No index found for " + tbl);
         }
-        return this.A[indx[top]][next];
+        return this.A[indx[top]]![next];
       }
     }
 
@@ -613,7 +717,7 @@ used to recursively hold tables and respective values
         var path = tblpath.split('.');
         var top = path.domain.first;
         if path.size < 2 {
-          if this.A.domain.member(tblpath) == false {
+          if this.A.contains(tblpath) == false {
             return false;
           }
           else {
@@ -622,8 +726,8 @@ used to recursively hold tables and respective values
         }
         else {
           var next = '.'.join(path[top+1..]);
-          if this.A.domain.member(path[top]) {
-            return this.A[path[top]].pathExists(next);
+          if this.A.contains(path[top]) {
+            return this.A[path[top]]!.pathExists(next);
           }
           else {
             return false;
@@ -636,16 +740,109 @@ used to recursively hold tables and respective values
       return false;
     }
 
+    proc set(tbl: string, toml: unmanaged Toml?) {
+      ref t = this(tbl);
+      if t == nil {
+        t = toml;
+      } else {
+        delete t;
+        t = toml;
+      }
+    }
+
+    proc set(tbl: string, s: string) {
+      ref t = this(tbl);
+      if t == nil {
+        t = new unmanaged Toml(s);
+      } else {
+        t!.tag = fieldString;
+        t!.s = s;
+      }
+    }
+    proc set(tbl: string, i: int) {
+      ref t = this(tbl);
+      if t == nil {
+        t = new unmanaged Toml(i);
+      } else {
+        t!.tag = fieldInt;
+        t!.i = i;
+      }
+    }
+    proc set(tbl: string, b: bool) {
+      ref t = this(tbl);
+      if t == nil {
+        t = new unmanaged Toml(b);
+      } else {
+        t!.tag = fieldBool;
+        t!.boo = b;
+      }
+    }
+    proc set(tbl: string, r: real) {
+      ref t = this(tbl);
+      if t == nil {
+        t = new unmanaged Toml(r);
+      } else {
+        t!.tag = fieldReal;
+        t!.re = r;
+      }
+    }
+    proc set(tbl: string, ld: date) {
+      ref t = this(tbl);
+      if t == nil {
+        t = new unmanaged Toml(ld);
+      } else {
+        t!.tag = fieldDate;
+        t!.ld = ld;
+      }
+    }
+    proc set(tbl: string, ti: time) {
+      ref t = this(tbl);
+      if t == nil {
+        t = new unmanaged Toml(ti);
+      } else {
+        t!.tag = fieldTime;
+        t!.ti = ti;
+      }
+    }
+    proc set(tbl: string, dt: datetime) {
+      ref t = this(tbl);
+      if t == nil {
+        t = new unmanaged Toml(dt);
+      } else {
+        t!.tag = fieldDateTime;
+        t!.dt = dt;
+      }
+    }
+    proc set(tbl: string, A: [?D] unmanaged Toml?) where isAssociativeDom(D) {
+      ref t = this(tbl);
+      if t == nil {
+        t = new unmanaged Toml(A);
+      } else {
+        t!.tag = fieldToml;
+        for i in D do t!.A[i] = A[i];
+      }
+    }
+    proc set(tbl: string, arr: [?dom] unmanaged Toml?) where !isAssociativeDom(dom) {
+      ref t = this(tbl);
+      if t == nil {
+        t = new unmanaged Toml(arr);
+      } else {
+        t!.tag = fieldArr;
+        t!.dom = dom;
+        t!.arr = arr;
+      }
+    }
+
+
     /* Write a Table to channel f in TOML format */
-    override proc writeThis(f) {
+    override proc writeThis(f) throws {
       writeTOML(f);
     }
 
     /* Write a Table to channel f in TOML format */
     proc writeTOML(f) {
       try! {
-        var flatDom: domain(string);
-        var flat: [flatDom] unmanaged Toml;
+        var flat = new map(string, unmanaged Toml?);
         this.flatten(flat);       // Flattens containing Toml
         printValues(f, this);     // Prints key values in containing Toml
         printTables(flat, f);       // Prints tables in containing Toml
@@ -658,8 +855,7 @@ used to recursively hold tables and respective values
     /* Write a Table to channel f in JSON format */
     proc writeJSON(f) {
       try! {
-        var flatDom: domain(string);
-        var flat: [flatDom] unmanaged Toml;
+        var flat = new map(string, unmanaged Toml?);
         this.flatten(flat);           // Flattens containing Toml
 
         var indent=0;
@@ -670,14 +866,14 @@ used to recursively hold tables and respective values
         // Prints key values in containing Toml
         printValuesJSON(f, this, indent=indent);
 
-        if flatDom.member('root') {
-          printValuesJSON(f, flat['root'], indent=indent);
-          flatDom.remove('root');
+        if flat.contains('root') {
+          printValuesJSON(f, flat['root']!, indent=indent);
+          flat.remove('root');
         }
-        for k in flatDom.sorted() {
+        for k in flat.keysToArray().sorted() {
           f.writef('%s"%s": {\n', ' '*indent, k);
           indent += tabSpace;
-          printValuesJSON(f, flat[k], indent=indent);
+          printValuesJSON(f, flat[k]!, indent=indent);
           indent -= tabSpace;
           f.writef('%s}\n', ' '*indent);
         }
@@ -693,35 +889,36 @@ used to recursively hold tables and respective values
 
     pragma "no doc"
     /* Flatten tables into flat associative array for writing */
-    proc flatten(flat: [?d] unmanaged Toml, rootKey = '') : flat.type {
-      for (k, v) in zip(this.D, this.A) {
-        if v.tag == fieldToml {
+    proc flatten(ref flat: map(string, unmanaged Toml?, false), rootKey = '') : flat.type {
+      for (k, v) in this.A.items() {
+        if v!.tag == fieldToml {
           var fullKey = k;
           if rootKey != '' then fullKey = '.'.join(rootKey, k);
           flat[fullKey] = v;
-          v.flatten(flat, fullKey);
+          v!.flatten(flat, fullKey);
         }
       }
       return flat;
     }
 
     pragma "no doc"
-    proc printTables(flat: [?d] unmanaged Toml, f:channel) {
-      if d.member('root') {
+    proc printTables(ref flat: map(string, unmanaged Toml?, false), f:channel) {
+      if flat.contains('root') {
         f.writeln('[root]');
-        printValues(f, flat['root']);
-        d.remove('root');
+        printValues(f, flat['root']!);
+        flat.remove('root');
       }
-      for k in d.sorted() {
+      for k in flat.keysToArray().sorted() {
         f.writeln('[', k, ']');
-        printValues(f, flat[k]);
+        printValues(f, flat[k]!);
       }
     }
 
     pragma "no doc"
     /* Send values from table to toString for writing  */
     proc printValues(f: channel, v: borrowed Toml) throws {
-      for (key, value) in zip(v.D, v.A) {
+      for (key, val) in v.A.items() {
+        var value = val!;
         select value.tag {
           when fieldToml do continue; // Table
           when fieldBool {
@@ -736,10 +933,10 @@ used to recursively hold tables and respective values
             final += '[';
             for k in value.arr {
               if value.arr.domain.size == 1 || k == value.arr[value.arr.domain.last] {
-                final += toString(k);
+                final += toString(k!);
               }
               else {
-                final += toString(k) + ', ';
+                final += toString(k!) + ', ';
               }
             }
             final += ']';
@@ -752,13 +949,19 @@ used to recursively hold tables and respective values
             f.write(key, ' = ', toString(value));
           }
           when fieldEmpty {
-            throw new TomlError("Keys must have a value");
+            throw new owned TomlError("Keys must have a value");
           }
           when fieldDate {
             f.write(key, ' = ', toString(value));
           }
+          when fieldTime {
+            f.write(key, ' = ', toString(value));
+          }
+          when fieldDateTime {
+            f.write(key, ' = ', toString(value));
+          }
           otherwise {
-            throw new TomlError("Not yet supported");
+            throw new owned TomlError("Not yet supported");
           }
         }
         f.writeln();
@@ -769,7 +972,8 @@ used to recursively hold tables and respective values
     pragma "no doc"
     /* Send values from table to toString for writing  */
     proc printValuesJSON(f: channel, v: borrowed Toml, in indent=0) throws {
-      for (key, value, i) in zip(v.D, v.A, 1..v.D.size) {
+      for ((key, val), i) in zip(v.A.items(), 1..v.A.size) {
+        var value = val!;
         select value.tag {
           when fieldToml do continue; // Table
           when fieldBool {
@@ -787,7 +991,7 @@ used to recursively hold tables and respective values
             var arrayElements: string;
             for i in value.arr.domain {
               ref k = value.arr[i];
-              f.writef('%s{"type": "%s", "value": "%s"}', ' '*indent, k.tomlType, toString(k));
+              f.writef('%s{"type": "%s", "value": "%s"}', ' '*indent, k!.tomlType, toString(k!));
               if i != value.arr.domain.last {
                 f.writef(',');
               }
@@ -805,16 +1009,22 @@ used to recursively hold tables and respective values
             f.writef('%s"%s": {"type": "%s", "value": "%s"}', ' '*indent, key, value.tomlType, toString(value));
           }
           when fieldEmpty {
-            throw new TomlError("Keys must have a value");
+            throw new owned TomlError("Keys must have a value");
           }
           when fieldDate {
             f.writef('%s"%s": {"type": "%s", "value": "%s"}', ' '*indent, key, value.tomlType, toString(value));
           }
+          when fieldTime {
+            f.writef('%s"%s": {"type": "%s", "value": "%s"}', ' '*indent, key, value.tomlType, toString(value));
+          }
+          when fieldDateTime {
+            f.writef('%s"%s": {"type": "%s", "value": "%s"}', ' '*indent, key, value.tomlType, toString(value));
+          }
           otherwise {
-            throw new TomlError("Not yet supported");
+            throw new owned TomlError("Not yet supported");
           }
         }
-        if i != v.D.size {
+        if i != v.A.size {
           f.writef(',');
         }
         f.writef('\n');
@@ -833,10 +1043,10 @@ used to recursively hold tables and respective values
           final += '[';
           for k in val.arr {
             if val.arr.domain.size == 1 || k == val.arr[val.arr.domain.last] {
-              final += toString(k);
+              final += toString(k!);
             }
             else {
-              final += toString(k) + ', ';
+              final += toString(k!) + ', ';
             }
           }
           final += ']';
@@ -845,9 +1055,11 @@ used to recursively hold tables and respective values
         when fieldReal do return val.re:string;
         when fieldString do return ('"' + val.s + '"');
         when fieldEmpty do return ""; // empty
-        when fieldDate do return val.dt.isoformat();
+        when fieldDate do return val.ld.isoformat();
+        when fieldTime do return val.ti.isoformat();
+        when fieldDateTime do return val.dt.isoformat();
         otherwise {
-          throw new TomlError("Error in printing " + val.s);
+          throw new owned TomlError("Error in printing " + val.s);
           return val.s;
         }
       }
@@ -883,10 +1095,12 @@ used to recursively hold tables and respective values
         when fieldReal do return 'float';
         when fieldString do return 'string';
         when fieldEmpty do return 'empty';
-        when fieldDate do return 'datetime';
+        when fieldDate do return 'date';
+        when fieldTime do return 'time';
+        when fieldDateTime do return 'datetime';
         when fieldToml do return 'toml';
         otherwise {
-          throw new TomlError("Unknown type");
+          throw new owned TomlError("Unknown type");
           return "nil";
         }
       }
@@ -895,7 +1109,7 @@ used to recursively hold tables and respective values
 
     pragma "no doc"
     proc deinit() {
-      for a in A do delete a;
+      for a in A.values() do delete a;
       for a in arr do delete a;
     }
   }
@@ -907,17 +1121,19 @@ pragma "no doc"
  Reader module for use in the Parser Class.
  */
 module TomlReader {
+ use List;
+ import TOML.TomlError;
 
- use Regexp;
+ private use Regexp;
 
  config const debugTomlReader = false;
 
   /* Returns the next token in the current line without removing it */
   proc top(source) throws {
     if !source.nextLine() {
-      throw new TomlError("Reached end of file unexpectedly");
+      throw new owned TomlError("Reached end of file unexpectedly");
     }
-    return source.currentLine[source.currentLine.D.first];
+    return source.currentLine![0];
   }
 
   /* Returns a boolean or whether or not another line can be read
@@ -927,18 +1143,18 @@ module TomlReader {
   }
 
   proc skipNext(source) {
-    source.currentLine.skip();
+    source.currentLine!.skip();
   }
 
   proc addToken(source, tokensToAdd: [?dom] string) {
     for toke in tokensToAdd {
-      source.currentLine.addToke(toke);
+      source.currentLine!.addToke(toke);
     }
   }
 
   proc skipLine(source) {
-    var emptyArray: [1..0] string;
-    var emptyCurrent = new unmanaged Tokens(emptyArray);
+    var emptyList: list(string);
+    var emptyCurrent = new unmanaged Tokens(emptyList);
     var ptrhold = source.currentLine;
     source.currentLine = emptyCurrent;
     var readNextLine = readLine(source);
@@ -960,9 +1176,8 @@ module TomlReader {
   class Source {
 
     var tomlStr: string;
-    var tokenD = {1..0},
-      tokenlist: [tokenD] unmanaged Tokens;
-    var currentLine: unmanaged Tokens;
+    var tokenlist: list(unmanaged Tokens);
+    var currentLine: unmanaged Tokens?;
 
 
     proc init(tomlStr: string) {
@@ -976,7 +1191,7 @@ module TomlReader {
         splitLine(line);
       }
       if !this.isEmpty() {
-        currentLine = tokenlist[tokenD.first];
+        currentLine = tokenlist[0];
       }
     }
 
@@ -985,7 +1200,10 @@ module TomlReader {
     }
 
     proc splitLine(line) {
-      var linetokens: [1..0] string;
+      var idx = 0;
+      var linetokens: list(string);
+      var nonEmptyChar: bool = false;
+
       const doubleQuotes = '(".*?")',           // ""
             singleQuotes = "('.*?')",           // ''
             bracketContents = "(\\[\\w+\\])",   // [_]
@@ -993,41 +1211,66 @@ module TomlReader {
             comments = "(\\#)",                 // #
             commas = "(\\,)",                   // ,
             equals = "(\\=)",                   // =
-            curly = "(\\{)|(\\})";              // {}
+            curly = "(\\{)|(\\})",              // {}
+            dt = "^\\d{4}-\\d{2}-\\d{2}[ T]\\d{2}:\\d{2}:\\d{2}",
+            ld = "^\\d{4}-\\d{2}-\\d{2}",
+            ti = "^\\d{2}:\\d{2}:\\d{2}(.\\d{6,})?";
 
       const pattern = compile('|'.join(doubleQuotes,
                                        singleQuotes,
                                        bracketContents,
                                        brackets,
-                                       comments,
                                        commas,
                                        curly,
-                                       equals));
+                                       equals,
+                                       dt,
+                                       ti,
+                                       ld));
 
       for token in pattern.split(line) {
-        var strippedToken = token.strip();
-        if strippedToken.length != 0  {
+        idx += 1;
+        var strippedToken = token.strip(" \t");
+        if strippedToken.size != 0 {
           if debugTomlReader {
             writeln('Tokenized: ', '(', strippedToken, ')');
           }
-          linetokens.push_back(strippedToken);}
+          nonEmptyChar = true;
+          // check for date/time in a line and avoid comment
+          const toke = strippedToken;
+          const isWhiteSpace = compile("\\s");
+          var dateTimeToken = isWhiteSpace.split(toke);
+          if strippedToken.match(compile('|'.join(dt,ti,ld))).matched then
+            strippedToken = dateTimeToken[0];
+          var isComment = strippedToken.match(compile(comments));
+          if isComment.matched && idx <= 1 {
+            linetokens.append(strippedToken);
+          } else if !isComment.matched {
+            linetokens.append(strippedToken);
+          }
+        }
       }
+
+      // If no non-empty-chars => token is a blank line
+      if(nonEmptyChar == false){
+        linetokens.append("\n");
+      }
+
       if !linetokens.isEmpty() {
         var tokens = new unmanaged Tokens(linetokens);
-        tokenlist.push_back(tokens);
+        tokenlist.append(tokens);
       }
     }
 
 
     proc nextLine() {
-      if currentLine.isEmpty() {
-        if tokenD.size == 1 {
+      if currentLine!.isEmpty() {
+        if tokenlist.size == 1 {
           return false;
         }
         else {
           var ptrhold = currentLine;
-          tokenlist.remove(tokenD.first);
-          currentLine = tokenlist[tokenD.first];
+          tokenlist.pop(0);
+          currentLine = tokenlist[0];
           delete ptrhold;
           return true;
         }
@@ -1039,9 +1282,9 @@ module TomlReader {
     /* retrieves next token in currentLine */
     proc nextToke() throws {
       if !nextLine() {
-        throw new TomlError("Reached end of file unexpectedly");
+        throw new owned TomlError("Reached end of file unexpectedly");
       }
-      return currentLine.next();
+      return currentLine!.next();
     }
 
 
@@ -1049,7 +1292,7 @@ module TomlReader {
       for line in tokenlist {
         if line.A.size != 0 {
           for token in line {
-            if token.length != 0 {
+            if token.size != 0 {
               write("(", token, ")");
             }
           }
@@ -1069,29 +1312,23 @@ module TomlReader {
 
   /* Array wrapper */
   class Tokens {
-    var D: domain(1);
-    var A: [D] string;
+    var A: list(string);
 
-    proc init(A: [?D] string) {
-      this.D = D;
+    proc init(A: list(string)) {
       this.A = A;
     }
 
     proc skip() {
-      var idx = D.first;
-      var toke = A(idx);
-      A.remove(idx);
+      A.pop(0);
     }
 
     proc next() {
-      var idx =  D.first;
-      var toke = A(idx);
-      A.remove(idx);
+      var toke = A.pop(0);
       return toke;
     }
 
     proc addToke(toke: string) {
-      A.push_front(toke);
+      A.insert(0, toke);
     }
 
     proc isEmpty(): bool {
@@ -1108,8 +1345,9 @@ module TomlReader {
       }
     }
 
-    proc readWriteThis(f) {
-      f <~> this.A;
+    proc readWriteThis(f) throws {
+      // TODO: The `list` type currently doesn't support readWriteThis!
+      f <~> this.A.toArray();
     }
   }
 }

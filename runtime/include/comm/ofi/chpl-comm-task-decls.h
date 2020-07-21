@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -17,57 +18,47 @@
  * limitations under the License.
  */
 
-//
-// Tasking-related macros for the Chapel uGNI communication layer.
-//
-
 #ifndef _COMM_TASK_DECLS_H_
 #define _COMM_TASK_DECLS_H_
 
 #include <stddef.h>
 #include <stdint.h>
 
+#include <rdma/fabric.h>
+#include <rdma/fi_domain.h>
+
 #include "chpltypes.h"
 
+// The type of task private data.
+#include "chpl-cache-task-decls.h"
+#define HAS_CHPL_CACHE_FNS
+
 typedef struct {
-  int dummy;    // structs must be nonempty
+  chpl_cache_taskPrvData_t cache_data;
+  uint8_t nfaCount;     // nonfetching AMO AM count
+  void* nfaBitmap;      // nonfetching AMO AM target nodes
+  void* amo_nf_buff;
+  void* get_buff;
+  void* put_buff;
 } chpl_comm_taskPrvData_t;
 
 //
-// Comm layer private area within executeOn argument bundles
-// (bundle.comm)
+// Comm layer private area within executeOn argument bundles.
+//
 typedef struct {
-  chpl_fn_int_t fid;
-  int caller;
-  void* ack;
+  chpl_bool fast;               // do directly in AM handler; no task
+  chpl_fn_int_t fid;            // function table index to call
+  c_nodeid_t node;              // initiator's node
+  c_sublocid_t subloc;          // target sublocale
+  size_t argSize;               // #bytes in whole arg bundle
+  void* pAmDone;                // initiator's 'amDone' flag; NULL means nonblk
+#ifdef CHPL_COMM_DEBUG
+  uint64_t seq;
+  uint32_t crc;
+#endif
 } chpl_comm_bundleData_t;
 
-//
-// Nonblocking GET support.  Handle is a unique handle for the GET.
-// This value is initially returned by chpl_com_get_nb(), and can then
-// be passed to chpl_comm_test_get_nb() while polling for the GET to
-// complete.  Once chpl_comm_test_get_nb() returns true, however, the
-// handle is expired and must not be passed to it again.
-//
-// Code external to the comm layer must not assume anything about or
-// change any of the contents of a nonblocking GET handle.  The only
-// supported interface is via the functions described below.
-//
-// chpl_comm_get_nb()
-//   Get 'size' bytes of remote data at 'raddr' on locale 'locale' to
-//   local data at 'addr', nonblocking.
-//
-// chpl_comm_test_get_nb()
-//   Return nonzero if the GET associated with the given handle has
-//   completed.
-//
+// The type of the communication handle.
 typedef void* chpl_comm_nb_handle_t;
-#ifdef BLAH
 
-chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, int32_t locale, void* raddr,
-                                       size_t size, int32_t typeIndex,
-                                       int32_t commID, int ln, int32_t fn);
-chpl_bool chpl_comm_test_get_nb(chpl_comm_nb_handle_t handle,
-                                int ln, int32_t fn);
-#endif
 #endif

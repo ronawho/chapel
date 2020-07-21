@@ -35,11 +35,38 @@ Basic Usage
 Starting a New Package
 ~~~~~~~~~~~~~~~~~~~~~~
 
-To initialize a new mason package, run the ``mason new [ package name ] [ options ]`` command, for example::
+To initialize a new mason package, run ``mason new``. The same can also be done using ``mason init`` as follows: 
 
-    mason new MyPackage 
+  .. code-block:: sh
+
+    mkdir newPackage
+    cd newPackage
+    mason init
+
+
+This starts an interactive session which walks an user through the process of creating a project using Mason. This is highly recommended for new users.
+
+A more advanced user may use the ``mason new [ options ] <project name>`` command, for example::
+
+    mason new MyPackage
 
 This creates a git repository by default, unless ``--no-vcs`` is included.
+
+Mason packages can also be initialized using the ``mason init [options] [directory path]``.
+To avoid the interactive session while initializing the project, run ``mason init -d | --default``. 
+
+
+For example, for an existing directory named MyPackage, 
+    
+  .. code-block:: sh
+    
+    mason init MyPackage 
+
+    # OR 
+
+    cd MyPackage
+    mason init -d  
+
 
 The package will have the following hierarchy::
 
@@ -64,8 +91,22 @@ additional functionality that comes with these folders later.
 Mason enforces that the main file be named after the package to enforce namespacing.
 ``MyPackage.chpl`` will be the first file listed in ``src/``.
 
+You can create a package in a directory that differs from the mason 
+package name with the `mason {new,init} --name` flag.
+This may be useful when creating a package in a directory that 
+is an illegal Mason package name, such as names with dashes. For example, 
 
-Building and Running 
+  .. code-block:: sh
+
+    mason new illegal-module-name --name LegalModuleName
+
+    # OR
+
+    mkdir illegal-module-name
+    mason init illegal-module-name --name LegalModuleName
+
+
+Building and Running
 ~~~~~~~~~~~~~~~~~~~~
 
 When invoked, ``mason build [ options ]`` will do the following:
@@ -158,9 +199,9 @@ MyPackage's structure is as follows::
    ├── Mason.toml
    ├── example/
    ├── src/
-   │   └── myPackage.chpl
-   ├── util/
-   │   └── myPackageUtils.chpl
+   │   ├── myPackage.chpl
+   │   └── util/
+   │       └── myPackageUtils.chpl
    ├── target/
    │   ├── debug/
    │   │   └── myPackage
@@ -198,8 +239,34 @@ To try out different values at runtime, pass the values for ``number`` to ``maso
 Testing your Package
 ~~~~~~~~~~~~~~~~~~~~
 
-Mason provides the functionality to test packages in a quick and concise manner.
-an example of adding to ``MyPackage`` and running it. The test is as follows:
+Mason provides the functionality to test packages through the ``mason test``
+subcommand. There are two styles of writing mason tests:
+
+1. Tests that utilize the `UnitTest`` module to determine pass/fail status
+2. Tests that rely on the exit code to determine pass/fail status
+
+Here is an example of a ``UnitTest``-based tests:
+
+.. code-block:: chpl
+
+  use UnitTest;
+
+  config const testParam: bool = true;
+
+  proc myTest(test: borrowed Test) throws{
+    test.assertTrue(testParam);
+  }
+
+  UnitTest.main();
+
+Mason testing that uses ``UnitTest`` will treat each individual function as a
+test, and the test will be considered successful if no assertions failed and no
+halts were reached within the function body.
+
+See the :chpl:mod:`UnitTest` documentation to learn more about writing unit tests in
+Chapel.
+
+Here is an example of an exit-code-based tests:
 
 .. code-block:: chpl
 
@@ -212,10 +279,21 @@ an example of adding to ``MyPackage`` and running it. The test is as follows:
      exit(1);
    }
 
-Our package structure will be as follows::
+Mason testing that relies on exit code tests each file as a test, and the test
+will be considered successful if the program compiled and exited with an exit
+code of 0.
+
+These tests should be configured such that a failure produces an exit code other than 0.
+Returning a non-zero exit code can be accomplished by calling ``exit()`` or
+throwing an uncaught error.
+
+Both exit-code and ``UnitTest`` style tests can be used within a single mason
+package.
+
+After adding our test, the package structure will be as follows::
 
   MyPackage/
-   │  
+   │
    ├── Mason.lock
    ├── Mason.toml
    ├── example/
@@ -231,29 +309,11 @@ Our package structure will be as follows::
    └── test/
         └── myPackageTest.chpl
 
-Mason testing is based on exit code which means that if the package's tests compile
-and run successfully, despite the "result" of the program, the tests pass. For this
-reason, Mason users should configure their tests such that a failure produces an
-exit code other than 0. Using ``exit()`` is the easiest way to do this, but throwing
-errors is another way to accomplish the same thing.
 
-To run the test(s), use the command ``mason test``. If tests are not explicitly specified in Mason.toml,
-Mason will gather all the tests found in ``test/``, compile them with the dependencies listed in your ``Mason.toml``
-and run them producing the following output::
-
-  --- Results ---
-  Test: myPackageTest Passed
-  
-  --- Summary:  1 tests run ---
-  -----> 1 Passed
-  -----> 0 Failed
-
-If the standard output of the tests is desired, simply throw the ``--show`` flag.
-The output of ``mason test --show`` in this case would be::
-
-  Test Passed!
-
-  --------------------
+Use ``mason test`` to run the test(s). If tests are not explicitly
+specified in ``Mason.toml``, Mason will gather all the tests found in ``test/``,
+compile them with the dependencies listed in your ``Mason.toml`` and run them
+producing the following output::
 
   --- Results ---
   Test: myPackageTest Passed
@@ -262,8 +322,27 @@ The output of ``mason test --show`` in this case would be::
   -----> 1 Passed
   -----> 0 Failed
 
-Mason will find tests either by searching through the ``test/`` directory, or by
-reading them from the ``Mason.toml`` where they can be specified.
+Additional output can be displayed by throwing the ``--show flag``.
+
+.. note::
+
+    ``mason test`` can also be used outside of a mason package as a
+    ``UnitTest`` test runner. See :chpl:mod:`UnitTest` for more information.
+
+Tests can be listed in the ``Mason.toml`` as a TOML array of strings for the
+``tests`` field:
+
+.. code-block:: text
+
+   [brick]
+   name = "myPackage"
+   version = "0.1.0"
+   chplVersion = "1.18.0"
+   license = "None"
+   tests = ["test1.chpl",
+            "test2.chpl",
+            "test3.chpl"]
+
 
 
 Creating and Running Examples
@@ -306,7 +385,7 @@ follows::
 
 
   MyPackage/
-   │ 
+   │
    ├── Mason.lock
    ├── Mason.toml
    ├── example/
@@ -335,6 +414,7 @@ in their ``Mason.toml`` as follows:
    name = "myPackage"
    version = "0.1.0"
    chplVersion = "1.18.0"
+   license = "None"
 
    [dependencies]
 
@@ -342,8 +422,8 @@ in their ``Mason.toml`` as follows:
    examples = ["myPackageExample.chpl"]
 
    [examples.myPackageExample]
-   execopts = ["--count=20"]
-   compopts = ["--savec tmp"]
+   execopts = "--count=20"
+   compopts = "--savec tmp"
 
 
 Documenting a Package
@@ -376,6 +456,7 @@ file of the package as follows:
    name = "myPackage"
    version = "0.1.0"
    chplVersion = "1.18.0"
+   license = "None"
 
    [dependencies]
    MatrixMarket = 0.1.0
@@ -454,6 +535,7 @@ The ``Mason.toml`` now looks like:
    name = "myPackage"
    version = "0.1.0"
    chplVersion = "1.18.0"
+   license = "None"
 
    [system]
    openSSL = "0.9.8zh"
@@ -476,11 +558,22 @@ to install and use any package in the `Spack registry <https://spack.readthedocs
 This interface is analogous to the previous example except when a package is missing, user's can download that package
 through the Spack integration. The following is a workflow of finding, installing, and adding a Spack dependency to a Mason Package.
 
-First, the Spack backend must be installed::
+**Setting up Spack backend**
+
+First, the Spack backend must be installed. Users can have mason install Spack
+or point mason to an existing spack installation.
+
+This command will install Spack into ``$MASON_HOME/spack`` and set it up so that it
+can be used by Mason. It should be noted that this command pulls from the `master` branch of spack
+for setting up the spack registry at ``$MASON_HOME/spack-registry``::
 
   mason external --setup
 
-This command will install Spack and set it up so that it can be used easily through Mason.
+Alternatively, users can set ``$SPACK_ROOT`` to their own spack installation::
+
+  export SPACK_ROOT=/path/to/spack
+
+**Searching Spack packages**
 
 Let's use ``openSSL`` as an example since we used it in the system example. ``mason external search openSSL``
 will search for the package and produce the following output::
@@ -535,6 +628,7 @@ To find out more about a package, use ``mason external info <package>`` as follo
    None
 
 
+**Installing Spack packages**
 
 The correct package has been found, but not yet installed. Let's fix that.
 We know that we want the preferred version which is ``1.0.2k``.
@@ -625,7 +719,7 @@ Resuming the example, the result of the install given ``openssl`` as the sole ar
   ==> Executing phase: 'install'
   ==> Successfully installed zlib
   Fetch: 4.84s.  Build: 4.24s.  Total: 9.08s.
-  
+
   ==> Installing openssl
   ==> Fetching http://www.openssl.org/source/openssl-1.0.2k.tar.gz
   ==> Staging archive: /$HOME/.mason/spack/var/spack/stage/openssl-1.0.2k-fwnsee6qcvbbgvmgp3f5hio6dwg6nh2d/openssl-1.0.2k.tar.gz
@@ -643,6 +737,8 @@ of the package specified. Packages are installed into unique directories such th
 Each dependency is downloaded distinctly for a package so no previous installs will be broken by installing new packages.
 This way, multiple versions and builds of a package can be installed on a system and used without breaking anything.
 
+**Specifying Spack packages in the manifest file**
+
 Now that the correct package is installed, add it to the ``Mason.toml`` as follows::
 
   $ mason add --external openssl@1.0.2k
@@ -658,6 +754,7 @@ The ``Mason.toml`` now looks like:
    name = "myPackage"
    version = "0.1.0"
    chplVersion = "1.18.0"
+   license = "None"
 
    [external]
    openSSL = "1.0.2k"
@@ -669,13 +766,13 @@ which will list all of the current Spack packages installed on system. For examp
   ==> 2 installed packages.
   -- darwin-sierra-x86_64 / clang@9.0.0-apple ---------------------
   openssl@1.0.2k  zlib@1.2.11
-  
+
 
 Now, everything necessary to use ``openssl`` in a Mason package has been done.
 Upon building, Mason will retrieve the necessary files and file locations
 for building ``myPackage`` with ``openssl``.
 
- 
+
 Mason-Registry
 ==============
 
@@ -716,6 +813,7 @@ Continuing the example from before, the 'registry' ``0.1.0.toml`` would include 
      name = "MyPackage"
      version = "0.1.0"
      chplVersion = "1.16.0"
+     license = "None"
      authors = ["Sam Partee <Sam@Partee.com>"]
      source = "https://github.com/Spartee/MyPackage"
 
@@ -725,6 +823,10 @@ Continuing the example from before, the 'registry' ``0.1.0.toml`` would include 
 Search the registry with ``mason search <query>``, which will list all packages
 (and their latest version) that contain ``<query>`` in their names (case-insensitive).
 If no query is provided, all packages in the registry will be listed.
+
+Searching with the ``--show`` flag will output the toml file of a package if the search
+returns a single package. If the package has multiple versions it will return the most
+recent.
 
 .. note::
 
@@ -737,9 +839,19 @@ Submit a Package
 The mason registry will hold the manifest files for packages submitted by developers.
 To contribute a package to the mason-registry a chapel developer will need to host their
 package and submit a pull request to the mason-registry with the toml file pointing
-to their package. For a more detailed description follow the steps below.
+to their package. For a more detailed description follow the steps below. Publishing
+can be done with ``mason publish`` or manually.
 
-Steps:
+``mason publish`` Steps:
+      1) Write a library or binary package in chapel using mason
+      2) Host the package in a git repository. (e.g. GitHub)
+      3) Fork the mason-registry on GitHub
+      4) Ensure your package has a remote origin.
+      5) Run ``mason publish`` in your package
+      6) Go to the link provided to open a pull request to the mason registry.
+      7) Wait for mason-registry gatekeepers to approve PR.
+
+Manual Steps:
       1) Write a library or binary package in chapel using mason
       2) Host that package in a git repository. (e.g. GitHub)
       3) Create a tag of your package that corresponds to the version number prefixed with a 'v'. (e.g. v0.1.0)
@@ -753,59 +865,50 @@ Once your package is uploaded, maintain the integrity of your package, and pleas
 chapel team if your package should be taken down.
 
 
+
+If you have a personal remote registry, ``mason publish <path-to-registry>``  also accepts
+a remote path to a git repository. This will create a branch to your registry that adds
+your package, and you can approve the PR to merge your new package into your registry.
+Must ensure your package has a remote origin in order to publish remotely.
+
+Publishing to a personal remote registry
+
+.. code-block:: sh
+
+   cd PackageA
+   mason publish <remote-path-to-registry>
+
+To assess the ability of your package to be published to the mason-registry or
+a personal registry, run ``mason publish --dry-run <path-to-registry>`` for a
+series of quick checks or ``mason publish --check <path-to-registry`` for a more
+in depth check that will build your packages and run the full test suite.
+
 Local Registries
 ================
 
 It is sometimes desirable to use a local registry, for example with libraries
 you don't intend to distribute. The following steps create a local registry
-starting with Bricks for ``PackageA`` and ``PackageB`` which were created with
-``mason new PackageA`` and ``mason new PackageB``, and are located at
-``/path/to/my/packages/Package[AB]``. It is expected that mason will be
-extended to simplify and handle more of this process.
+starting with Bricks for ``PackageA`` which was created with ``mason new PackageA``.
+Once you have successfully created a local registry, ``mason publish <path-to-local-registry>``
+can be used to publish automatically.
 
 First create, commit, and tag the packages that will be in the registry:
 
-.. code-block:: sh
 
-   # Create PackageA
-   cd /path/to/my/packages
-   mason new PackageA
-   cd PackageA
-   git add Mason.toml src/PackageA.chpl
-   git commit
-   git tag -a v0.1.0 -m "Tag version 0.1.0"
-
-   # Create PackageB
-   cd ..
-   mason new PackageB
-   cd PackageB
-   git add Mason.toml src/PackageB.chpl
-   git commit
-   git tag -a v0.1.0 -m "Tag version 0.1.0"
-
-Next, create a local registry:
+Create a local registry:
 
 .. code-block:: sh
 
    # Create the local registry
    mkdir /path/to/local/registry
    cd /path/to/local/registry
-   mkdir -p Bricks/PackageA Bricks/PackageB
-
-   # Add bricks for PackageA and PackageB
-   cp /path/to/my/packages/PackageA/Mason.toml Bricks/PackageA/0.1.0.toml
-   cp /path/to/my/packages/PackageB/Mason.toml Bricks/PackageB/0.1.0.toml
-
-   # Edit Bricks/PackageA/0.1.0.toml to add:
-   source = "/path/to/my/packages/PackageA"
-
-   # Edit Bricks/PackageB/0.1.0.toml to add:
-   source = "/path/to/my/packages/PackageB"
+   # Create /Bricks/DummyPackage/0.1.0.toml
+   touch README.md
 
    # Initialize and check everything in to the git repository
    git init
-   git add Bricks/PackageA/0.1.0.toml Bricks/PackageB/0.1.0.toml
-   git commit
+   git add README.md /Bricks/DummyPackage/0.1.0.toml
+   git commit -m 'First Commit'
 
 Now ``MASON_REGISTRY`` can be set to point at both the local registry and the
 default registry.
@@ -814,14 +917,24 @@ default registry.
 
    export MASON_REGISTRY="local-registry|/path/to/local/registry,mason-registry|https://github.com/chapel-lang/mason-registry"
 
-The ``MyPackage`` package is now free to include ``PackageA`` and ``PackageB``
-as dependencies by adding the following lines to the ``[dependencies]`` section
-of its .toml file.
 
-.. code-block:: text
+Adding a local package to the local registry
 
-   PackageA = "0.1.0"
-   PackageB = "0.1.0"
+.. code-block:: sh
+
+   mason new PackageA
+   cd PackageA
+   git add .
+   git commit -m "First Commit"
+   mason publish <path-to-local-registry>
+
+The ``MyPackage`` package is now free to include ``PackageA`` as dependency by adding
+the it as a dependency with ``mason add package@version``
+
+.. code-block:: sh
+
+   cd MyPackage
+   mason add PackageA@0.1.0
 
 
 The Manifest File
@@ -839,6 +952,7 @@ For example, ``Mason.toml``:
     name = "MyPackage"
     version = "0.1.0"
     chplVersion = "1.16.0"
+    license = "None"
     authors = ["Sam Partee <Sam@Partee.com>"]
 
     [dependencies]
@@ -857,6 +971,9 @@ By default, ``chplVersion`` is set to represent the current Chapel release or
 later. For example, if you are using the 1.16 release, chplVersion will be
 ``1.16.0``.
 
+The ``license`` field indicates the software license under which the package is distributed.
+Any of the licenses available at the `SPDX License List <https://spdx.org/licenses/>`_ can be used for Mason packages.
+The license field defaults to ``None``.
 
 Environment Variables
 =====================
@@ -870,6 +987,10 @@ Mason can be configured by setting the following environment variables:
   ``mason-registry|https://github.com/chapel-lang/mason-registry``. If the
   ``name|`` part of a pair is omitted it is inferred to be the word following
   the final slash in ``location`` with any ``.git`` suffix removed.
+- ``MASON_OFFLINE`` : A boolean value that prevents mason from making calls that
+  require internet access when set to ``true``. Defaults to ``false``. Mason command
+  that support a ``--[no-]update`` flag can override the ``MASON_OFFLINE`` setting
+  when ``--update`` is explicitly passed.
 
 The ``mason env`` command will print the inferred or set values of these
 environment variables. If a variable was set by the user, an asterisk will be
@@ -880,6 +1001,7 @@ printed at the end of the line. For example, if ``$MASON_HOME`` was set:
    > mason env
    MASON_HOME: /path/to/something *
    MASON_REGISTRY: mason-registry|https://github.com/chapel-lang/mason-registry
+   MASON_OFFLINE: false
 
 .. warning::
 
@@ -959,6 +1081,7 @@ a lock file is written below as if generated from the earlier example of a ``Mas
      name = 'curl'
      version = '1.0.0'
      chplVersion = "1.16.0..1.16.0"
+     license = "None"
      source = 'https://github.com/username/curl'
 
 
@@ -966,6 +1089,7 @@ a lock file is written below as if generated from the earlier example of a ``Mas
      name = "MyPackage"
      version = "0.1.0"
      chplVersion = "1.16.0..1.16.0"
+     license = "None"
      authors = ["Sam Partee <Sam@Partee.com>"]
      source = "https://github.com/Spartee/MyPackage"
      dependencies = ['curl 1.0.0 https://github.com/username/curl']

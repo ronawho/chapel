@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -30,6 +31,10 @@
 #include "LayeredValueTable.h"
 #include "llvmUtil.h"
 
+#if HAVE_LLVM_VER >= 100
+#include "llvm/Support/Alignment.h"
+#endif
+
 // forward declare some llvm and clang things
 namespace llvm {
   class Function;
@@ -38,8 +43,15 @@ namespace llvm {
 }
 namespace clang {
   class Decl;
+  class FunctionDecl;
+  class QualType;
   class TypeDecl;
   class ValueDecl;
+
+  namespace CodeGen {
+    class ABIArgInfo;
+    class CGFunctionInfo;
+  }
 }
 
 #endif
@@ -54,12 +66,28 @@ void cleanupExternC();
 #ifdef HAVE_LLVM
 // should support TypedefDecl,EnumDecl,RecordDecl
 llvm::Type* codegenCType(const clang::TypeDecl* td);
+llvm::Type* codegenCType(const clang::QualType& qType);
 // should support FunctionDecl,VarDecl,EnumConstantDecl
 GenRet codegenCValue(const clang::ValueDecl *vd);
 
 llvm::Function* getFunctionLLVM(const char* name);
+clang::FunctionDecl* getFunctionDeclClang(const char* name);
+
 llvm::Type* getTypeLLVM(const char* name);
-int getCRecordMemberGEP(const char* typeName, const char* fieldName);
+int getCRecordMemberGEP(const char* typeName, const char* fieldName, bool& isCArrayField);
+
+#if HAVE_LLVM_VER >= 100
+llvm::MaybeAlign getPointerAlign(int addrSpace);
+#else
+uint64_t getPointerAlign(int addrSpace);
+#endif
+
+const clang::CodeGen::CGFunctionInfo& getClangABIInfoFD(clang::FunctionDecl* FD);
+const clang::CodeGen::CGFunctionInfo& getClangABIInfo(FnSymbol* fn);
+
+const clang::CodeGen::ABIArgInfo*
+getCGArgInfo(const clang::CodeGen::CGFunctionInfo* CGI, int curCArg);
+
 void makeBinaryLLVM();
 void prepareCodegenLLVM();
 void finishCodegenLLVM();
@@ -77,7 +105,6 @@ bool setAlreadyConvertedExtern(ModuleSymbol* module, const char* name);
 void checkAdjustedDataLayout();
 
 extern fileinfo gAllExternCode;
-extern fileinfo gChplCompilationConfig;
 
 #endif // HAVE_LLVM
 

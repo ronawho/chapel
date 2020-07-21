@@ -5,24 +5,24 @@
     $CHPL_HOME/modules/internal/ChapelArray.chpl:3893: note: unresolved call had id 1436887
  */
 
-use CyclicDist;
+use CyclicDist, Map;
 
 proc main() {
-  var assocDom: domain(string);
-  var assocArr: [assocDom] I;
-  assocArr['a'] = new I();
+  var m = new map(string, I);;
+  m['a'] = new I();
 
-  const space = {1..assocArr.size};
+  const space = {1..m.size};
   const dom: domain(1) dmapped Cyclic(startIdx=1) = space;
 
-  var arr: [dom] I = for i in assocArr do i;
+  var arr: [dom] I = for v in m.values() do v;
 }
 
 record I {
 
-  proc init(const ref i: I) { }
+  proc init=(const ref i: I) { }
 
   proc init() { }
 
 }
 
+proc =(ref lhs: I, const ref rhs: I) { }

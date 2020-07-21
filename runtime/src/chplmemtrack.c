@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -26,6 +27,7 @@
 #include "chpl-tasks.h"
 #include "chpltypes.h"
 #include "chpl-comm.h"
+#include "chpl-comm-internal.h"
 #include "chplcgfns.h"
 #include "chpl-linefile-support.h"
 #include "config.h"
@@ -42,6 +44,8 @@
 #include <stdlib.h>
 #include <inttypes.h>
 
+int chpl_verbose_mem = 0;
+int chpl_memTrack = 0;
 
 static void
 printMemAllocs(chpl_mem_descInt_t description, int64_t threshold,
@@ -60,8 +64,6 @@ extern void chpl_memTracking_returnConfigVals(chpl_bool* memTrack,
                                               size_t* memThreshold,
                                               c_string* memLog,
                                               c_string* memLeaksLog);
-
-chpl_bool chpl_memTrack = false;
 
 typedef struct memTableEntry_struct { /* table entry */
   size_t number;
@@ -155,15 +157,14 @@ void chpl_setMemFlags(void) {
                                     &memLog,
                                     &memLeaksLog);
 
-  if (local_memTrack
-      || memStats
-      || memLeaksByType
-      || (memLeaksByDesc && strcmp(memLeaksByDesc, ""))
-      || memLeaks
-      || memMax > 0
-      || memLeaksLog != NULL) {
-    chpl_memTrack = true;
-  }
+  chpl_memTrack = (local_memTrack
+                   || memStats
+                   || memLeaksByType
+                   || (memLeaksByDesc && strcmp(memLeaksByDesc, ""))
+                   || memLeaks
+                   || memMax > 0
+                   || memLeaksLog != NULL);
+  
 
   if (!memLog) {
     memLogFile = stdout;
@@ -172,7 +173,7 @@ void chpl_setMemFlags(void) {
       memLogFile = fopen(memLog, "w");
     } else {
       char* filename = (char*)sys_malloc((strlen(memLog)+10)*sizeof(char));
-      sprintf(filename, "%s.%" FORMAT_c_nodeid_t, memLog, chpl_nodeID);
+      sprintf(filename, "%s.%" PRI_c_nodeid_t, memLog, chpl_nodeID);
       memLogFile = fopen(filename, "w");
       sys_free(filename);
     }
@@ -556,8 +557,16 @@ printMemAllocs(chpl_mem_descInt_t description, int64_t threshold,
   }
 
   totalWidth = filenameWidth+numberWidth*4+descWidth+20;
-  for (i = 0; i < totalWidth; i++)
+  const int headerWidth = strlen(" Memory Leaks ");
+  const int leftHeaderWidth = (totalWidth-headerWidth)/2;
+  const int rightHeaderWidth = totalWidth-leftHeaderWidth-headerWidth;
+
+  for (i = 0; i < leftHeaderWidth; i++)
     fprintf(memLogFile, "=");
+  fprintf(memLogFile, "%s", " Memory Leaks ");
+  for (i = 0; i < rightHeaderWidth; i++)
+    fprintf(memLogFile, "=");
+
   fprintf(memLogFile, "\n");
   fprintf(memLogFile, "%-*s%-*s%-*s%-*s%-*s%-*s\n",
          filenameWidth+numberWidth, "Allocated Memory (Bytes)",
@@ -621,16 +630,22 @@ void chpl_reportMemInfo() {
     chpl_printMemAllocStats(0, 0);
   }
   if (memLeaksByType) {
-    fprintf(memLogFile, "\n");
-    printMemAllocsByType(true /* forLeaks */, 0, 0);
+    if (totalMem) {
+      fprintf(memLogFile, "\n");
+      printMemAllocsByType(true /* forLeaks */, 0, 0);
+    }
   }
   if (memLeaksByDesc && strcmp(memLeaksByDesc, "")) {
-    fprintf(memLogFile, "\n");
-    chpl_printMemAllocsByDesc(memLeaksByDesc, memThreshold, 0, 0);
+    if (totalMem) {
+      fprintf(memLogFile, "\n");
+      chpl_printMemAllocsByDesc(memLeaksByDesc, memThreshold, 0, 0);
+    }
   }
   if (memLeaks) {
-    fprintf(memLogFile, "\n");
-    printMemAllocs(-1, memThreshold, 0, 0);
+    if (totalMem) {
+      fprintf(memLogFile, "\n");
+      printMemAllocs(-1, memThreshold, 0, 0);
+    }
   }
   if (memLogFile && memLogFile != stdout)
     fclose(memLogFile);
@@ -656,7 +671,7 @@ void chpl_track_malloc(void* memAlloc, size_t number, size_t size,
       memTrack_unlock();
     }
     if (chpl_verbose_mem) {
-      fprintf(memLogFile, "%" FORMAT_c_nodeid_t ": %s:%" PRId32
+      fprintf(memLogFile, "%" PRI_c_nodeid_t ": %s:%" PRId32
                           ": allocate %zuB of %s at %p\n",
               chpl_nodeID, (filename ? chpl_lookupFilename(filename) : "--"),
               lineno, number * size, chpl_mem_descString(description),
@@ -673,7 +688,7 @@ void chpl_track_free(void* memAlloc, int32_t lineno, int32_t filename) {
     memEntry = removeMemTableEntry(memAlloc);
     if (memEntry) {
       if (chpl_verbose_mem) {
-        fprintf(memLogFile, "%" FORMAT_c_nodeid_t ": %s:%" PRId32
+        fprintf(memLogFile, "%" PRI_c_nodeid_t ": %s:%" PRId32
                             ": free %zuB of %s at %p\n",
                 chpl_nodeID, (filename ? chpl_lookupFilename(filename) : "--"),
                 lineno, memEntry->number * memEntry->size,
@@ -683,7 +698,7 @@ void chpl_track_free(void* memAlloc, int32_t lineno, int32_t filename) {
     }
     memTrack_unlock();
   } else if (chpl_verbose_mem && !memEntry) {
-    fprintf(memLogFile, "%" FORMAT_c_nodeid_t ": %s:%" PRId32 ": free at %p\n",
+    fprintf(memLogFile, "%" PRI_c_nodeid_t ": %s:%" PRId32 ": free at %p\n",
             chpl_nodeID, (filename ? chpl_lookupFilename(filename) : "--"),
             lineno, memAlloc);
   }
@@ -718,7 +733,7 @@ void chpl_track_realloc_post(void* moreMemAlloc,
       memTrack_unlock();
     }
     if (chpl_verbose_mem) {
-      fprintf(memLogFile, "%" FORMAT_c_nodeid_t ": %s:%" PRId32
+      fprintf(memLogFile, "%" PRI_c_nodeid_t ": %s:%" PRId32
                           ": reallocate %zuB of %s at %p -> %p\n",
               chpl_nodeID, (filename ? chpl_lookupFilename(filename) : "--"),
               lineno, size, chpl_mem_descString(description), memAlloc,
@@ -729,14 +744,12 @@ void chpl_track_realloc_post(void* moreMemAlloc,
 
 void chpl_startVerboseMem() {
   chpl_verbose_mem = 1;
-  chpl_comm_broadcast_private(2 /* &chpl_verbose_mem */, sizeof(int),
-                              -1 /* typeIndex: broke for hetero */);
+  chpl_comm_bcast_rt_private(chpl_verbose_mem);
 }
 
 void chpl_stopVerboseMem() {
   chpl_verbose_mem = 0;
-  chpl_comm_broadcast_private(2 /* &chpl_verbose_mem */, sizeof(int),
-                              -1 /* typeIndex: broke for hetero */);
+  chpl_comm_bcast_rt_private(chpl_verbose_mem);
 }
 
 void chpl_startVerboseMemHere() {

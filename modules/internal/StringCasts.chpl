@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -18,18 +19,15 @@
  */
 
 module StringCasts {
-  use ChapelStandard;
+  private use ChapelStandard;
+  private use SysCTypes;
+  private use String.NVStringFactory;
 
   // TODO: I want to break all of these casts from string to T out into
   // T.parse(string), but we dont support methods on types yet. Ideally they
   // would use a tagged union return val as well.
 
-  //
-  // Type -- Foo.type:string
-  //
-  proc _cast(type t:string, type x)  param : string {
-    return __primitive("typeToString", x);
-  }
+  // SomeType:string or Foo.type:string is handled directly by compiler.
 
   //
   // Bool
@@ -45,14 +43,14 @@ module StringCasts {
 
   proc _cast(type t:chpl_anybool, x: string) throws {
     var str = x.strip();
-    if str.isEmptyString() {
-      throw new unmanaged IllegalArgumentError("bad cast from empty string to bool");
+    if str.isEmpty() {
+      throw new owned IllegalArgumentError("bad cast from empty string to bool");
     } else if (str == "true") {
       return true;
     } else if (str == "false") {
       return false;
     } else {
-      throw new unmanaged IllegalArgumentError("bad cast from string '" + x + "' to bool");
+      throw new owned IllegalArgumentError("bad cast from string '" + x + "' to bool");
     }
     return false;
   }
@@ -62,7 +60,9 @@ module StringCasts {
   //
   proc _cast(type t:string, x: integral) {
     //TODO: switch to using qio's writef somehow
+    pragma "fn synchronization free"
     extern proc integral_to_c_string(x:int(64), size:uint(32), isSigned: bool, ref err: bool) : c_string;
+    pragma "fn synchronization free"
     extern proc strlen(const str: c_string) : size_t;
 
     var isErr: bool;
@@ -71,70 +71,89 @@ module StringCasts {
     // this should only happen if the runtime is broken
     if isErr {
       try! {
-        throw new unmanaged IllegalArgumentError("Unexpected case in integral_to_c_string");
+        throw new owned IllegalArgumentError("Unexpected case in integral_to_c_string");
       }
     }
 
-    var ret: string;
-    ret.buff = csc:c_ptr(uint(8));
-    ret.len = strlen(csc).safeCast(int);
-    ret._size = ret.len+1;
-
-    return ret;
+    const len = strlen(csc).safeCast(int);
+    return chpl_createStringWithOwnedBufferNV(x=csc:c_ptr(uint(8)),
+                                              length=len,
+                                              size=len+1,
+                                              numCodepoints=len);
   }
 
   inline proc _cast(type t:integral, x: string) throws {
     //TODO: switch to using qio's readf somehow
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_int8_t  (x:c_string, ref err: bool) : int(8);
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_int16_t (x:c_string, ref err: bool) : int(16);
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_int32_t (x:c_string, ref err: bool) : int(32);
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_int64_t (x:c_string, ref err: bool) : int(64);
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_uint8_t (x:c_string, ref err: bool) : uint(8);
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_uint16_t(x:c_string, ref err: bool) : uint(16);
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_uint32_t(x:c_string, ref err: bool) : uint(32);
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_uint64_t(x:c_string, ref err: bool) : uint(64);
 
     var retVal: t;
     var isErr: bool;
-    const localX = x.localize();
+    // localize the string and remove leading and trailing whitespace
+    var localX = x.localize();
+    const hasUnderscores = localX.find("_") != -1;
+
+    if hasUnderscores {
+      localX = localX.strip();
+      // make sure the string only has one word
+      var numElements: int;
+      for localX.split() {
+        numElements += 1;
+        if numElements > 1 then break;
+      }
+      if numElements > 1 then
+        throw new owned IllegalArgumentError("bad cast from string '" + x + "' to " + t:string);
+
+      // remove underscores everywhere but the first position
+      if localX.size >= 2 then
+        localX = localX[0] + localX[1..].replace("_", "");
+    }
+
+    if localX.isEmpty() then
+      throw new owned IllegalArgumentError("bad cast from empty string to " + t:string);
 
     if isIntType(t) {
-      if localX.isEmptyString() then
-        throw new unmanaged IllegalArgumentError("bad cast from empty string to int(" + numBits(t) + ")");
-
       select numBits(t) {
         when 8  do retVal = c_string_to_int8_t(localX.c_str(), isErr);
         when 16 do retVal = c_string_to_int16_t(localX.c_str(), isErr);
         when 32 do retVal = c_string_to_int32_t(localX.c_str(), isErr);
         when 64 do retVal = c_string_to_int64_t(localX.c_str(), isErr);
-        otherwise compilerError("Unsupported bit width ", numBits(t), " in cast to string");
+        otherwise compilerError("Unsupported bit width ", numBits(t), " in cast from string to " + t:string);
       }
-
-      if isErr then
-        throw new unmanaged IllegalArgumentError("bad cast from string '" + x + "' to int(" + numBits(t) + ")");
     } else {
-      if localX.isEmptyString() then
-        throw new unmanaged IllegalArgumentError("bad cast from empty string to uint(" + numBits(t) + ")");
-
       select numBits(t) {
         when 8  do retVal = c_string_to_uint8_t(localX.c_str(), isErr);
         when 16 do retVal = c_string_to_uint16_t(localX.c_str(), isErr);
         when 32 do retVal = c_string_to_uint32_t(localX.c_str(), isErr);
         when 64 do retVal = c_string_to_uint64_t(localX.c_str(), isErr);
-        otherwise compilerError("Unsupported bit width ", numBits(t), " in cast to string");
+        otherwise compilerError("Unsupported bit width ", numBits(t), " in cast from string to " + t:string);
       }
-
-      if isErr then
-        throw new unmanaged IllegalArgumentError("bad cast from string '" + x + "' to uint(" + numBits(t) + ")");
     }
+
+    if isErr then
+      throw new owned IllegalArgumentError("bad cast from string '" + x + "' to " + t:string);
 
     return retVal;
   }
@@ -143,17 +162,18 @@ module StringCasts {
   // real & imag
   //
   inline proc _real_cast_helper(x: real(64), param isImag: bool) : string {
+    pragma "fn synchronization free"
     extern proc real_to_c_string(x:real(64), isImag: bool) : c_string;
+    pragma "fn synchronization free"
     extern proc strlen(const str: c_string) : size_t;
 
     var csc = real_to_c_string(x:real(64), isImag);
 
-    var ret: string;
-    ret.buff = csc:c_ptr(uint(8));
-    ret.len = strlen(csc).safeCast(int);
-    ret._size = ret.len+1;
-
-    return ret;
+    const len = strlen(csc).safeCast(int);
+    return chpl_createStringWithOwnedBufferNV(x=csc:c_ptr(uint(8)),
+                                              length=len,
+                                              size=len+1,
+                                              numCodepoints=len);
   }
 
   proc _cast(type t:string, x:chpl_anyreal) {
@@ -169,18 +189,36 @@ module StringCasts {
     return _real_cast_helper(r, true);
   }
 
+  inline proc _cleanupStringForRealCast(type t, ref s: string) throws {
+    var len = s.size;
+
+    if s.isEmpty() then
+      throw new owned IllegalArgumentError("bad cast from empty string to " + t: string);
+
+    if len >= 2 && s[1..].find("_") != -1 {
+      // Don't remove a leading underscore in the string number,
+      // but remove the rest.
+      if len > 2 && s[0] == "_" {
+        s = s[0] + s[1..].replace("_", "");
+      } else {
+        s = s.replace("_", "");
+      }
+    }
+  }
+
   inline proc _cast(type t:chpl_anyreal, x: string) throws {
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_real32(x: c_string, ref err: bool) : real(32);
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_real64(x: c_string, ref err: bool) : real(64);
 
     var retVal: t;
     var isErr: bool;
-    const localX = x.localize();
+    var localX = x.localize();
 
-    if localX.isEmptyString() then
-      throw new unmanaged IllegalArgumentError("bad cast from empty string to real(" + numBits(t) + ")");
+    _cleanupStringForRealCast(t, localX);
 
     select numBits(t) {
       when 32 do retVal = c_string_to_real32(localX.c_str(), isErr);
@@ -189,23 +227,24 @@ module StringCasts {
     }
 
     if isErr then
-      throw new unmanaged IllegalArgumentError("bad cast from string '" + x + "' to real(" + numBits(t) + ")");
+      throw new owned IllegalArgumentError("bad cast from string '" + x + "' to real(" + numBits(t):string + ")");
 
     return retVal;
   }
 
   inline proc _cast(type t:chpl_anyimag, x: string) throws {
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_imag32(x: c_string, ref err: bool) : imag(32);
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_imag64(x: c_string, ref err: bool) : imag(64);
 
     var retVal: t;
     var isErr: bool;
-    const localX = x.localize();
+    var localX = x.localize();
 
-    if localX.isEmptyString() then
-      throw new unmanaged IllegalArgumentError("bad cast from empty string to imag(" + numBits(t) + ")");
+    _cleanupStringForRealCast(t, localX);
 
     select numBits(t) {
       when 32 do retVal = c_string_to_imag32(localX.c_str(), isErr);
@@ -214,7 +253,7 @@ module StringCasts {
     }
 
     if isErr then
-      throw new unmanaged IllegalArgumentError("bad cast from string '" + x + "' to imag(" + numBits(t) + ")");
+      throw new owned IllegalArgumentError("bad cast from string '" + x + "' to imag(" + numBits(t):string + ")");
 
     return retVal;
   }
@@ -247,8 +286,10 @@ module StringCasts {
 
 
   inline proc _cast(type t:chpl_anycomplex, x: string) throws {
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_complex64(x:c_string, ref err: bool) : complex(64);
+    pragma "fn synchronization free"
     pragma "insert line file info"
     extern proc c_string_to_complex128(x:c_string, ref err: bool) : complex(128);
 
@@ -256,8 +297,8 @@ module StringCasts {
     var isErr: bool;
     const localX = x.localize();
 
-    if localX.isEmptyString() then
-      throw new unmanaged IllegalArgumentError("bad cast from empty string to complex(" + numBits(t) + ")");
+    if localX.isEmpty() then
+      throw new owned IllegalArgumentError("bad cast from empty string to complex(" + numBits(t):string + ")");
 
     select numBits(t) {
       when 64 do retVal = c_string_to_complex64(localX.c_str(), isErr);
@@ -266,7 +307,7 @@ module StringCasts {
     }
 
     if isErr then
-      throw new unmanaged IllegalArgumentError("bad cast from string '" + x + "' to complex(" + numBits(t) + ")");
+      throw new owned IllegalArgumentError("bad cast from string '" + x + "' to complex(" + numBits(t):string + ")");
 
     return retVal;
   }

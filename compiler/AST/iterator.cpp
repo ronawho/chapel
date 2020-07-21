@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -29,6 +30,7 @@
 #include "oldCollectors.h"
 #include "optimizations.h"
 #include "passes.h"
+#include "preFold.h"
 #include "resolution.h"
 #include "resolveFunction.h"
 #include "stlUtil.h"
@@ -66,6 +68,323 @@ IteratorInfo::IteratorInfo() :
   init(NULL),
   incr(NULL)
 {}
+
+// Actions upon deleting a FnSymbol.
+void cleanupIteratorInfo(FnSymbol* host) {
+  IteratorInfo* iteratorInfo = host->iteratorInfo;
+
+  if (iteratorInfo && ! host->hasFlag(FLAG_TASK_FN_FROM_ITERATOR_FN)) {
+    // Also set iterator class and iterator record iteratorInfo = NULL.
+    if (iteratorInfo->iclass)
+      iteratorInfo->iclass->iteratorInfo = NULL;
+
+    if (iteratorInfo->irecord)
+      iteratorInfo->irecord->iteratorInfo = NULL;
+
+    delete iteratorInfo;
+  }
+}
+
+
+//
+// Iterator Groups
+//
+
+/*
+The following properties hold after a call is resolved to an iterator "IT".
+Implemented by resolveAlsoParallelIterators(). 
+
+ANY ITERATOR
+
+* Iterator <-> IG is a many-to-one relationship.
+  It is stored in Iterator->iteratorGroup for each Iterator in IG.
+
+  Given a group IG, IT2->iteratorGroup==IG for each iterator IT2
+  that IG points to: IG.serial, IG.standalone (when non-NULL), etc.
+
+  IG.serial is always non-NULL.
+  
+* An iterator IT2 (any flavor) is pointed to from a group IG
+  if and only if IT2->iteratorGroup == IG.
+
+SERIAL / STANDALONE / LEADER
+
+* If IT is a serial iterator, there is an iterator group IG for it
+  such that:
+   - IG.serial points to IT.
+   - IG.standalone points to the corresponding standalone iterator
+     if it is available, NULL otherwise.
+   - IG.leader - ditto.
+   - IG.follower is currently unused.
+
+* If a serial IT has no corresponding standalone or leader,
+  there is still a group IG for IT, such that:
+   - IG.serial == IT
+   - IG.standalone == IG.leader == NULL.
+  This can be used to check availability of standalone/leader.
+
+* If IT is a standalone or leader iterator, there may or may not be
+  a group for it. We are interested in a group only when it maps
+  from a serial iterator to its parallel counterparts. So when
+  a CallExpr invokes a parallel iterator directly, iterator groups
+  are not updated.
+
+SERIAL --> PARALLEL
+
+* Each parallel iterators is attempted to be resolved by resolving
+  a "representative call". It is created as follows:
+   - It seeks a function of the same name as the serial iterator's.
+   - The actual arguments are the serial iterator's formals, plus 'tag'.
+
+* That way there is a 1:1 relationship between the serial iterator
+  its standalone counterpart; ditto leader. Because the choice
+  of the parallel iterator is affected only by the serial iterator.
+  This choice is not affected by the "original call" i.e. one that
+  led to resolving the serial iterator.
+
+* The "representative call" is placed next to the "original call".
+  To strengthen confidence in this 1:1 relationship, it seems like
+  the representative call should go next to the definition
+  of the serial iterator. However, that would cause visibility issues.
+
+LOGISTICS  
+
+* Only the availability of the standalone and leader iterators
+  is detected. Their bodies are not resolved, to avoid encountering
+  (and generating) potential compile-time errors when those iterators
+  are not actually used in the program.
+
+* The absence of a parallel iterator is not an error. An error may
+  be issued later when+if this iterator is required for a parallel
+  computation.
+
+* The follower iterator is not sought at this time. To seek it we would
+  need to know what the leader iterator yields. For that we may have to
+  resolve the **body** of the leader. Which we are not doing here.
+*/
+
+IteratorGroup::IteratorGroup() :
+  serial(NULL), standalone(NULL), leader(NULL), follower(NULL),
+  noniterSA(false), noniterL(false)
+{}
+
+static bool isIteratorOrForwarder(FnSymbol* it) {
+  // The test 'it->retType->symbol->hasFlag(FLAG_ITERATOR_RECORD)'
+  // gives a false negative when it->retType is "unknown"
+  // or a false positive for chpl__autoCopy(_iteratorRecord).
+  // FLAG_FN_RETURNS_ITERATOR is not a great test either because
+  // iteratorIndex() has it whereas it usually doesn't.
+
+  return it->hasFlag(FLAG_ITERATOR_FN) ||
+         it->hasFlag(FLAG_FN_RETURNS_ITERATOR);
+}
+
+// Look for the iterator for 'iterKindTag' and update the iterator group.
+static void checkParallelIterator(FnSymbol* serial, Expr* call,
+                                  Symbol* iterKindTag, IteratorGroup* igroup,
+                                  FnSymbol*& outParIter, bool& noniterFlag)
+{
+  // Build a "representative call".
+  CallExpr* repCall = new CallExpr(new UnresolvedSymExpr(serial->name));
+
+  // Use the formals of 'serial', for the purposes of resolution.
+  for_formals(formal, serial) {
+    if (formal->name != astrTag)
+      repCall->insertAtTail(
+        new NamedExpr(formal->name, createSymExprPropagatingParam(formal)) );
+  }
+
+  // Add the tag argument.
+  repCall->insertAtTail(new NamedExpr(astrTag, new SymExpr(iterKindTag)));
+
+  // Wrap in a block, to contain possible side-effects of resolving.
+  BlockStmt* container = new BlockStmt(repCall);
+  call->getStmtExpr()->insertAfter(container);
+
+  if (FnSymbol* parIter = tryResolveCall(repCall)) {
+    // Got it.
+    if (isIteratorOrForwarder(parIter)) {
+      outParIter = parIter;
+      parIter->iteratorGroup = igroup;
+
+    } else {
+      // If this is not an iterator, do not record it.
+      // We may need to raise an error later.
+      noniterFlag = true;
+    }
+  }
+
+  container->remove();
+}
+
+// See if any parallel iterators are available.
+void resolveAlsoParallelIterators(FnSymbol* serial, Expr* call) {
+  if (! isIteratorOrForwarder(serial)) return;  // not of interest
+  if (serial->iteratorGroup != NULL) return;  // already taken care of
+
+  if (serial->hasFlag(FLAG_INLINE_ITERATOR))
+    // 'serial' is actually a parallel iterator. Since we did not come
+    // from a serial iterator, we will not update iterator groups.
+    return;
+
+  if (! serial->isIterator())
+    // The above "is parallel" check does not fire on iterator forwarders.
+    // So check for 'tag' formals instead, like in isIteratorOfType().
+    for_formals(formal, serial)
+      if (formal->name == astrTag && formal->type == gLeaderTag->type)
+        return;
+
+  IteratorGroup* igroup = new IteratorGroup();
+  igroup->serial = serial;
+  serial->iteratorGroup = igroup;
+
+  checkParallelIterator(serial, call, gStandaloneTag, igroup,
+                        igroup->standalone, igroup->noniterSA);
+
+  checkParallelIterator(serial, call, gLeaderTag, igroup,
+                        igroup->leader, igroup->noniterL);
+}
+
+static inline void verifyIGfunction(IteratorGroup* igroup, FnSymbol* fn) {
+  if (fn != NULL)
+    INT_ASSERT(fn->iteratorGroup == igroup);
+}
+
+void verifyIteratorGroup(FnSymbol* it) {
+  IteratorGroup* igroup = it->iteratorGroup;
+  if (! igroup) return;
+
+  INT_ASSERT(it == igroup->serial     ||
+             it == igroup->standalone ||
+             it == igroup->leader     ||
+             it == igroup->follower);
+
+  // Independent of 'it'.
+  INT_ASSERT(igroup->serial != NULL);
+  verifyIGfunction(igroup, igroup->serial);
+  verifyIGfunction(igroup, igroup->standalone);
+  verifyIGfunction(igroup, igroup->leader);
+  verifyIGfunction(igroup, igroup->follower);
+}
+
+static inline void cleanupIGfunction(FnSymbol* it, FnSymbol*& parIterInIG) {
+  if (it == parIterInIG) {
+    parIterInIG = NULL;
+    it->iteratorGroup = NULL;
+  }
+}
+
+// Actions upon deleting a FnSymbol.
+void cleanupIteratorGroup(FnSymbol* it) {
+  IteratorGroup* igroup = it->iteratorGroup;
+  if (! igroup) return;
+
+  it->iteratorGroup = NULL;
+
+  bool deleteIG = false;
+
+  if (it == igroup->serial) {
+    // Without the serial iterator, the group is of no interest.
+    deleteIG = true;
+    if (FnSymbol* SA = igroup->standalone) SA->iteratorGroup = NULL;
+    if (FnSymbol* L  = igroup->leader)     L->iteratorGroup  = NULL;
+    if (FnSymbol* F  = igroup->follower)   F->iteratorGroup  = NULL;
+  } else {
+    cleanupIGfunction(it, igroup->standalone);
+    cleanupIGfunction(it, igroup->leader);
+    cleanupIGfunction(it, igroup->follower);
+  }
+
+  if (deleteIG ||  // or if nobody remains in the group:
+      (igroup->serial     == NULL &&
+       igroup->standalone == NULL &&
+       igroup->leader     == NULL &&
+       igroup->follower   == NULL )
+  ) {
+    delete igroup;
+  }
+}
+
+// showIteratorGroup() - for debugging
+
+static void showIGhelp(IteratorGroup* igroup, FnSymbol* fn, const char* kind)
+{
+  if (fn == NULL) {
+    printf("  %s -\n", kind);
+  } else {
+    printf("  %s  %s[%d]  ", kind, fn->name, fn->id);
+    if (IteratorGroup* fnIG = fn->iteratorGroup) {
+      if (fnIG == igroup) printf("+\n");
+      else printf("ig ((IteratorGroup*)%p)\n", fnIG);
+    } else {
+      printf("no ig\n");
+    }
+  }
+}
+
+static void showIGhelp(IteratorGroup* igroup, FnSymbol* fn) {
+  if (fn) printf("%s %s[%d]  ",
+                 fn->isIterator() ? "iter" : "proc",
+                 fn->name, fn->id);
+  printf("igroup %p\n", igroup);
+
+  if (igroup != NULL) {
+    showIGhelp(igroup, igroup->serial,     "serial");
+    showIGhelp(igroup, igroup->standalone, "standalone");
+    showIGhelp(igroup, igroup->leader,     "leader");
+    if (igroup->follower != NULL)  // currently unexpected
+      showIGhelp(igroup, igroup->follower, "??follower");
+  }
+}
+
+void showIteratorGroup(IteratorGroup* igroup) {
+  showIGhelp(igroup, NULL);
+}
+
+void showIteratorGroup(BaseAST* ast) {
+  if (ast == NULL)
+    printf("<showIteratorGroup: ast==NULL>\n");
+  else if (FnSymbol* fn = toFnSymbol(ast))
+    showIGhelp(fn->iteratorGroup, fn);
+  else
+    printf("<showIteratorGroup: node %d is a %s, not a FnSymbol>\n",
+           ast->id, ast->astTagAsString());
+}
+
+void showIteratorGroup(int id) {
+  BaseAST* aid(int id);
+  showIteratorGroup(aid(id));
+}
+
+
+//
+// Helpers
+//
+
+static void skipIBBinAlist(Expr*& _alist_next) {
+  INT_ASSERT(isIBBCondStmt(_alist_next));
+  // If I had a C++-style iterator, I would just say "it++;".
+  _alist_next = _alist_next->next;
+}
+
+// If this is an IBB, return its CondStmt. Otherwise return NULL.
+CondStmt* isIBBCondStmt(BaseAST* ast) {
+  if (CondStmt* condStmt = toCondStmt(ast))
+    if (SymExpr* condSE = toSymExpr(condStmt->condExpr))
+      if (condSE->symbol() == gIteratorBreakToken)
+        return condStmt;
+  return NULL;
+}
+
+// If this is in an IBB, return its CondStmt. Otherwise return NULL.
+static CondStmt* isInIBBCondStmt(Expr* expr) {
+  for (Expr* parent = expr->parentExpr; parent;
+       expr = parent, parent = parent->parentExpr)
+    if (CondStmt* IBB = isIBBCondStmt(parent))
+      if (expr == IBB->thenStmt)
+        return IBB;
+  return NULL;
+}
 
 
 // Return the PRIM_YIELD CallExpr* or NULL.
@@ -191,6 +510,7 @@ CallExpr* setIteratorRecordShape(Expr* ref, Symbol* ir, Symbol* shapeSpec,
     iRecord->fields.insertAtTail(new DefExpr(field));
     // An accessor lets us get _shape_ in Chapel code.
     FnSymbol* accessor = build_accessor(iRecord, field, false, false);
+    accessor->setGeneric(false);
     // This sidesteps the visibility issue in the presence of nested
     // LoopExprs. Ex. test/expressions/loop-expr/scoping.chpl
     theProgram->block->insertAtTail(accessor->defPoint->remove());
@@ -199,7 +519,7 @@ CallExpr* setIteratorRecordShape(Expr* ref, Symbol* ir, Symbol* shapeSpec,
   } else {
     INT_ASSERT(field->type == value->type);
   }
-  INT_ASSERT(checkIteratorFromForExpr(ref, ir) == fromForExpr);
+  INT_ASSERT(fromForExpr || !checkIteratorFromForExpr(ref, ir));
 
   return new CallExpr(PRIM_SET_MEMBER, ir, field, value);
 }
@@ -221,6 +541,23 @@ void setIteratorRecordShape(CallExpr* call) {
   call->replace(shapeCall);
 }
 
+// Find the parent block that is either
+//  * a loop
+//  * or, not a BlockStmt
+// Used to ignore non-loop BlockStmts
+// (these come up in particular with local and unlocal blocks).
+static Expr* loopOrNonBlockParent(Expr* expr) {
+  Expr* parent = expr->parentExpr;
+  while (parent != NULL) {
+    if (!isBlockStmt(parent))
+      break;
+    if (isLoopStmt(parent))
+      break;
+
+    parent = parent->parentExpr;
+  }
+  return parent;
+}
 
 //
 // Determines that an iterator has a single loop with a single yield
@@ -252,9 +589,16 @@ isSingleLoopIterator(FnSymbol* fn, Vec<BaseAST*>& asts) {
         // Select yield statements whose parent expression is a loop statement
         // (except for dowhile statements, for some reason....
 
+        // Find the parent block that is either
+        //  * a loop
+        //  * or, a conditional
+        // Ignore non-loop BlockStmts
+        // (conditionals could probably be allowed if both sides yielded)
+        Expr* parent = loopOrNonBlockParent(call);
+
         // This test is not logically related to the preceding quick-exit, so
         // putting "else" here would be misleading.
-        if (isLoopStmt(call->parentExpr)) {
+        if (isLoopStmt(parent)) {
           // NOAKES 2014/11/25  It is interesting the DoWhile loops aren't supported
           if (isDoWhileStmt(call->parentExpr))
             return NULL;
@@ -287,8 +631,9 @@ isSingleLoopIterator(FnSymbol* fn, Vec<BaseAST*>& asts) {
 
       Expr*      expr  = toExpr(ast);
       BlockStmt* block = toBlockStmt(ast);
+      Expr*     parent = loopOrNonBlockParent(expr);
 
-      if (expr->parentExpr == fn->body) {
+      if (parent == NULL && expr->parentSymbol == fn) {
         // This captures the first loop statement, but does not fail if there
         // is more than one.  Compare the test for a single yield above.
         // Is this intentional?
@@ -313,8 +658,13 @@ isSingleLoopIterator(FnSymbol* fn, Vec<BaseAST*>& asts) {
 
     // If the iterator  contains a goto statement, it is not considered to be a
     // single loop iterator.
-    else if (isGotoStmt(ast)) {
-      return NULL;
+    else if (GotoStmt* gt = toGotoStmt(ast)) {
+      if (isInIBBCondStmt(gt))
+        ; // Gotos in an IBB do not affect our judgment.
+          // Should we restrict this case to allow a goto only if it is
+          // the last goto in the IBB conditional's then-branch?
+      else
+        return NULL;
     }
   }
 
@@ -334,12 +684,11 @@ static void replaceLocalWithFieldTemp(SymExpr*       se,
                                       bool           is_use,
                                       Vec<BaseAST*>& asts)
 {
-  // BHARSH TODO: fix this to correctly utilize qualified refs
   // Get the expression that sets or uses the symexpr.
   CallExpr* call = toCallExpr(se->parentExpr);
 
   // Create a new temp and load the field value into it.
-  VarSymbol* tmp = newTemp(se->symbol()->type);
+  VarSymbol* tmp = newTemp(se->symbol()->qualType());
 
   // Find the statement containing the symexpr access.
   Expr* stmt = se->getStmtExpr();
@@ -530,8 +879,8 @@ replaceLocalsWithFields(FnSymbol* fn,           // the iterator function
 
         } else {
           // Update ic.value.
-          // Unless it's yielding something of type dtVoid.
-          if (ySym->type != dtVoid) {
+          // Unless it's yielding something of type dtNothing.
+          if (ySym->type != dtNothing) {
             SymExpr* upd = new SymExpr(ySym);
             pc->insertBefore(new CallExpr(PRIM_SET_MEMBER, ic, valField, upd));
             if (ySym->defPoint->parentSymbol == fn) {
@@ -700,6 +1049,10 @@ buildZip2(IteratorInfo* ii, Vec<BaseAST*>& asts, BlockStmt* singleLoop) {
       zip2body->insertAtTail(expr->copy(&map));
   }
 
+  // Since this passes isSingleLoopIterator(), there is a single yield,
+  // so 'more' is always the first value after initialization, i.e. 2.
+  zip2body->insertAtTail(new CallExpr(PRIM_SET_MEMBER, my_this, ii->iclass->getField("more"), new_IntSymbol(2)));
+
   zip2body->insertAtTail(new CallExpr(PRIM_RETURN, gVoid));
 
   ii->zip2->body->replace(zip2body);
@@ -740,8 +1093,10 @@ buildZip3(IteratorInfo* ii, Vec<BaseAST*>& asts, BlockStmt* singleLoop) {
     // Skip everything before the yield
     if (beforeYield) {
       if (CallExpr* call = toCallExpr(expr))
-        if (call->isPrimitive(PRIM_YIELD))
+        if (call->isPrimitive(PRIM_YIELD)) {
           beforeYield = false;
+          skipIBBinAlist(_alist_next);
+        }
     } else {
       // after yield
       if (!isDefExpr(expr))
@@ -830,6 +1185,124 @@ buildZip4(IteratorInfo* ii, Vec<BaseAST*>& asts, BlockStmt* singleLoop) {
 }
 
 
+//
+// Handle IBB - Iterator Break Block.
+//
+// An IBB contains the defer actions to be taken when breaking
+// out of the enclosing loop. It is constructed like this:
+//
+// (a) createIteratorBreakBlocks() adds a conditional after each "yield",
+// so they look like this:
+//
+//   yield ...;
+//   if gIteratorBreakToken {
+//     return;
+//   }
+//
+// (b) This "return" causes callDestructors to insert, before the "return",
+// the defer actions that are appropriate at this point in the iterator.
+//
+// See also isIBBCondStmt() and the PR message for #12963.
+//
+void createIteratorBreakBlocks() {
+  for_alive_in_Vec(CallExpr, yield, gCallExprs)
+    if (yield->isPrimitive(PRIM_YIELD))
+      if (FnSymbol* parent = toFnSymbol(yield->parentSymbol)) {
+        SET_LINENO(yield);
+        // An empty IBB is: if gIteratorBreakToken then return;
+        Symbol* epLab = parent->getOrCreateEpilogueLabel();
+        yield->insertAfter(new CondStmt(new SymExpr(gIteratorBreakToken),
+                             new BlockStmt(new GotoStmt(GOTO_RETURN, epLab))));
+      }
+}
+
+// Find and return the IBB for the given yield stmt.
+// Remove the enclosing conditional from the tree if delayedRm==NULL,
+// otherwise add it to delayedRm.
+BlockStmt* getAndRemoveIteratorBreakBlockForYield(std::vector<Expr*>* delayedRm,
+                                                  CallExpr* yield)
+{
+  // Right now the CondStmt follows a yield immediately.
+  // If this changes, trace the 'next' pointers until found.
+  CondStmt* IBBcond = isIBBCondStmt(yield->next);
+  BlockStmt* result = IBBcond->thenStmt;
+
+  if (delayedRm) {
+    // This happens when lowering a ForallStmt. A few callers up from here
+    // there is a for_alist in visitor code. It would exit right after IBBcond
+    // if we remove IBBcond here, so the remaining alist stmts would not
+    // get processed.
+    delayedRm->push_back(IBBcond);
+    result->remove();
+  } else {
+    IBBcond->remove();
+  }
+  return result;
+}
+
+
+static void handleYieldInAdvance(Vec<LabelSymbol*>& labels,
+                                 Vec<LabelSymbol*>& breakLbls,
+                                 IteratorInfo* ii, Symbol* ic, Symbol* end,
+                                 CallExpr* call, int idx)
+{
+  BlockStmt* breakBlock = getAndRemoveIteratorBreakBlockForYield(NULL, call);
+
+  call->insertBefore(new CallExpr(PRIM_SET_MEMBER,
+                                  ic, ii->iclass->getField("more"),
+                                  new_IntSymbol(idx)));
+  call->insertBefore(new GotoStmt(GOTO_ITER_END, end));
+
+  LabelSymbol* label = new LabelSymbol(astr("_jump_", istr(idx)));
+  labels.add(label);
+  call->insertAfter(new DefExpr(label));
+
+  LabelSymbol* breakLab = new LabelSymbol(astr("_jump_break_", istr(idx)));
+  breakLbls.add(breakLab);
+  breakBlock->insertAtHead(new DefExpr(breakLab));
+  // breakBlock already ends with "goto end"
+  call->insertAfter(breakBlock);
+  // "goto label" needs to skip 'breakBlock'
+  INT_ASSERT(breakBlock->next == label->defPoint);
+  breakBlock->flattenAndRemove();
+
+  call->remove();
+}
+
+static void buildJumpTables(BlockStmt* advanceBody,
+                            Vec<LabelSymbol*>& labels,
+                            Vec<LabelSymbol*>& breakLbls,
+                            Symbol* more)
+{
+  int i = 2;
+  Expr* anchor = advanceBody->body.head;
+
+  forv_Vec(LabelSymbol, label, labels) {
+    GotoStmt* igs = new GotoStmt(GOTO_ITER_RESUME, label);
+    label->iterResumeGoto = igs;
+    Symbol* tmp = newTemp(dtBool);
+    // Todo: switch to anchor->insertBefore().
+    // Then, the order of comparisons will change. Will it affect performance?
+    advanceBody->insertAtHead(new CondStmt(new SymExpr(tmp), igs));
+    advanceBody->insertAtHead(new CallExpr(PRIM_MOVE, tmp,
+                      new CallExpr(PRIM_EQUAL, more, new_IntSymbol(i++))));
+    advanceBody->insertAtHead(new DefExpr(tmp));
+  }
+
+  // add jumps to handle 'break's from the loops over this iterator
+  // todo: skip this when the loops do not have breaks
+  i = 2;
+  forv_Vec(LabelSymbol, label, breakLbls) {
+    GotoStmt* igs = new GotoStmt(GOTO_ITER_RESUME, label);
+    label->iterResumeGoto = igs;
+    Symbol* tmp = newTemp(dtBool);
+    anchor->insertBefore(new DefExpr(tmp));
+    anchor->insertBefore(new CallExpr(PRIM_MOVE, tmp,
+                      new CallExpr(PRIM_EQUAL, more, new_IntSymbol(-(i++)))));
+    anchor->insertBefore(new CondStmt(new SymExpr(tmp), igs));
+  }
+}
+
 // Builds the standard (non-optimized) iterator body by replacing yields with
 // statements that update the "more" field in the iterator class, gotos and
 // labels.  Then adds a jump table at the beginning of advance, so execution
@@ -856,19 +1329,14 @@ buildAdvance(FnSymbol* fn,
 
   // change yields to labels and gotos
   int i = 2; // 1 = not started, 0 = finished
-  Vec<LabelSymbol*> labels;
+  Vec<LabelSymbol*> labels, breakLbls;
+
   forv_Vec(BaseAST, ast, asts) {
     if (CallExpr* call = toCallExpr(ast)) {
       if (call->isPrimitive(PRIM_YIELD)) {
-        call->insertBefore(new CallExpr(PRIM_SET_MEMBER, ic, ii->iclass->getField("more"), new_IntSymbol(i)));
-        call->insertBefore(new GotoStmt(GOTO_ITER_END, end));
-        LabelSymbol* label = new LabelSymbol(astr("_jump_", istr(i)));
-        call->insertBefore(new DefExpr(label));
-        labels.add(label);
-        call->remove();
-        i++;
+        handleYieldInAdvance(labels, breakLbls, ii, ic, end, call, i++);
       } else if (call->isPrimitive(PRIM_RETURN)) {
-        INT_ASSERT(false); // should have been removed with removeRetSymbolAndUses()
+        INT_FATAL(call, "should have been removed with removeRetSymbolAndUses()");
       }
     } else if (LoopStmt* loop = toLoopStmt(ast)) {
       loop->orderIndependentSet(false);
@@ -879,18 +1347,10 @@ buildAdvance(FnSymbol* fn,
   end->defPoint->insertBefore(new CallExpr(PRIM_SET_MEMBER, ic, ii->iclass->getField("more"), new_IntSymbol(0)));
 
   // insert jump table at head of advance
-  i = 2;
-  Symbol* tmp = newTemp(dtBool);
   Symbol* more = new VarSymbol("more", dtInt[INT_SIZE_DEFAULT]);
+  buildJumpTables(advanceBody, labels, breakLbls, more);
 
-  forv_Vec(LabelSymbol, label, labels) {
-    GotoStmt* igs = new GotoStmt(GOTO_ITER_RESUME, label);
-    label->iterResumeGoto = igs;
-    advanceBody->insertAtHead(new CondStmt(new SymExpr(tmp), igs));
-    advanceBody->insertAtHead(new CallExpr(PRIM_MOVE, tmp, new CallExpr(PRIM_EQUAL, more, new_IntSymbol(i++))));
-  }
   advanceBody->insertAtHead(new CallExpr(PRIM_MOVE, more, new CallExpr(PRIM_GET_MEMBER_VALUE, ic, ii->iclass->getField("more"))));
-  advanceBody->insertAtHead(new DefExpr(tmp));
   advanceBody->insertAtHead(new DefExpr(more));
   advanceBody->insertAtTail(new CallExpr(PRIM_RETURN, gVoid));
 
@@ -973,7 +1433,7 @@ buildGetValue(IteratorInfo* ii, BlockStmt* singleLoop) {
   {
     INT_FATAL(singleLoop, "Unexpected singleLoop iterator type");
   }
-  else if (ii->getValue->retType != dtVoid)
+  else if (ii->getValue->retType != dtNothing)
   {
     VarSymbol* tmp = newTemp(ii->getValue->retType);
     getValueBody->insertAtTail(new DefExpr(tmp));
@@ -1507,6 +1967,21 @@ static inline Symbol* createICField(int& i, Symbol* local, Type* type,
   return field;
 }
 
+static std::map<Symbol*, std::vector<CallExpr*> > formalToPrimMap;
+
+void gatherPrimIRFieldValByFormal() {
+  for_alive_in_Vec(CallExpr, call, gCallExprs) {
+    if (call->isPrimitive(PRIM_ITERATOR_RECORD_FIELD_VALUE_BY_FORMAL)) {
+      Symbol* formal = toSymExpr(call->get(2))->symbol();
+      formalToPrimMap[formal].push_back(call);
+    }
+  }
+}
+
+void cleanupPrimIRFieldValByFormal() {
+  formalToPrimMap.clear();
+}
+
 // Fills in the iterator class and record types with fields corresponding to the
 // local variables defined in the iterator function (or its static context)
 // and live at any yield.
@@ -1516,20 +1991,6 @@ static void addLocalsToClassAndRecord(Vec<Symbol*>& locals, FnSymbol* fn,
                                       SymbolMap& local2field, SymbolMap& local2rfield)
 {
   IteratorInfo* ii = fn->iteratorInfo;
-
-  // For the current iterator record, create a map of formals to the primitive
-  // calls for PRIM_ITERATOR_RECORD_FIELD_VALUE_BY_FORMAL
-  std::map<Symbol*, std::vector<CallExpr*> > formalToPrimMap;
-  forv_Vec(CallExpr, call, gCallExprs) {
-    if (call->inTree() && call->isPrimitive(PRIM_ITERATOR_RECORD_FIELD_VALUE_BY_FORMAL)) {
-      AggregateType* ir = toAggregateType(toArgSymbol((toSymExpr(call->get(1))->symbol()))->type);
-      if (ii->irecord == ir) {
-        Symbol* formal = toSymExpr(call->get(2))->symbol();
-        formalToPrimMap[formal].push_back(call);
-      }
-    }
-  }
-
   Symbol* valField = NULL;
 
   int i = 0;    // This numbers the fields.
@@ -1555,16 +2016,17 @@ static void addLocalsToClassAndRecord(Vec<Symbol*>& locals, FnSymbol* fn,
       // while we're creating the iterator record fields based on the original
       // iterator function arguments, replace the primitive that gets the value
       // based on the formal with prim_get_member_value of the actual value.
-      if (formalToPrimMap.count(local) > 0) {
-        for_vector(CallExpr, call, formalToPrimMap[local]) {
+      std::map<Symbol*, std::vector<CallExpr*> >::iterator localIt =
+        formalToPrimMap.find(local);
+      if (localIt != formalToPrimMap.end()) {
+        for_vector(CallExpr, call, localIt->second) {
+          INT_ASSERT(ii->irecord == call->get(1)->getValType());
           call->get(2)->replace(new SymExpr(rfield));
           call->primitive = primitives[PRIM_GET_MEMBER_VALUE];
         }
       }
     }
   }
-
-  ii->iclass->fields.insertAtTail(new DefExpr(new VarSymbol("more", dtInt[INT_SIZE_DEFAULT])));
 
   if (!valField) {
     valField = createICField(i, NULL, yieldedType, true, fn);
@@ -1579,6 +2041,7 @@ static void addLocalsToClassAndRecord(Vec<Symbol*>& locals, FnSymbol* fn,
 // (see protoIteratorClass())
 // This function takes a pointer to an iterator and fills in those types.
 void lowerIterator(FnSymbol* fn) {
+  INT_ASSERT(! iteratorsLowered);  // ensure formalToPrimMap is valid
   SET_LINENO(fn);
   Vec<BaseAST*> asts;
   Type* yieldedType = removeRetSymbolAndUses(fn);

@@ -114,12 +114,6 @@ OPTIONS
     will compile code in a module that does not handle its errors. If any
     error comes up during execution, it will cause the program to halt.
 
-**--[no-]warn-constructors**
-
-    Enable [disable] deprecation warnings for user-defined constructors. This
-    warning is enabled by default and will be triggered for each user-defined
-    constructor encountered.
-
 **--[no-]warn-unstable**
 
     Enable [disable] warnings for code that has recently or will recently
@@ -185,6 +179,12 @@ OPTIONS
     loop runs into the loop's "pre-header." By default invariant code is
     moved. This is currently a rather conservative pass in the sense that it
     may not identify all code that is truly invariant.
+
+**--[no-]optimize-forall-unordered-ops**
+
+    Enable [disable] optimization of the last statement in forall statements
+    to use unordered communication. This optimization works with runtime
+    support for unordered operations with CHPL_COMM=ugni.
 
 **--[no-]ignore-local-classes**
 
@@ -290,11 +290,27 @@ OPTIONS
     Enable [disable] analysis to infer local fields in classes and records
     (experimental)
 
+**--[no-]auto-local-access**
+
+    Enable [disable] an optimization applied to forall loops over domains in
+    which accesses of the form of `A[i]` within the loop are transformed to use
+    local accesses if the array `A` is aligned with the domain and `i` is the
+    loop index variable. With this flag, the compiler does some static analysis
+    and adds calls that can further analyze alignment dynamically during
+    execution time.
+
+**--[no-]auto-local-access-dynamic**
+
+    Enable [disable] the dynamic portion of the analysis described in
+    `--[no-]auto-local-access`.  This dynamic analysis can result in loop
+    duplication that increases executable size and compilation time. There
+    may also be execution time overheads independent of loop domain size.
+
 *Run-time Semantic Check Options* 
 
-**--no-checks**
+**--[no-]checks**
 
-    Turns off all of the run-time checks in this section of the man page.
+    Enable [disable] all of the run-time checks in this section of the man page.
     Currently, it is typically necessary to use this flag (or **--fast**,
     which implies **--no-checks**) to achieve performance competitive with
     hand-coded C or Fortran.
@@ -435,8 +451,8 @@ OPTIONS
 
     Causes the generated C code to be compiled with flags that specialize
     the executable to the architecture that is defined by
-    CHPL\_TARGET\_ARCH. The effects of this flag will vary based on choice
-    of back-end compiler and the value of CHPL\_TARGET\_ARCH.
+    CHPL\_TARGET\_CPU. The effects of this flag will vary based on choice
+    of back-end compiler and the value of CHPL\_TARGET\_CPU.
 
 **-o, --output <filename>**
 
@@ -531,6 +547,12 @@ OPTIONS
     instantiated. This flag raises that maximum in the event that a legal
     instantiation is being pruned too aggressively.
 
+**--[no-]print-all-candidates**
+
+    By default, function resolution errors show only a few candidates.
+    Use this flag to see all of the candidates for a call that could
+    not be resolved.
+
 **--[no-]print-callgraph**
 
     Print a textual call graph representing the program being compiled. The
@@ -551,11 +573,11 @@ OPTIONS
     Print the names and source locations of unused functions within the
     user program.
 
-**-s, --set <config param>[=<value>]**
+**-s, --set <config>[=<value>]**
 
-    Overrides the default value of a configuration parameter in the code.
-    For boolean configuration variables, the value can be omitted, causing
-    the default value to be toggled.
+    Overrides the default value of a configuration param, type, var,
+    or const in the code.  If the value is omitted, it will default
+    to the value `true`.
 
 **--[no-]task-tracking**
 
@@ -660,11 +682,9 @@ OPTIONS
 
 **--target-arch <architecture>**
 
-    Specify the architecture that the compiled executable will be
-    specialized to when **--specialize** is enabled. This flag corresponds
-    with and overrides the $CHPL\_TARGET\_ARCH environment variable
-    (defaults to a best guess based on $CHPL\_COMM, $CHPL\_TARGET\_COMPILER,
-    and $CHPL\_TARGET\_PLATFORM).
+    Specify the machine type or general architecture to use.
+    This flag corresponds with and overrides the $CHPL\_TARGET\_ARCH
+    environment variable (defaults to the result of `uname -m`).
 
 **--target-compiler <compiler>**
 
@@ -673,6 +693,14 @@ OPTIONS
     with and overrides the $CHPL\_TARGET\_COMPILER environment variable
     (defaults to a best guess based on $CHPL\_HOST\_PLATFORM,
     $CHPL\_TARGET\_PLATFORM, and $CHPL\_HOST\_COMPILER).
+
+**--target-cpu <cpu>**
+
+    Specify the cpu model that the compiled executable will be
+    specialized to when **--specialize** is enabled. This flag corresponds
+    with and overrides the $CHPL\_TARGET\_CPU environment variable
+    (defaults to a best guess based on $CHPL\_COMM, $CHPL\_TARGET\_COMPILER,
+    and $CHPL\_TARGET\_PLATFORM).
 
 **--target-platform <platform>**
 
@@ -772,5 +800,5 @@ See $CHPL\_HOME/CONTRIBUTORS.md for a list of contributors to Chapel.
 COPYRIGHT
 ---------
 
-Copyright (c) 2004-2018 Cray Inc. (See $CHPL\_HOME/LICENSE for more
-details.)
+| Copyright 2020 Hewlett Packard Enterprise Development LP
+| Copyright 2004-2019 Cray Inc.

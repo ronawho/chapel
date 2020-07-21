@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -45,7 +46,11 @@
 #include "llvm/ADT/Statistic.h"
 
 #include "llvm/IR/Attributes.h"
+
+#if HAVE_LLVM_VER < 90
 #include "llvm/IR/CallSite.h"
+#endif
+
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/IntrinsicInst.h"
@@ -90,9 +95,7 @@ namespace {
     // stack overflow.
     Function *func = insertBefore->getParent()->getParent();
     BasicBlock* entryBlock = & func->getEntryBlock();
-#if HAVE_LLVM_VER >= 50
     const llvm::DataLayout &DL = func->getParent()->getDataLayout();
-#endif
 
     if( insertBefore->getParent() == entryBlock ) {
       // Add before specific instruction in entry block.
@@ -108,15 +111,11 @@ namespace {
 
     if( insertBefore ) {
       tempVar = new AllocaInst(type,
-#if HAVE_LLVM_VER >= 50
                                DL.getAllocaAddrSpace(),
-#endif
                                name, insertBefore);
     } else {
       tempVar = new AllocaInst(type,
-#if HAVE_LLVM_VER >= 50
                                DL.getAllocaAddrSpace(),
-#endif
                                name, entryBlock);
     }
 
@@ -172,11 +171,7 @@ namespace {
   Constant* createLoadStoreControl(Module &M,
                                    GlobalToWideInfo* info,
                                    AtomicOrdering ordering,
-#if HAVE_LLVM_VER >= 50
                                    SyncScope::ID scope
-#else
-                                   SynchronizationScope scope
-#endif
                                    )
   {
     int atomic_part = 0;
@@ -291,18 +286,17 @@ namespace {
                                                "", insertBefore);
 
     new StoreInst(fromValue, allocAsFrom, insertBefore);
-    Instruction* load = new LoadInst(allocAsNew, "", insertBefore);
+    Instruction* load = new LoadInst(toType, allocAsNew, "", insertBefore);
 
     return load;
   }
 
-  void checkFunctionExistAndHasArgs(Constant* f, unsigned nArgs)
+  void checkFunctionExistAndHasArgs(Value* f, Type* t, unsigned nArgs)
   {
     assert(f);
     if( Function* ff = dyn_cast<Function>(f) ) {
       assert(ff->getParent());
     }
-    Type* t = f->getType();
     FunctionType* ft = NULL;
     if( PointerType* pt = dyn_cast<PointerType>(t) ) {
       t = pt->getElementType();
@@ -345,10 +339,14 @@ namespace {
     llvm::Type* sizeTy;
 
     // See llvmGlobalToWide.h for descriptions of these functions
-    llvm::Constant* getFn;
-    llvm::Constant* putFn;
-    llvm::Constant* getPutFn;
-    llvm::Constant* memsetFn;
+    llvm::Value* getFn;
+    llvm::FunctionType* getFnType;
+    llvm::Value* putFn;
+    llvm::FunctionType* putFnType;
+    llvm::Value* getPutFn;
+    llvm::FunctionType* getPutFnType;
+    llvm::Value* memsetFn;
+    llvm::FunctionType* memsetFnType;
 
 
     GlobalTypeFixer(Module & M, GlobalToWideInfo * info, bool debugPassTwo)
@@ -379,53 +377,15 @@ namespace {
       assert(wideVoidPtrTy);
 
       getFn = info->getFn;
-      if( ! getFn ) {
-        getFn = M.getOrInsertFunction("chpl_gen_comm_get_ctl_sym", voidTy,
-                                      voidPtrTy, nodeTy, voidPtrTy,
-                                      sizeTy, i64Ty
-#if HAVE_LLVM_VER < 50
-                                      , NULL
-#endif
-                                      );
-      }
-      checkFunctionExistAndHasArgs(getFn, 5);
-
+      getFnType = info->getFnType;
       putFn = info->putFn;
-      if( ! putFn ) {
-        putFn = M.getOrInsertFunction("chpl_gen_comm_put_ctl_sym", voidTy,
-                                      nodeTy, voidPtrTy, voidPtrTy,
-                                      sizeTy, i64Ty
-#if HAVE_LLVM_VER < 50
-                                      , NULL
-#endif
-                                      );
-      }
-      checkFunctionExistAndHasArgs(putFn, 5);
+      putFnType = info->putFnType;
 
       getPutFn = info->getPutFn;
-      if( ! getPutFn ) {
-        getPutFn = M.getOrInsertFunction("chpl_gen_comm_getput_sym", voidTy,
-                                         nodeTy, voidPtrTy,
-                                         nodeTy, voidPtrTy,
-                                         sizeTy
-#if HAVE_LLVM_VER < 50
-                                         , NULL
-#endif
-                                         );
-      }
-      checkFunctionExistAndHasArgs(getPutFn, 5);
+      getPutFnType = info->getPutFnType;
 
       memsetFn = info->memsetFn;
-      if( ! memsetFn ) {
-        memsetFn = M.getOrInsertFunction("chpl_gen_comm_memset_sym", voidTy,
-                                         nodeTy, voidPtrTy,
-                                         i8Ty, sizeTy
-#if HAVE_LLVM_VER < 50
-                                         , NULL
-#endif
-                                         );
-      }
-      checkFunctionExistAndHasArgs(memsetFn, 4);
+      memsetFnType = info->memsetFnType;
     }
 
     Function* getGlobalToWideFn(Type* globalPtrTy) {
@@ -535,7 +495,7 @@ namespace {
             // Add a call to global2wide before the terminator in
             // incomingBlock and save the result to store in the
             // new phi node.
-            TerminatorInst* incomingEnd = incomingBlock->getTerminator();
+            auto incomingEnd = incomingBlock->getTerminator();
             newIncoming[j] = callGlobalToWideFn(incomingValue, incomingEnd);
           }
 
@@ -696,26 +656,26 @@ namespace {
             args[2] = castRaddr;
             args[3] = size;
             args[4] = createLoadStoreControl(M, info, oldLoad->getOrdering(),
-#if HAVE_LLVM_VER >= 50
                                              oldLoad->getSyncScopeID()
-#else
-                                             oldLoad->getSynchScope()
-#endif
                                              );
 
+#if HAVE_LLVM_VER >= 90
+            Value* call = CallInst::Create(getFnType, getFn, args, "", oldLoad);
+#else
             Value* call = CallInst::Create(getFn, args, "", oldLoad);
+#endif
             assert(call);
 
             // Now load from the alloc'd area.
-            Instruction* loadedWide = new LoadInst(alloc, "",
+            Instruction* loadedWide = new LoadInst(wLoadedTy, alloc, "",
                                        oldLoad->isVolatile(),
-                                       oldLoad->getAlignment(),
-                                       oldLoad->getOrdering(),
-#if HAVE_LLVM_VER >= 50
-                                       oldLoad->getSyncScopeID(),
+#if HAVE_LLVM_VER >= 100
+                                       oldLoad->getAlign(),
 #else
-                                       oldLoad->getSynchScope(),
+                                       oldLoad->getAlignment(),
 #endif
+                                       oldLoad->getOrdering(),
+                                       oldLoad->getSyncScopeID(),
                                        oldLoad);
 
             // now convert loadedWide back into a global type,
@@ -749,13 +709,13 @@ namespace {
             // Now store to the alloc'd area
             Instruction* st = new StoreInst(wValueOp, alloc,
                                             oldStore->isVolatile(),
-                                            oldStore->getAlignment(),
-                                            oldStore->getOrdering(),
-#if HAVE_LLVM_VER >= 50
-                                            oldStore->getSyncScopeID(),
+#if HAVE_LLVM_VER >= 100
+                                            oldStore->getAlign(),
 #else
-                                            oldStore->getSynchScope(),
+                                            oldStore->getAlignment(),
 #endif
+                                            oldStore->getOrdering(),
+                                            oldStore->getSyncScopeID(),
                                             oldStore);
             assert(st);
 
@@ -776,14 +736,14 @@ namespace {
             args[2] = castAlloc;
             args[3] = size;
             args[4] = createLoadStoreControl(M, info, oldStore->getOrdering(),
-#if HAVE_LLVM_VER >= 50
                                              oldStore->getSyncScopeID()
-#else
-                                             oldStore->getSynchScope()
-#endif
                                              );
 
+#if HAVE_LLVM_VER >= 90
+            Instruction* put = CallInst::Create(putFnType, putFn, args, "", oldStore);
+#else
             Instruction* put = CallInst::Create(putFn, args, "", oldStore);
+#endif
             myReplaceInstWithInst(oldStore, put);
           }
           break; }
@@ -922,11 +882,7 @@ namespace {
               Value* wSrc = callGlobalToWideFn(gSrc, call);
               Value* ctl = createLoadStoreControl(M, info,
                                                   AtomicOrdering::NotAtomic,
-#if HAVE_LLVM_VER >= 50
                                                   SyncScope::SingleThread
-#else
-                                                  SingleThread
-#endif
                                                   );
 
               Instruction* putget = NULL;
@@ -941,7 +897,11 @@ namespace {
                 args[3] = n;
                 args[4] = ctl;
 
+#if HAVE_LLVM_VER >= 90
+                putget = CallInst::Create(putFnType, putFn, args, "", call);
+#else
                 putget = CallInst::Create(putFn, args, "", call);
+#endif
               } else if( srcSpace == info->globalSpace &&
                          dstSpace != info->globalSpace ) {
                 // It's a GET
@@ -952,7 +912,11 @@ namespace {
                 args[3] = n;
                 args[4] = ctl;
 
+#if HAVE_LLVM_VER >= 90
+                putget = CallInst::Create(getFnType, getFn, args, "", call);
+#else
                 putget = CallInst::Create(getFn, args, "", call);
+#endif
               } else {
                 Value* args[5];
                 args[0] = createRnode(info, wDst, call);
@@ -962,7 +926,11 @@ namespace {
                 args[4] = n;
 
                 assert(getPutFn && "Missing get-put-function for global-to-global memcpy");
+#if HAVE_LLVM_VER >= 90
+                putget = CallInst::Create(getPutFnType, getPutFn, args, "", call);
+#else
                 putget = CallInst::Create(getPutFn, args, "", call);
+#endif
               }
 
               myReplaceInstWithInst(call, putget);
@@ -987,7 +955,11 @@ namespace {
               args[2] = c;
               args[3] = n;
               assert(memsetFn && "Missing memset-function for global memset");
+#if HAVE_LLVM_VER >= 90
+              mset = CallInst::Create(memsetFnType, memsetFn, args, "", call);
+#else
               mset = CallInst::Create(memsetFn, args, "", call);
+#endif
               myReplaceInstWithInst(call, mset);
             } else {
               assert(false && "Unknown intrinsic call with global pointer");
@@ -1233,6 +1205,13 @@ namespace {
       // information, but if not we set some defaults here so
       // that tests can be created and bugpoint can be run.
       if( !info ) {
+        Type* voidTy = llvm::Type::getVoidTy(M.getContext());
+        Type* voidPtrTy = llvm::Type::getInt8PtrTy(M.getContext(), 0);
+        Type* i64Ty = llvm::Type::getInt64Ty(M.getContext());
+        Type* i8Ty = llvm::Type::getInt8Ty(M.getContext());
+        const DataLayout& DL = M.getDataLayout();
+        Type* sizeTy = DL.getIntPtrType(M.getContext(), 0);
+
         errs() << "Warning: GlobalToWide using default configuration\n";
         info = new GlobalToWideInfo();
         madeInfo = true;
@@ -1243,14 +1222,75 @@ namespace {
         if( ! info->localeIdType ) {
           StructType* t = StructType::create(M.getContext(), "struct.c_localeid_t");
           t->setBody(Type::getInt32Ty(M.getContext()),
-                     Type::getInt32Ty(M.getContext())
-#if HAVE_LLVM_VER < 50
-                     , NULL
-#endif
-                     );
+                     Type::getInt32Ty(M.getContext()));
           info->localeIdType = t;
         }
         info->nodeIdType = Type::getInt32Ty(M.getContext());
+
+        Type* nodeTy = info->nodeIdType;
+
+        auto getFn = M.getOrInsertFunction("chpl_gen_comm_get_ctl_sym", voidTy,
+                                           voidPtrTy, nodeTy, voidPtrTy,
+                                           sizeTy, i64Ty);
+#if HAVE_LLVM_VER < 90
+        Type* getFnTy = getFn->getType();
+        info->getFn = getFn;
+        info->getFnType = NULL;
+#else
+        FunctionType* getFnTy = getFn.getFunctionType();
+        info->getFn = getFn.getCallee();
+        info->getFnType = getFnTy;
+#endif
+        checkFunctionExistAndHasArgs(info->getFn, getFnTy, 5);
+
+
+        auto putFn = M.getOrInsertFunction("chpl_gen_comm_put_ctl_sym", voidTy,
+                                           nodeTy, voidPtrTy, voidPtrTy,
+                                           sizeTy, i64Ty);
+#if HAVE_LLVM_VER < 90
+        Type* putFnTy = putFn->getType();
+        info->putFn = putFn;
+        info->putFnType = NULL;
+#else
+        FunctionType* putFnTy = putFn.getFunctionType();
+        info->putFn = putFn.getCallee();
+        info->putFnType = putFnTy;
+#endif
+        checkFunctionExistAndHasArgs(info->putFn, putFnTy, 5);
+
+
+        auto getPutFn = M.getOrInsertFunction("chpl_gen_comm_getput_sym", voidTy,
+                                              nodeTy, voidPtrTy,
+                                              nodeTy, voidPtrTy,
+                                              sizeTy);
+
+#if HAVE_LLVM_VER < 90
+        Type* getPutFnTy = getPutFn->getType();
+        info->getPutFn = getPutFn;
+        info->getPutFnType = NULL;
+#else
+        FunctionType* getPutFnTy = getPutFn.getFunctionType();
+        info->getPutFn = getPutFn.getCallee();
+        info->getPutFnType = getPutFnTy;
+#endif
+        checkFunctionExistAndHasArgs(info->getPutFn, getPutFnTy, 5);
+
+
+        auto memsetFn = M.getOrInsertFunction("chpl_gen_comm_memset_sym", voidTy,
+                                              nodeTy, voidPtrTy,
+                                              i8Ty, sizeTy);
+
+#if HAVE_LLVM_VER < 90
+        Type* memsetFnTy = memsetFn->getType();
+        info->memsetFn = memsetFn;
+        info->memsetFnType = NULL;
+#else
+        FunctionType* memsetFnTy = memsetFn.getFunctionType();
+        info->memsetFn = memsetFn.getCallee();
+        info->memsetFnType = memsetFnTy;
+#endif
+        checkFunctionExistAndHasArgs(info->memsetFn, memsetFnTy, 4);
+
 
         // Now go identify special functions in the module by name.
         for (Module::iterator next_func = M.begin(); next_func!= M.end(); )
@@ -1322,6 +1362,17 @@ namespace {
           }
         }
       }
+
+      assert(info->getFn);
+      assert(info->putFn);
+      assert(info->getPutFn);
+      assert(info->memsetFn);
+#if HAVE_LLVM_VER >= 90
+      assert(info->getFnType);
+      assert(info->putFnType);
+      assert(info->getPutFnType);
+      assert(info->memsetFnType);
+#endif
 
       assert(info->globalSpace > 0);
       assert(info->localeIdType);
@@ -1456,27 +1507,13 @@ namespace {
 
         if (update_return) {
           // if it's no longer a pointer, remove pointer-based attributes
-#if HAVE_LLVM_VER >= 50
           NF->removeAttributes(AttributeList::ReturnIndex,
                                AttributeFuncs::typeIncompatible(RetTy));
-#else
-          NF->removeAttributes(AttributeSet::ReturnIndex,
-                               AttributeSet::get(NF->getContext(),
-                                 AttributeSet::ReturnIndex,
-                                 AttributeFuncs::typeIncompatible(RetTy)));
-#endif
         }
         if (update_parameters) {
           for (size_t i = 0; i < Params.size(); i++ ) {
-#if HAVE_LLVM_VER >= 50
             NF->removeAttributes(i+1,
                                  AttributeFuncs::typeIncompatible(Params[i]));
-#else
-            NF->removeAttributes(i+1,
-                AttributeSet::get(NF->getContext(),
-                                  i+1,
-                                  AttributeFuncs::typeIncompatible(Params[i])));
-#endif
           }
         }
 
@@ -1493,22 +1530,28 @@ namespace {
           Use &U = *UI;
           User *Old = U.getUser();
           ++UI;
+#if HAVE_LLVM_VER >= 90
+          if (auto *CB = dyn_cast<CallBase>(Old)) {
+            assert(CB->getCalledFunction() == F);
+            Instruction *Call = CB;
+#else
           CallSite CS(Old);
           if (CS.getInstruction()) {
             assert(CS.getCalledFunction() == F);
             Instruction *Call = CS.getInstruction();
-#if HAVE_LLVM_VER >= 50
-            const AttributeList &CallPAL = CS.getAttributes();
-#else
-            const AttributeSet &CallPAL = CS.getAttributes();
 #endif
 
             // Loop over the operands, inserting globalToWide function calls in
             // the caller as appropriate.
             unsigned ArgIndex = 1;
 
+#if HAVE_LLVM_VER >= 90
+            for(User::op_iterator AE = CB->arg_end(), AI = CB->arg_begin();
+                AI != AE; ++AI, ++ArgIndex) {
+#else
             for(CallSite::arg_iterator AE = CS.arg_end(), AI = CS.arg_begin();
                 AI != AE; ++AI, ++ArgIndex) {
+#endif
 
               if(!containsGlobalPointers(info, AI->get()->getType())) {
                 // unmodified argument
@@ -1527,12 +1570,22 @@ namespace {
             if (InvokeInst *II = dyn_cast<InvokeInst>(Call)) {
               New = InvokeInst::Create(NF, II->getNormalDest(), II->getUnwindDest(),
                                        Args, "", Call);
+#if HAVE_LLVM_VER >= 90
+              cast<InvokeInst>(New)->setCallingConv(CB->getCallingConv());
+              cast<InvokeInst>(New)->setAttributes(CB->getAttributes());
+#else
               cast<InvokeInst>(New)->setCallingConv(CS.getCallingConv());
-              cast<InvokeInst>(New)->setAttributes(CallPAL);
+              cast<InvokeInst>(New)->setAttributes(CS.getAttributes());
+#endif
             } else {
               New = CallInst::Create(NF, Args, "", Call);
+#if HAVE_LLVM_VER >= 90
+              cast<CallInst>(New)->setCallingConv(CB->getCallingConv());
+              cast<CallInst>(New)->setAttributes(CB->getAttributes());
+#else
               cast<CallInst>(New)->setCallingConv(CS.getCallingConv());
-              cast<CallInst>(New)->setAttributes(CallPAL);
+              cast<CallInst>(New)->setAttributes(CS.getAttributes());
+#endif
               if (cast<CallInst>(Call)->isTailCall())
                 cast<CallInst>(New)->setTailCall();
             }
@@ -1909,15 +1962,11 @@ namespace {
       }
 
       // Delete the dummy dependencies preserving function
-      Constant* cf = info->preservingFn;
-      if( cf ) {
+      if (info->hasPreservingFn) {
+        Value* cf = info->preservingFn;
         Function* f = dyn_cast<Function>(cf);
         if( f ) {
-#if HAVE_LLVM_VER >= 50
           info->preservingFn.setValPtr(NULL);
-#else
-          info->preservingFn = NULL;
-#endif
           f->eraseFromParent();
         }
       }
@@ -2178,7 +2227,7 @@ Type* convertTypeGlobalToWide(Module* module, GlobalToWideInfo* info, Type* t)
       // Rename the old structure
       std::string name;
       std::string glob_name;
-      name = st->getName();
+      name = std::string(st->getName());
       glob_name += GLOBAL_TYPE;
       glob_name += name;
       st->setName(glob_name);

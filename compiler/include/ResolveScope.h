@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -25,6 +26,7 @@
 #include <string>
 #include <vector>
 
+class astlocT;
 class BaseAST;
 class BlockStmt;
 class CallExpr;
@@ -38,6 +40,13 @@ class Symbol;
 class TypeSymbol;
 class UnresolvedSymExpr;
 class UseStmt;
+class VisibilityStmt;
+
+enum importUseProgress {
+  IUP_NOT_STARTED, // We haven't started resolving use or import statements
+  IUP_IN_PROGRESS, // We started but haven't completed resolving them
+  IUP_COMPLETED    // We've finished resolving use and import statements
+};
 
 // A preliminary version of a class to support the scope resolve pass
 // This is currently a thin wrapping over a previous typedef + functions
@@ -52,6 +61,8 @@ public:
   static void           destroyAstMap();
 
 public:
+  importUseProgress progress;
+
                         ResolveScope(ModuleSymbol*       modSym,
                                      const ResolveScope* parent);
 
@@ -68,13 +79,27 @@ public:
 
   ModuleSymbol*         enclosingModule()                                const;
 
-  bool                  extend(Symbol*        sym);
+  bool                  extend(Symbol*        sym, bool isTopLevel=false);
 
-  bool                  extend(const UseStmt* stmt);
+  bool                  extend(VisibilityStmt* stmt);
 
-  Symbol*               lookup(Expr*       expr)                         const;
+  Symbol*               lookupForImport(Expr* expr, bool isUse) const;
 
-  Symbol*               lookupNameLocally(const char* name)              const;
+  Symbol*               lookup(Expr*       expr, bool isUse=false)       const;
+
+  Symbol*               lookupNameLocally(const char* name,
+                                          bool isUse=false)              const;
+
+  Symbol*               lookupPublicVisStmts(const char* name)           const;
+
+  Symbol*               lookupPublicUnqualAccessSyms(const char* name,
+                                                     BaseAST *context);
+
+  Symbol*
+  lookupPublicUnqualAccessSyms(const char* name,
+                               BaseAST *context,
+                               std::map<Symbol *, astlocT *>& renameLocs,
+                               bool followUses = false);
 
   // Support for UseStmt with only/except
   // Has the potential to return multiple fields
@@ -84,14 +109,16 @@ public:
 
   void                  describe()                                       const;
 
+  bool                  canReexport;
+
 private:
-  typedef std::vector<const UseStmt*>    UseList;
+  typedef std::vector<VisibilityStmt*>   UseImportList;
   typedef std::vector<Symbol*>           SymList;
 
   typedef std::set<const ResolveScope*>  ScopeSet;
 
   typedef std::map<const char*, Symbol*> Bindings;
-  typedef std::map<Symbol*,     UseList> UseMap;
+  typedef std::map<Symbol*, UseImportList> UseImportMap;
 
                         ResolveScope();
 
@@ -103,13 +130,16 @@ private:
   bool                  isSymbolAndMethod(Symbol* sym0,
                                           Symbol* sym1);
 
-  Symbol*               lookup(UnresolvedSymExpr* usymExpr)              const;
+  Symbol*               lookup(UnresolvedSymExpr* usymExpr,
+                               bool isUse=false)                         const;
 
-  Symbol*               lookupWithUses(UnresolvedSymExpr* usymExpr)      const;
+  Symbol*               lookupWithUses(UnresolvedSymExpr* usymExpr,
+                                       bool isUse=false)                 const;
 
   bool                  isRepeat(Symbol* toAdd, const SymList& symbols)  const;
 
-  Symbol*               getFieldFromPath(CallExpr* dottedExpr)           const;
+  Symbol*               getFieldFromPath(CallExpr* dottedExpr,
+                                         bool isUse=false)               const;
 
   Symbol*               getField(const char* fieldName)                  const;
 
@@ -122,19 +152,28 @@ private:
   bool                  getFieldsWithUses(const char* fieldName,
                                           SymList&    symbols)           const;
 
-  void                  buildBreadthFirstUseList(UseList& useList)       const;
+  void buildBreadthFirstUseImportList(UseImportList& useList) const;
 
-  void                  buildBreadthFirstUseList(UseList& modules,
-                                                 UseList& current,
-                                                 UseMap&  visited)       const;
+  void buildBreadthFirstUseImportList(UseImportList& modules,
+                                      UseImportList& current,
+                                      UseImportMap&  visited) const;
 
-   bool                 skipUse(UseMap&        visited,
-                                const UseStmt* current)                  const;
+  bool                 skipUse(UseImportMap&  visited,
+                               const UseStmt* current)                  const;
+
+  Symbol* followImportUseChains(const char* name) const;
+  Symbol* lookupNameLocallyForImport(const char* name) const;
+  void firstImportedModuleName(Expr* expr,
+                               const char*& name,
+                               CallExpr*& call,
+                               const ResolveScope*& scope) const;
 
   BaseAST*              mAstRef;
   const ResolveScope*   mParent;
   Bindings              mBindings;
-  UseList               mUseList;
+  UseImportList         mUseImportList;
 };
+
+extern ResolveScope* rootScope;
 
 #endif

@@ -1,12 +1,7 @@
 #!/usr/bin/env python
-import os
 import sys
 
-chplenv_dir = os.path.dirname(__file__)
-sys.path.insert(0, os.path.abspath(chplenv_dir))
-
 import chpl_platform, overrides
-from chpl_home_utils import using_chapel_module
 from utils import memoize
 
 
@@ -15,9 +10,12 @@ def get():
     comm_val = overrides.get('CHPL_COMM')
     if not comm_val:
         platform_val = chpl_platform.get('target')
-        # Use ugni on cray-x* series
-        if platform_val.startswith('cray-x'):
+        # Use ugni on cray-xc series
+        if platform_val == 'cray-xc':
             comm_val = 'ugni'
+        # Use ofi on cray-shasta
+        elif platform_val == 'cray-shasta':
+            comm_val = 'ofi'
         # Use gasnet on cray-cs
         elif platform_val.startswith('cray-'):
             comm_val = 'gasnet'

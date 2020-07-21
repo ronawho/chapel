@@ -57,14 +57,14 @@ module CGMakeA {
     //  writeln("Inds is: ", Inds);
 
     // copy into arithmetic domain/array
-    var IndArr: [1..Inds.numIndices] index(2);
+    var IndArr: [1..Inds.size] index(2);
     for (i,j) in zip(Inds, 1..) {
       IndArr[j] = i;
     }
     //  writeln("IndArr is: ", IndArr);
 
     // sort indices
-    quickSort(IndArr);
+    sort(IndArr);
 
     //  writeln("After sort, IndArr is: ", IndArr);
     
@@ -89,7 +89,7 @@ module CGMakeA {
       do {
         vecelt = randStr.getNext();
         ind = (randStr.getNext() * nn1):int + 1;
-      } while (ind > n || indices.member(ind));
+      } while (ind > n || indices.contains(ind));
 
       v(nzv) = vecelt;
       iv(nzv) = ind;

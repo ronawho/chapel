@@ -1,4 +1,5 @@
-# Copyright 2004-2018 Cray Inc.
+# Copyright 2020 Hewlett Packard Enterprise Development LP
+# Copyright 2004-2019 Cray Inc.
 # Other additional copyright holders may be indicated within.
 # 
 # The entirety of this work is licensed under the Apache License,
@@ -34,15 +35,15 @@ all: $(CHPL_ENV_HEADER) third-party-pkgs all.helpme
 depend:
 
 clean: clean.helpme
-	rm -f tags TAGS
+	rm -f tags TAGS $(CHPL_ENV_HEADER)
 
 cleanall: cleanall.helpme
-	rm -f tags TAGS
+	rm -f tags TAGS $(CHPL_ENV_HEADER)
 
 cleandeps: cleandeps.helpme
 
 clobber: clobber.helpme
-	rm -f tags TAGS
+	rm -f tags TAGS $(CHPL_ENV_HEADER)
 
 %.helpme:
 	@$(MAKE) -f Makefile.help MAKE_LAUNCHER=0 CHPL_MAKE_RULE=$* $*
@@ -50,7 +51,7 @@ ifneq ($(CHPL_MAKE_LAUNCHER),none)
 	@$(MAKE) -f Makefile.help MAKE_LAUNCHER=1 CHPL_MAKE_RULE=$* $*
 endif
 
-$(CHPL_ENV_HEADER):
+$(CHPL_ENV_HEADER): $(CHPL_MAKE_HOME)/util/printchplenv $(CHPL_MAKE_HOME)/util/chplenv/*
 	@mkdir -p $(CHPL_ENV_HEADER_DIR)
 	@echo "Generating $(CHPL_ENV_HEADER)"
 	@cp $(CHPL_ENV_HEADER_TEMPLATE) $(CHPL_ENV_HEADER)
@@ -70,12 +71,15 @@ third-party-pkgs:
 ifneq (, $(THIRD_PARTY_PKGS))
 # Qthreads may use hwloc and/or jemalloc. Ensure they are built first
 ifneq (, $(filter $(THIRD_PARTY_PKGS),hwloc))
-	$(MAKE) -C $(THIRD_PARTY_DIR) hwloc
+	@echo "Making hwloc..."
+	@$(MAKE) -C $(THIRD_PARTY_DIR) hwloc
 endif
 ifneq (, $(filter $(THIRD_PARTY_PKGS),jemalloc))
-	$(MAKE) -C $(THIRD_PARTY_DIR) jemalloc
+	@echo "Making jemalloc..."
+	@$(MAKE) -C $(THIRD_PARTY_DIR) jemalloc
 endif
-	$(MAKE) -C $(THIRD_PARTY_DIR) $(THIRD_PARTY_PKGS)
+	@echo "Making third-party-packages..."
+	@$(MAKE) -C $(THIRD_PARTY_DIR) $(THIRD_PARTY_PKGS)
 endif
 
 .NOTPARALLEL:

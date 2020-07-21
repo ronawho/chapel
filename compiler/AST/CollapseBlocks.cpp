@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -80,6 +81,7 @@
 #include "ForallStmt.h"
 
 #include "alist.h"
+#include "ImportStmt.h"
 #include "stmt.h"
 
 CollapseBlocks::CollapseBlocks()
@@ -133,12 +135,6 @@ bool CollapseBlocks::enterBlockStmt(BlockStmt* node)
 
   // Do not recurse
   return false;
-}
-
-void CollapseBlocks::visitForallIntents(ForallIntents* clause) {
-  // Need to define this so CollapseBlocks is not abstract.
-  // However, it should not be invoked.
-  INT_ASSERT(false);
 }
 
 bool CollapseBlocks::enterForallStmt(ForallStmt* node) {
@@ -214,12 +210,12 @@ void CollapseBlocks::exitAggrType(AggregateType* node)
 
 }
 
-bool CollapseBlocks::enterUnmanagedClassType(UnmanagedClassType* node)
+bool CollapseBlocks::enterDecoratedClassType(DecoratedClassType* node)
 {
   return false;
 }
 
-void CollapseBlocks::exitUnmanagedClassType(UnmanagedClassType* node)
+void CollapseBlocks::exitDecoratedClassType(DecoratedClassType* node)
 {
 
 }
@@ -363,6 +359,11 @@ void CollapseBlocks::exitLoopExpr(LoopExpr* node)
 }
 
 void CollapseBlocks::visitUseStmt(UseStmt* node)
+{
+
+}
+
+void CollapseBlocks::visitImportStmt(ImportStmt* node)
 {
 
 }

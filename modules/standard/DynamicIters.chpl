@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -28,19 +29,7 @@
 */
 module DynamicIters {
 
-/*
-   An atomic test-and-set lock.
-*/
-pragma "no doc"
-record vlock {
-  var l: atomic bool;
-  proc lock() {
-    on this do while l.testAndSet() != false do chpl_task_yield();
-  }
-  proc unlock() {
-    l.write(false);
-  }
-}
+  private use ChapelLocks;
 
 /*
    Toggle debugging output.
@@ -93,10 +82,28 @@ where tag == iterKind.leader
   assert(chunkSize > 0); // caller's responsibility
 
   // # of tasks the range can fill. (fast) ceil so all work is represented
-  const chunkTasks = divceilpos(c.length, chunkSize): int;
+  const numChunks: int;
+
+  // divceilpos() doesn't accept two unsigned ints.
+  // divceil() doesn't accept args of non-matching signedness.
+  //
+  // So we need to call divceil() for the former case, and
+  // divceilpos() for the latter.
+  //
+  // If c.size (of type c.idxType) is uint(64), we can safely cast the
+  // chunkSize (asserted positive above) to uint(64), and can call
+  // divceil() on two unsigned ints.
+  //
+  // Otherwise, it isn't uint(64), and we can safely cast it to
+  // int(64).  Then we can call divceilpos() with it and any chunkSize
+  // type, since then we know at least one arg is signed.
+  if c.idxType == uint(64) then
+    numChunks = divceil(c.size, chunkSize:uint(64)): int;
+  else
+    numChunks = divceilpos(c.size:int(64), chunkSize): int;
 
   // Check if the number of tasks is 0, in that case it returns a default value
-  const nTasks = min(chunkTasks, defaultNumTasks(numTasks));
+  const nTasks = min(numChunks, defaultNumTasks(numTasks));
 
   type rType=c.type;
 
@@ -110,31 +117,37 @@ where tag == iterKind.leader
       writeln("Dynamic Iterator: serial execution because there is not enough work");
     yield (remain,);
   } else {
-    var moreWork : atomic bool;
-    moreWork.write(true);
-    var curIndex : atomic remain.low.type;
-    curIndex.write(remain.low);
+    var moreWork : atomic bool = true;
+    var curChunkIdx : atomic int = 0;
 
     coforall tid in 0..#nTasks with (const in remain) {
       while moreWork.read() {
         // There is local work in remain
-        const low = curIndex.fetchAdd(chunkSize);
-        var high = low + chunkSize-1;
+        const chunkIdx = curChunkIdx.fetchAdd(1);
+        const low = chunkIdx * chunkSize; /* remain.low is 0, stride is 1 */
+        const high: low.type;
 
-        if low > remain.high {
+        if chunkSize >= max(low.type) - low then
+          high = max(low.type);
+        else
+          high = low + chunkSize-1;
+
+        if chunkIdx >= numChunks {
+          /*
+           * Multiple threads passed moreWork.read() at once.
+           * All whose fetchAdd() was after the one
+           * that grabbed the final chunk just break.
+           */
           break;
-        } else if high > remain.high {
-          high = remain.high;
+        } else if high >= remain.high {
           moreWork.write(false);
         }
 
         const current:rType = remain(low .. high);
 
-        if high >= low then {
-          if debugDynamicIters then
-            writeln("Parallel dynamic Iterator. Working at tid ", tid, " with range ", unDensify(current,c), " yielded as ", current);
-          yield (current,);
-        }
+        if debugDynamicIters then
+          writeln("Parallel dynamic Iterator. Working at tid ", tid, " with range ", unDensify(current,c), " yielded as ", current);
+        yield (current,);
       }
     }
   }
@@ -146,7 +159,7 @@ iter dynamic(param tag:iterKind, c:range(?), chunkSize:int=1, numTasks:int, foll
 where tag == iterKind.follower
 {
   type rType=c.type;
-  const current:rType=unDensify(followThis(1),c);
+  const current:rType=unDensify(followThis(0),c);
   if debugDynamicIters then
     writeln("Follower received range ", followThis, " ; shifting to ", current);
   for i in current do {
@@ -155,6 +168,7 @@ where tag == iterKind.follower
 }
 
 //************************* Dynamic domain iterator
+//This is the serial version of this iterator
 /*
 
   :arg c: The domain to iterate over. The rank of the domain must be greater
@@ -170,8 +184,8 @@ where tag == iterKind.follower
                  ``dataParTasksPerLocale``.
   :type numTasks: `int`
 
-  :arg parDim: The index of the dimension to parallelize across. Must be > 0.
-                Must be <= the rank of the domain ``c``. Defaults to 1.
+  :arg parDim: The index of the dimension to parallelize across. Must be >= 0.
+                Must be < the rank of the domain ``c``. Defaults to 0.
   :type parDim: `int`
 
   :yields: Indices of the domain ``c``
@@ -184,8 +198,7 @@ where tag == iterKind.follower
   This iterator can be called in serial and zippered contexts.
 */
 
-//This is the serial version of this iterator
-iter dynamic(c:domain, chunkSize:int=1, numTasks:int=0, parDim:int=1)
+iter dynamic(c:domain, chunkSize:int=1, numTasks:int=0, parDim:int=0)
 {
   if debugDynamicIters then
     writeln("Serial Dynamic Domain Iterator, working with domain: ", c);
@@ -195,7 +208,7 @@ iter dynamic(c:domain, chunkSize:int=1, numTasks:int=0, parDim:int=1)
 
 //Leader
 pragma "no doc"
-iter dynamic(param tag:iterKind, c:domain, chunkSize:int=1, numTasks:int=0, parDim : int = 1)
+iter dynamic(param tag:iterKind, c:domain, chunkSize:int=1, numTasks:int=0, parDim : int = 0)
   where tag == iterKind.leader
   {
     //caller's responsibility to use a valid chunk size
@@ -205,15 +218,15 @@ iter dynamic(param tag:iterKind, c:domain, chunkSize:int=1, numTasks:int=0, parD
     assert(c.rank > 0, "Must use a valid domain");
 
     //caller's responsibility to use a valid parDim
-    assert(parDim <= c.rank, "parDim must be a dimension of the domain");
-    assert(parDim > 0, "parDim must be a positive integer");
+    assert(parDim < c.rank, "parDim must be a dimension of the domain");
+    assert(parDim >= 0, "parDim must be a non-negative integer");
 
     var parDimDim = c.dim(parDim);
     var parDimOffset = c.dim(parDim).low;
 
     for i in dynamic(tag=iterKind.leader, parDimDim, chunkSize, numTasks) {
       //Set the new range based on the tuple the dynamic 1d iterator yields
-      var newRange = i(1);
+      var newRange = i(0);
 
       type dType = c.type;
       //does the same thing as densify, but densify makes a stridable domain,
@@ -235,7 +248,7 @@ iter dynamic(param tag:iterKind, c:domain, chunkSize:int=1, numTasks:int, parDim
 where tag == iterKind.follower
 {
   //Invoke the default rectangular domain follower iterator
-  for i in c._value.these(tag=iterKind.follower, followThis=followThis) do
+  for i in c.these(tag=iterKind.follower, followThis=followThis) do
     yield i;
 }
 
@@ -276,7 +289,7 @@ iter guided(param tag:iterKind, c:range(?), numTasks:int=0)
 where tag == iterKind.leader
 {
   // Check if the number of tasks is 0, in that case it returns a default value
-  const nTasks=min(c.length, defaultNumTasks(numTasks));
+  const nTasks=min(c.size, defaultNumTasks(numTasks));
   type rType=c.type;
   var remain:rType = densify(c,c);
   // If the number of tasks is insufficient, yield in serial
@@ -287,16 +300,15 @@ where tag == iterKind.leader
   }
 
   else {
-    var undone : atomic bool;
-    undone.write(true);
+    var undone: atomic bool = true;
     const factor=nTasks;
-    var lock : vlock;
+    var lock: chpl_LocalSpinlock;
 
-    coforall tid in 0..#nTasks with (ref remain, ref undone, ref lock) do {
+    coforall tid in 0..#nTasks with (ref remain) do {
       while undone.read() do {
         // There is local work in remain(tid)
         const current:rType=adaptSplit(remain, factor, undone, lock);
-        if current.length !=0 then {
+        if current.size !=0 then {
           if debugDynamicIters then
             writeln("Parallel guided Iterator. Working at tid ", tid, " with range ", unDensify(current,c), " yielded as ", current);
           yield (current,);
@@ -313,7 +325,7 @@ where tag == iterKind.follower
 
 {
   type rType=c.type;
-  const current:rType=unDensify(followThis(1),c);
+  const current:rType=unDensify(followThis(0),c);
   if debugDynamicIters then
     writeln("Follower received range ", followThis, " ; shifting to ", current);
   for i in current do {
@@ -322,7 +334,7 @@ where tag == iterKind.follower
 }
 
 //************************* Guided domain iterator
-
+// Here is the serial version of this iterator.
 /*
 
   :arg c: The domain to iterate over. The rank of the domain must be greater
@@ -334,8 +346,8 @@ where tag == iterKind.follower
                  ``dataParTasksPerLocale``.
   :type numTasks: `int`
 
-  :arg parDim: The index of the dimension to parallelize across. Must be > 0.
-               Must be <= the rank of the domain ``c``. Defaults to 1.
+  :arg parDim: The index of the dimension to parallelize across. Must be >= 0.
+               Must be < the rank of the domain ``c``. Defaults to 0.
   :type parDim: `int`
 
   :yields: Indices in the domain ``c``.
@@ -352,8 +364,7 @@ where tag == iterKind.follower
   This iterator can be called in serial and zippered contexts.
 
 */
-// Here is the serial version of this iterator.
-iter guided(c:domain, numTasks:int=0, parDim:int=1)
+iter guided(c:domain, numTasks:int=0, parDim:int=0)
 {
   if debugDynamicIters then
     writeln("Serial guided domain iterator, working with domain ", c);
@@ -363,21 +374,21 @@ iter guided(c:domain, numTasks:int=0, parDim:int=1)
 
 // Leader.
 pragma "no doc"
-iter guided(param tag:iterKind, c:domain, numTasks:int=0, parDim:int=1)
+iter guided(param tag:iterKind, c:domain, numTasks:int=0, parDim:int=0)
 where tag == iterKind.leader
 {
   // Caller's responsibility to use a valid domain.
   assert(c.rank > 0, "Must use a valid domain");
 
   // Caller's responsibility to use a valid parDim.
-  assert(parDim <= c.rank, "parDim must be a dimension of the domain");
-  assert(parDim > 0, "parDim must be a positive integer");
+  assert(parDim < c.rank, "parDim must be a dimension of the domain");
+  assert(parDim >= 0, "parDim must be a non-negative integer");
 
   var parDimDim = c.dim(parDim);
 
   for i in guided(tag=iterKind.leader, parDimDim, numTasks) {
     // Set the new range based on the tuple the guided 1-D iterator yields.
-    var newRange = i(1);
+    var newRange = i(0);
 
     type dType = c.type;
     // Does the same thing as densify, but densify makes a stridable domain,
@@ -399,7 +410,7 @@ iter guided(param tag:iterKind, c:domain, numTasks:int, parDim:int, followThis)
 where tag == iterKind.follower
 {
   // Invoke the default rectangular domain follower iterator.
-  for i in c._value.these(tag=iterKind.follower, followThis=followThis) do {
+  for i in c.these(tag=iterKind.follower, followThis=followThis) do {
     yield i;
   }
 }
@@ -481,7 +492,7 @@ where tag == iterKind.leader
     compilerError("methodStealing value must be between 0 and 2");*/
 
   // Check if the number of tasks is 0, in that case it returns a default value
-  const nTasks=min(c.length, defaultNumTasks(numTasks));
+  const nTasks=min(c.size, defaultNumTasks(numTasks));
   type rType=c.type;
 
   // If the number of tasks is insufficient, yield in serial
@@ -496,7 +507,7 @@ where tag == iterKind.leader
     const SpaceThreads:domain(1)=0..#nTasks;
     var localWork:[SpaceThreads] rType; // The remaining range to split on each Thread
     var moreLocalWork:[SpaceThreads] bool=true; // bool var to signal there is still work on each local range
-    var locks:[SpaceThreads] vlock; // sync var to control the splitting on each Thread
+    var locks: [SpaceThreads] chpl_LocalSpinlock;
     const factor:int=2;
 
     const factorSteal:int=2;
@@ -512,10 +523,10 @@ where tag == iterKind.leader
       // Step 1: Initial range per Thread/Task
 
       // Initial Local range in localWork[tid]
-      const chunkSize = c.length/nTasks;
+      const chunkSize = c.size/nTasks;
       localWork[tid]=
       if tid==nTasks-1 then
-        r#(chunkSize*(nTasks-1)-r.length)
+        r#(chunkSize*(nTasks-1)-r.size)
       else
         (r+tid*chunkSize)#chunkSize;
       barrier.add(1);
@@ -532,7 +543,7 @@ where tag == iterKind.leader
         // There is local work
         // The current range we get after splitting locally
         const zeroBasedIters:rType=adaptSplit(localWork[tid], factorSteal, moreLocalWork[tid], locks[tid]);
-        if zeroBasedIters.length !=0 then {
+        if zeroBasedIters.size !=0 then {
           if debugDynamicIters then
             writeln("Parallel adaptive Iterator. Working locally at tid ", tid, " with range yielded as ", zeroBasedIters);
           yield (zeroBasedIters,);
@@ -555,7 +566,7 @@ where tag == iterKind.leader
           if moreLocalWork[victim] then {
             // There is work in victim
             const zeroBasedIters2:rType=adaptSplit(localWork[victim], factorSteal, moreLocalWork[victim], locks[victim]);
-            if zeroBasedIters2.length !=0 then {
+            if zeroBasedIters2.size !=0 then {
               if debugDynamicIters then
                 writeln("Range stolen at victim ", victim," yielded as ", zeroBasedIters2," by tid ", tid);
               yield (zeroBasedIters2,);
@@ -568,7 +579,7 @@ where tag == iterKind.leader
             // There is work in victim
             const zeroBasedIters2:rType=adaptSplit(localWork[victim], factorSteal, moreLocalWork[victim], locks[victim], methodStealing==Method.WholeTail);
                                           //after splitting from a victim range
-            if zeroBasedIters2.length !=0 then {
+            if zeroBasedIters2.size !=0 then {
               if debugDynamicIters then
                 writeln("Range stolen at victim ", victim," yielded as ", zeroBasedIters2," by tid ", tid);
               yield (zeroBasedIters2,);
@@ -604,7 +615,7 @@ iter adaptive(param tag:iterKind, c:range(?), numTasks:int, followThis)
 where tag == iterKind.follower
 {
   type rType=c.type;
-  var current:rType=unDensify(followThis(1),c);
+  var current:rType=unDensify(followThis(0),c);
   if debugDynamicIters then
     writeln("Follower received range ", followThis, " ; shifting to ", current);
   for i in current do {
@@ -613,6 +624,7 @@ where tag == iterKind.follower
 }
 
 //************************* Adaptive work-stealing domain iterator
+// Here is the serial version of this iterator.
 /*
 
   :arg c: The domain to iterate over. Must have a length greater than zero.
@@ -623,8 +635,8 @@ where tag == iterKind.follower
                  ``dataParTasksPerLocale``.
   :type numTasks: `int`
 
-  :arg parDim: The index of the dimension to parallelize across. Must be > 0.
-               Must be <= the rank of the domain ``c``. Defaults to 1.
+  :arg parDim: The index of the dimension to parallelize across. Must be >= 0.
+               Must be < the rank of the domain ``c``. Defaults to 0.
   :type parDim: `int`
 
   :yields: Indices in the domain ``c``.
@@ -643,8 +655,7 @@ where tag == iterKind.follower
 
   This iterator can be called in serial and zippered contexts.
 */
-// Here is the serial version of this iterator.
-iter adaptive(c:domain, numTasks:int=0, parDim:int=1)
+iter adaptive(c:domain, numTasks:int=0, parDim:int=0)
 {
   if debugDynamicIters then
     writeln("Serial adaptive domain iterator, working with domain ", c);
@@ -654,21 +665,21 @@ iter adaptive(c:domain, numTasks:int=0, parDim:int=1)
 
 // Leader.
 pragma "no doc"
-iter adaptive(param tag:iterKind, c:domain, numTasks:int=0, parDim:int=1)
+iter adaptive(param tag:iterKind, c:domain, numTasks:int=0, parDim:int=0)
 where tag == iterKind.leader
 {
   // Caller's responsibility to use a valid domain.
   assert(c.rank > 0, "Must use a valid domain");
 
   // Caller's responsibility to use a valid parDim.
-  assert(parDim <= c.rank, "parDim must be a dimension of the domain");
-  assert(parDim > 0, "parDim must be a positive integer");
+  assert(parDim < c.rank, "parDim must be a dimension of the domain");
+  assert(parDim >= 0, "parDim must be a non-negative integer");
 
   var parDimDim = c.dim(parDim);
 
   for i in adaptive(tag=iterKind.leader, parDimDim, numTasks) {
     // Set the new range based on the tuple the guided 1-D iterator yields.
-    var newRange = i(1);
+    var newRange = i(0);
 
     type dType = c.type;
     // Does the same thing as densify, but densify makes a stridable domain,
@@ -690,7 +701,7 @@ iter adaptive(param tag:iterKind, c:domain, numTasks:int, parDim:int, followThis
 where tag == iterKind.follower
 {
   // Invoke the default rectangular domain follower iterator.
-  for i in c._value.these(tag=iterKind.follower, followThis=followThis) do {
+  for i in c.these(tag=iterKind.follower, followThis=followThis) do {
     yield i;
   }
 }
@@ -706,20 +717,20 @@ private proc defaultNumTasks(nTasks:int)
       dnTasks = dataParTasksPerLocale;
 
     if nTasks < 0 then
-      warning("'numTasks' < 0, defaulting to numTasks=" + dnTasks);
+      warning("'numTasks' < 0, defaulting to numTasks=", dnTasks);
   }
   return dnTasks;
 }
 
-private proc adaptSplit(ref rangeToSplit:range(?), splitFactor:int, ref itLeft, ref lock : vlock, splitTail:bool=false)
+private proc adaptSplit(ref rangeToSplit:range(?), splitFactor:int, ref itLeft, lock:chpl_LocalSpinlock, splitTail:bool=false)
 {
   type rType=rangeToSplit.type;
-  type lenType=rangeToSplit.length.type;
+  type lenType=rangeToSplit.size.type;
   var totLen, size:lenType;
   const profThreshold=1;
 
   lock.lock();
-  totLen=rangeToSplit.length;
+  totLen=rangeToSplit.size;
   if totLen > profThreshold then
     size=max(totLen/splitFactor, profThreshold);
   else {

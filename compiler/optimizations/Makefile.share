@@ -1,4 +1,5 @@
-# Copyright 2004-2018 Cray Inc.
+# Copyright 2020 Hewlett Packard Enterprise Development LP
+# Copyright 2004-2019 Cray Inc.
 # Other additional copyright holders may be indicated within.
 # 
 # The entirety of this work is licensed under the Apache License,
@@ -24,7 +25,10 @@ OPTIMIZATIONS_SRCS = \
 	liveVariableAnalysis.cpp \
 	localizeGlobals.cpp \
 	loopInvariantCodeMotion.cpp \
+	noAliasSets.cpp \
+        optimizeForallUnorderedOps.cpp \
 	optimizeOnClauses.cpp \
+	preNormalizeOptimizations.cpp \
 	refPropagation.cpp \
 	remoteValueForwarding.cpp \
 	removeEmptyRecords.cpp \
@@ -33,8 +37,7 @@ OPTIMIZATIONS_SRCS = \
 	replaceArrayAccessesWithRefTemps.cpp \
 	scalarReplace.cpp
 
-SVN_SRCS = $(OPTIMIZATIONS_SRCS)
-SRCS = $(SVN_SRCS)
+SRCS = $(OPTIMIZATIONS_SRCS)
 
 OPTIMIZATIONS_OBJS = \
 	$(OPTIMIZATIONS_SRCS:%.cpp=$(OPTIMIZATIONS_OBJDIR)/%.$(OBJ_SUFFIX))

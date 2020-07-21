@@ -7,10 +7,10 @@
 
 // Used to encode a string into a uint
 var tonum : [0..127] int;
-tonum[ascii("A")] = 0;
-tonum[ascii("C")] = 1;
-tonum[ascii("T")] = 2;
-tonum[ascii("G")] = 3;
+tonum["A".toByte()] = 0;
+tonum["C".toByte()] = 1;
+tonum["T".toByte()] = 2;
+tonum["G".toByte()] = 3;
 
 // Used to decode a uint back into a string
 var tochar : [0..3] string;
@@ -23,7 +23,7 @@ inline proc hash(data : string) {
   var e : uint = 0;
   for d in data {
     e <<= 2;
-    e |= tonum[ascii(d)];
+    e |= tonum[d.toByte()];
   }
   return e;
 }
@@ -41,9 +41,9 @@ proc calculate(data : string, size : int) {
   var freqDom : domain(uint);
   var freqs : [freqDom] atomic int;
 
-  const high = data.length - size + 1;
+  const high = data.size - size + 1;
   forall i in 1..high {
-    const key = hash(data[i..#size]);
+    const key = hash(data[i:byteIndex..#size]);
     freqDom.add(key);
     freqs[key].add(1);
   }
@@ -63,18 +63,18 @@ proc write_frequencies(data : string, size : int) {
   for (s, e, f) in zip(sorted, freqs.domain, freqs) do
     s = (f.read(), e);
 
-  // quickSort will sort starting at the tuple's first element.
-  quickSort(sorted, comparator=reverseComparator);
+  // sort will sort starting at the tuple's first element.
+  sort(sorted, comparator=reverseComparator);
 
-  const sum = data.length - size;
+  const sum = data.size - size;
   for (f, e) in sorted do
     writef("%s %.3dr\n", decode(e, size), (100.0 * f) / sum);
 }
 
 proc write_count(data : string, pattern : string) {
-  const size = pattern.length;
+  const size = pattern.numBytes;
   var freqs = calculate(data, size);
-  const d = hash(pattern[1..size]);
+  const d = hash(pattern[1:byteIndex..#size]);
   writeln(freqs[d], "\t", decode(d, size));
 }
 

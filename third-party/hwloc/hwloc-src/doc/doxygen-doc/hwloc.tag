@@ -307,6 +307,13 @@
       <anchor>ad914eac61c77481e1b7037877bcc5579</anchor>
       <arglist></arglist>
     </member>
+    <member kind="variable">
+      <type>unsigned char</type>
+      <name>dont_merge</name>
+      <anchorfile>a00216.html</anchorfile>
+      <anchor>afa253d4b70f92e940c226d61f192054f</anchor>
+      <arglist></arglist>
+    </member>
   </compound>
   <compound kind="struct">
     <name>hwloc_obj</name>
@@ -3945,6 +3952,7 @@
     <docanchor file="a00323" title="How do I build hwloc for BlueGene/Q?">faq_bgq</docanchor>
     <docanchor file="a00323" title="How do I build hwloc for Windows?">faq_windows</docanchor>
     <docanchor file="a00323" title="How to get useful topology information on NetBSD?">faq_netbsd_bind</docanchor>
+    <docanchor file="a00323" title="Why does binding fail on AIX?">faq_aix_bind</docanchor>
   </compound>
   <compound kind="page">
     <name>index</name>

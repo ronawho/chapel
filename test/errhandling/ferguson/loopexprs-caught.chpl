@@ -5,13 +5,13 @@ module CannotThrow {
     var x:int;
     var y:int;
     override proc message() {
-      return x + " " + y;
+      return x:string + " " + y:string;
     }
   }
 
   proc willthrow(x: int, y: int) throws {
     if throwx == x && throwy == y then
-      throw new MyError(x,y);
+      throw new owned MyError(x,y);
     return x;
   }
   proc main() {

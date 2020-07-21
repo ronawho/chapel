@@ -61,9 +61,9 @@ proc constructGraph(Edges:[?ArrD] , G)
    forall v in G.Vertices do {
      const oldNC = v.neighbor_count.read();
      // TODO: remove duplicates via sorting
-     // quickSort(v.nd); ...
+     // sort(v.nd); ...
      const newNC = oldNC; // TODO: recompute after duplicate removal
-     if newNC != v.nd.numIndices {
+     if newNC != v.nd.size {
        // resize
        v.nd  = {1..newNC};
      }

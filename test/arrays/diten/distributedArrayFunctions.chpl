@@ -3,10 +3,10 @@ use BlockDist;
 var Dist = new dmap(new Block(rank=2, boundingBox={1..3, 1..3}));
 var dom: domain(2) dmapped Dist = {1..3, 1..3};
 
-writeln("numIndices: ", dom.numIndices);
+writeln("numIndices: ", dom.size);
 
 for i in {0..4, 0..4} {
-  writeln("member(", i, ") ", dom.member(i));
+  writeln("contains(", i, ") ", dom.contains(i));
 }
 
 for i in {0..4, 0..4} {

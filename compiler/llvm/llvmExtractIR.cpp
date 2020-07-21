@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -35,25 +36,43 @@
 
 using namespace llvm;
 
-void extractAndPrintFunctionLLVM(Function *func) {
+void extractAndPrintFunctionsLLVM(std::set<const GlobalValue*> *gvs) {
 
-  Module* funcModule = func->getParent();
+  if (gvs == NULL || gvs->size() == 0)
+    return;
+
+  const Module* funcModule = NULL;
+
+  std::set<std::string> names;
+  for (auto V : *gvs) {
+    if (funcModule == NULL) {
+      funcModule = V->getParent();
+    } else {
+      assert(funcModule == V->getParent());
+    }
+    names.insert(V->getName().str());
+  }
+  assert(funcModule != NULL);
+
   ValueToValueMapTy VMap;
   // Create a new module containing only the definition of the function
   // and using external declarations for everything else
 #if HAVE_LLVM_VER < 70
   auto ownedM = CloneModule(funcModule, VMap,
-                            [=](const GlobalValue *GV) { return GV == func; });
+                            [=](const GlobalValue *GV) {
+                                       return gvs->count(GV) > 0; });
 #else
   auto ownedM = CloneModule(*funcModule, VMap,
-                            [=](const GlobalValue *GV) { return GV == func; });
+                            [=](const GlobalValue *GV) {
+                                       return gvs->count(GV) > 0; });
 #endif
   Module& M = *ownedM.get();
 
   // Make sure the function in the module is externally visible
   // (so the below cleanups don't remove it)
   for (Function &F : M) {
-    if (F.getName() == func->getName()) {
+    std::string name = F.getName().str();
+    if (names.count(name) > 0) {
       F.setLinkage(GlobalValue::WeakAnyLinkage);
     }
   }
@@ -67,7 +86,7 @@ void extractAndPrintFunctionLLVM(Function *func) {
 
   std::error_code EC;
   // note: could output to a file if we replace "-" with a filename
-  TOOL_OUTPUT_FILE Out("-", EC, sys::fs::F_None);
+  ToolOutputFile Out("-", EC, sys::fs::F_None);
   if (EC) {    
     errs() << EC.message() << '\n';
     return;

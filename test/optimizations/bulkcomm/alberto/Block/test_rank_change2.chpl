@@ -1,14 +1,18 @@
 config  const n: int=5;
-var A: [1..5, 1..5] int = 1..;
-var F: [1..5, 1..5] int = 300..;
+var A: [1..5, 1..5] int = [(i,j) in {1..5, 1..5}] (i-1)*5 + j;
+var F: [1..5, 1..5] int = [(i,j) in {1..5, 1..5}] (i-1)*5 + j + 299;
 
 var B: [1..5] int;
 
-var C: [1..5,1..5,1..5] int = 100..;
+var C: [1..5,1..5,1..5] int
+     = [(i,j,k) in {1..5, 1..5, 1..5}] (i-1)*5*5 + (j-1)*5 + k + 99;
 
-var E: [1..5,1..5,1..5] int = 500..;
+var E: [1..5,1..5,1..5] int
+     = [(i,j,k) in {1..5, 1..5, 1..5}] (i-1)*5*5 + (j-1)*5 + k + 499;
 
-var D: [1..5,1..5,1..5,1..5] int = 1000..;
+var D: [1..5,1..5,1..5,1..5] int
+     = [(i,j,k,l) in {1..5, 1..5, 1..5, 1..5}]
+         (i-1)*5*5*5 + (j-1)*5*5 + (k-1)*5 + l + 9999;;
 //writeln("A:",A);
 //writeln("B:",B);
 //writeln("C:",C);
@@ -116,7 +120,7 @@ F=C[1..5,1..5,1];
 for (a,b) in zip(C[1..5,1..5,1],F[1..5,1..5]) do if (a!=b) then {writeln("ERROR!!!!");}
 
 // All these examples would work if we remove the
-// a.dom.numIndices==b.dom.numIndices condition from ChapelArray to do
+// a.dom.size==b.dom.size condition from ChapelArray to do
 // bulkCopy in proc chpl__useBulkTransferStride(a:[], b:[]).
 /*
 writeln();

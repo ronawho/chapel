@@ -1,4 +1,5 @@
-# Copyright 2004-2018 Cray Inc.
+# Copyright 2020 Hewlett Packard Enterprise Development LP
+# Copyright 2004-2019 Cray Inc.
 # Other additional copyright holders may be indicated within.
 # 
 # The entirety of this work is licensed under the Apache License,
@@ -39,12 +40,14 @@ CHPL_MAKE_HOST_TARGET = --target
 endif
 include $(RUNTIME_ROOT)/../make/Makefile.base
 
+RANLIB ?= ranlib
 
 LAUNCHER_CFLAGS = $(RUNTIME_CFLAGS) -DLAUNCHER
 LAUNCHER_INCLS = \
         -I$(RUNTIME_ROOT)/include/comm/$(CHPL_MAKE_COMM) \
         -I$(RUNTIME_ROOT)/include/comm \
-        -I$(RUNTIME_ROOT)/include
+        -I$(RUNTIME_ROOT)/include \
+        -I$(THIRD_PARTY_DIR)/whereami/whereami-src
 
 ifeq ($(CHPL_MAKE_HWLOC),none)
   CHPL_MAKE_TOPO = none
@@ -78,7 +81,7 @@ endif
 #
 # platform-specific subdirectory targets
 #
-SVN_DEPENDS = ./$(DEPEND_DIR)/*.d
+DEPENDS = ./$(DEPEND_DIR)/*.d
 
 
 #

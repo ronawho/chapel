@@ -5,7 +5,7 @@
    derived from the GNU C version by Mr Ledrug
 */
 
-use GMP;
+use GMP, SysCTypes;
 
 config const n = 50;         // Compute n digits of pi, 50 by default
 
@@ -26,7 +26,7 @@ proc main() {
   //
   const leftover = n%digitsPerLine;
   if (leftover) {
-    for leftover..digitsPerLine do
+    for leftover..digitsPerLine-1 do
       write(" ");
     writeln("\t:", n);
   }

@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -83,6 +84,9 @@ module Crypto {
   use C_OpenSSL;
   use SysError;
 
+  private use IO;
+  private use SysCTypes;
+
   pragma "no doc"
   proc generateKeys(bits: int) {
    var localKeyPair: EVP_PKEY_PTR;
@@ -124,13 +128,13 @@ module Crypto {
     */
     proc init(s: string) {
       this.complete();
-      this._len = s.length;
+      this._len = s.numBytes;
       if (this._len == 0) {
         halt("Enter a string with length greater than 0 in order to create a buffer");
       }
-      this.buffDomain = {1..this._len};
+      this.buffDomain = {0..<this._len};
       for i in this.buffDomain do {
-        this.buff[i] = ascii(s[i]);
+        this.buff[i] = s.byte(i);
       }
     }
 
@@ -826,11 +830,11 @@ proc bfEncrypt(plaintext: CryptoBuffer, key: CryptoBuffer, IV: CryptoBuffer, cip
       var ivLen = IV.getBuffSize();
       var keyLen = key.getBuffSize();
       if (ivLen != 8) {
-        throw new IllegalArgumentError("IV", "Blowfish cipher expects a size of 8 bytes.");
+        throw new owned IllegalArgumentError("IV", "Blowfish cipher expects a size of 8 bytes.");
       }
 
       if (keyLen < 10) {
-        throw new IllegalArgumentError("key", "Blowfish cipher expects a size greater than 10 bytes.");
+        throw new owned IllegalArgumentError("key", "Blowfish cipher expects a size greater than 10 bytes.");
       }
       var encryptedPlaintext = bfEncrypt(plaintext, key, IV, this.cipher);
       var encryptedPlaintextBuff = new owned CryptoBuffer(encryptedPlaintext);
@@ -904,7 +908,7 @@ proc bfEncrypt(plaintext: CryptoBuffer, key: CryptoBuffer, IV: CryptoBuffer, cip
     */
     proc getRandomBuffer(buffLen: int): owned CryptoBuffer throws {
       if (buffLen < 1) {
-        throw new IllegalArgumentError("buffLen", "Invalid random buffer length specified.");
+        throw new owned IllegalArgumentError("buffLen", "Invalid random buffer length specified.");
       }
       var randomizedBuff = try createRandomBuffer(buffLen);
       var randomizedCryptoBuff = new owned CryptoBuffer(randomizedBuff);
@@ -920,7 +924,7 @@ proc bfEncrypt(plaintext: CryptoBuffer, key: CryptoBuffer, IV: CryptoBuffer, cip
     var key: [0..#byteLen] uint(8);
     var salt = saltBuff.getBuffData();
     var saltLen = saltBuff.getBuffSize();
-    var userKeyLen = userKey.length;
+    var userKeyLen = userKey.numBytes;
 
     var md: CONST_EVP_MD_PTR;
     md = EVP_get_digestbyname(digestName.c_str());
@@ -1067,7 +1071,7 @@ proc bfEncrypt(plaintext: CryptoBuffer, key: CryptoBuffer, IV: CryptoBuffer, cip
       }
 
       if (!openErrCode) {
-        throw new IllegalArgumentError("key", "The RSAKey is an invalid match.");
+        throw new owned IllegalArgumentError("key", "The RSAKey is an invalid match.");
       }
 
       var plaintextLen = ciphertext.size;
@@ -1192,6 +1196,8 @@ proc bfEncrypt(plaintext: CryptoBuffer, key: CryptoBuffer, IV: CryptoBuffer, cip
 
     require "openssl/pem.h", "openssl/bn.h", "openssl/bio.h", "openssl/evp.h",
             "openssl/aes.h", "openssl/rand.h", "openssl/sha.h", "-lcrypto", "-lssl";
+
+    use SysCTypes;
 
     extern type EVP_PKEY_CTX;
     extern type EVP_PKEY;

@@ -1,13 +1,16 @@
 #!/bin/bash
 
 BRANCH=unknown
-ENABLE_RV=0
+ENABLE_RV=1
 
 if [ "$#" -eq 0 ]
 then
-# No branch argument to use, so compute one
-MYVERSION=`cat LLVM_VERSION | sed 's/\.//g'`
-BRANCH=release_$MYVERSION
+  MYVERSION=`cat LLVM_VERSION | sed 's/\.//g'`
+  BRANCH=release_$MYVERSION
+  echo "a branch argument is required; try"
+  echo "  master"
+  echo "  $BRANCH"
+  exit 1
 else
 # Argument supplied, use that branch
 BRANCH="$1"
@@ -19,53 +22,34 @@ sleep 1
 
 CLONEARGS="--branch $BRANCH --single-branch --depth=1"
 
-if [ -d llvm ]
+if [ -d llvm-project ]
 then
 
 echo Updating LLVM
-cd llvm
-git pull
-# --rebase
-echo Updating CLANG
-cd tools/clang
+cd llvm-project
 git pull --rebase
-cd ../..
-echo Updating POLLY
-cd tools/polly
-git pull --rebase
-cd ../..
 echo Updating RV
-if [ -d tools/rv ]
+if [ -d llvm-project/rv ]
 then
-cd tools/rv
+cd llvm-project/rv
 git pull --rebase
 cd ../..
 fi
-echo Updating compiler-rt
-cd runtimes/compiler-rt
-git pull --rebase
-cd ../..
+
 cd ..
 
 else
 
-echo Checking out LLVM $BRANCH
-git clone $CLONEARGS https://git.llvm.org/git/llvm.git llvm
-echo Checking out CLANG $BRANCH
-git clone $CLONEARGS https://git.llvm.org/git/clang.git llvm/tools/clang
-echo Checking out POLLY $BRANCH
-git clone $CLONEARGS https://git.llvm.org/git/polly.git llvm/tools/polly
+echo Checking out LLVM monorepo $BRANCH
+git clone $CLONEARGS https://github.com/llvm/llvm-project.git llvm-project
+
 if [ "$ENABLE_RV" -ne 0 ]
 then
 echo Checking out RV $BRANCH
-git clone $CLONEARGS https://github.com/cdl-saarland/rv llvm/tools/rv
+git clone $CLONEARGS https://github.com/cdl-saarland/rv llvm-project/rv
+cd llvm-project/rv
+git submodule update --init
+cd ../..
 fi
-echo Checking out compiler-rt $BRANCH
-git clone $CLONEARGS https://git.llvm.org/git/compiler-rt.git llvm/runtimes/compiler-rt
-
-echo Applying Chapel patches to LLVM
-patch -p0 < llvm-4.0.1-BasicAliasAnalysis-patch.txt
-patch -p0 < llvm-4.0.1-ValueTracking-patch.txt
-
 
 fi

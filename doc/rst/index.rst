@@ -21,7 +21,7 @@ Chapel Documentation
    Quick Reference <language/reference>
    Hello World Variants <examples/index>
    Primers <primers/index>
-   Language Specification <language/spec>
+   Language Specification <language/spec/index>
    builtins/index
    modules/standard
    modules/packages
@@ -33,7 +33,7 @@ Chapel Documentation
    :maxdepth: 1
 
    Chapel Evolution <language/evolution>
-   Archived Language Specifications <language/archivedSpecs>
+   Documentation Archives <language/archivedSpecs>
 
 Index
 -----

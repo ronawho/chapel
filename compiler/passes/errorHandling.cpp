@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -21,15 +22,16 @@
 
 #include "AstVisitorTraverse.h"
 #include "CatchStmt.h"
+#include "DecoratedClassType.h"
 #include "DeferStmt.h"
 #include "ForallStmt.h"
 #include "ForLoop.h"
 #include "driver.h"
 #include "resolution.h"
 #include "stmt.h"
+#include "stringutil.h"
 #include "symbol.h"
 #include "TryStmt.h"
-#include "UnmanagedClassType.h"
 #include "wellknown.h"
 
 #include <stack>
@@ -151,13 +153,17 @@ static void checkErrorHandling(FnSymbol* fn, implicitThrowsReasons_t * reasons);
 static bool isCompilerGeneratedFunction(FnSymbol* fn);
 static bool isUncheckedThrowsFunction(FnSymbol* fn);
 
+static Type* dtErrorNilable() {
+  return getDecoratedClass(dtError, CLASS_TYPE_UNMANAGED_NILABLE);
+}
+
 namespace {
 
 
 // Static class helper functions
 static bool catchesNotExhaustive(TryStmt* tryStmt);
-static bool shouldEnforceStrict(CallExpr* node);
-static AList castToError(Symbol* error, SymExpr* &castedError);
+static bool shouldEnforceStrict(CallExpr* node, int taskFunctionDepth);
+static AList castToErrorNilable(Symbol* error, SymExpr* &castedError);
 
 class ErrorHandlingVisitor : public AstVisitorTraverse {
 
@@ -216,7 +222,7 @@ ErrorHandlingVisitor::ErrorHandlingVisitor(ArgSymbol*   _outError,
 bool ErrorHandlingVisitor::enterTryStmt(TryStmt* node) {
   SET_LINENO(node);
 
-  VarSymbol*   errorVar     = newTemp("error", dtError);
+  VarSymbol*   errorVar     = newTemp("error", dtErrorNilable());
   errorVar->addFlag(FLAG_ERROR_VARIABLE);
   LabelSymbol* handlerLabel = new LabelSymbol("handler");
   handlerLabel->addFlag(FLAG_ERROR_LABEL);
@@ -271,57 +277,42 @@ void ErrorHandlingVisitor::lowerCatches(const TryInfo& info) {
     SET_LINENO(c);
 
     CatchStmt* catchStmt = toCatchStmt(c);
+
     BlockStmt* catchBody = catchStmt->body();
-    DefExpr*   catchDef  = catchStmt->expr();
 
-    VarSymbol* toDelete = errorVar;
+    // PRIM_CURRENT_ERROR should be already replaced by info.errorVar
 
-    catchBody->remove();
-
-    // catchall
-    if (catchDef == NULL) {
+    // named or unnamed catchall
+    if (catchStmt->isCatchall()) {
       hasCatchAll = true;
-      currHandler->insertAtTail(catchBody);
+      currHandler->insertAtTail(catchBody->remove());
     } else {
-      VarSymbol* errSym  = toVarSymbol(catchDef->sym);
-      Type*      errType = errSym->type;
+      // Find the else body in the last CondStmt in the catch block body.
+      // This should always exist after CatchStmt::cleanup
+      // for non-catchall errors.
 
-      toDelete = errSym;
-      catchDef->remove();
-      currHandler->insertAtTail(catchDef);
-
-      // named catchall
-      if (errType == dtError) {
-        hasCatchAll = true;
-        currHandler->insertAtTail(new CallExpr(PRIM_MOVE, errSym, errorVar));
-        currHandler->insertAtTail(errorCond(errSym, catchBody));
-
-      // specified catch
-      } else {
-        CallExpr*  castError   = new CallExpr(PRIM_DYNAMIC_CAST,
-                                              new SymExpr(errType->symbol),
-                                              errorVar);
-        BlockStmt* nextHandler = new BlockStmt();
-
-        currHandler->insertAtTail(new CallExpr(PRIM_MOVE, errSym, castError));
-        currHandler->insertAtTail(errorCond(errSym, catchBody, nextHandler));
-
-        currHandler = nextHandler;
+      CondStmt* finalCond = NULL;
+      for_alist_backward(node, catchBody->body) {
+        if (CondStmt* cond = toCondStmt(node)) {
+          finalCond = cond;
+          break;
+        }
       }
+      INT_ASSERT(finalCond != NULL && finalCond->elseStmt != NULL);
+
+      BlockStmt* nextHandler = finalCond->elseStmt;
+
+      // Clear everything in the elseStmt
+      // (sometimes has PRIM_RT_ERROR to satisfy isDefinedAllPaths)
+      for_alist(stmt, nextHandler->body)
+        stmt->remove();
+
+      // Remove the catch body and place it in the currHandler block
+      currHandler->insertAtTail(catchBody->remove());
+
+      // Set currHandler to the else block
+      currHandler = nextHandler;
     }
-
-    BlockStmt* deferDeleteBody = new BlockStmt();
-    DeferStmt* deferDelete     = new DeferStmt(deferDeleteBody);
-
-    SymExpr*   castedError     = NULL;
-    AList      castError       = castToError(toDelete, castedError);
-    CallExpr*  deleteError     = new CallExpr(gChplDeleteError, castedError);
-    AList      deleteCond      = errorCond(toDelete,
-                                           new BlockStmt(deleteError));
-
-    deferDeleteBody->insertAtHead(castError);
-    deferDeleteBody->insertAtTail(deleteCond);
-    catchBody->insertAtHead(deferDelete);
   }
 
   if (!hasCatchAll) {
@@ -365,7 +356,7 @@ bool ErrorHandlingVisitor::enterCallExpr(CallExpr* node) {
         errorPolicy->insertAtTail(gotoHandler());
       } else {
         // without try, need an error variable
-        errorVar = newTemp("error", dtError);
+        errorVar = newTemp("error", dtErrorNilable());
         errorVar->addFlag(FLAG_ERROR_VARIABLE);
         insert->insertBefore(new DefExpr(errorVar));
         insert->insertBefore(new CallExpr(PRIM_MOVE, errorVar, gNil));
@@ -400,34 +391,13 @@ bool ErrorHandlingVisitor::enterCallExpr(CallExpr* node) {
     VarSymbol* thrownError = toVarSymbol(thrownExpr->symbol());
 
     Type* thrownType = thrownError->typeInfo();
-    if (UnmanagedClassType* ut = toUnmanagedClassType(thrownType))
-      thrownType = ut->getCanonicalClass();
+    if (DecoratedClassType* dt = toDecoratedClassType(thrownType))
+      thrownType = dt->getCanonicalClass();
 
     // normalizeThrows should give us this invariant earlier
     INT_ASSERT(thrownType == dtError);
 
     VarSymbol* fixedError = thrownError;
-
-    if (!catchesStack.empty()) {
-      Expr*      parent      = throwBlock;
-      CatchStmt* parentCatch = NULL;
-      while (parentCatch == NULL) {
-        parent      = parent->parentExpr;
-        parentCatch = toCatchStmt(parent);
-      }
-
-      if (DefExpr* catchFilter = parentCatch->expr()) {
-        VarSymbol* handledError = toVarSymbol(catchFilter->sym);
-
-        VarSymbol* throwingHandledVar = newTemp("throwingHandledError", dtBool);
-        CallExpr*  throwingHandled    = new CallExpr(PRIM_EQUAL, thrownError, handledError);
-
-        throwBlock->insertAtTail(new DefExpr(throwingHandledVar));
-        throwBlock->insertAtTail(new CallExpr(PRIM_MOVE, throwingHandledVar, throwingHandled));
-        throwBlock->insertAtTail(new CondStmt(new SymExpr(throwingHandledVar),
-                                              new CallExpr(PRIM_MOVE, handledError, gNil)));
-      }
-    }
 
     if (insideTry) {
       throwBlock->insertAtTail(setOuterErrorAndGotoHandler(fixedError));
@@ -436,6 +406,12 @@ bool ErrorHandlingVisitor::enterCallExpr(CallExpr* node) {
     } else {
       INT_FATAL(node, "cannot throw in a non-throwing function");
     }
+  } else if (node->isPrimitive(PRIM_CURRENT_ERROR)) {
+    INT_ASSERT(!catchesStack.empty());
+    TryInfo info = catchesStack.top();
+
+    SET_LINENO(node);
+    node->replace(new SymExpr(info.errorVar));
   }
   return true;
 }
@@ -449,7 +425,7 @@ void ErrorHandlingVisitor::setupForThrowingLoop(Stmt* node,
                                                 LabelSymbol* handlerLabel,
                                                 BlockStmt* body)
 {
-  VarSymbol*   errorVar     = newTemp("error", dtError);
+  VarSymbol*   errorVar     = newTemp("error", dtErrorNilable());
   errorVar->addFlag(FLAG_ERROR_VARIABLE);
 
   node->insertBefore(new DefExpr(errorVar));
@@ -481,10 +457,42 @@ bool ErrorHandlingVisitor::enterForLoop(ForLoop* node) {
   return true;
 }
 
+
+static bool canForallStmtThrow(ForallStmt* fs) {
+  // Do this first to check for throwing non-POD initializer exprs.
+  for_shadow_vars(svar, temp, fs) {
+    if (BlockStmt* IB = svar->initBlock()) {
+      if (canBlockStmtThrow(IB)) {
+        if (! isPOD(svar->type))
+          // The AST currently created by the compiler executes all TPVs'
+          // deinitializers when any of their initializing exprs throws.
+          // This will deinitialize at least one not-yet-initialized TPV. Bad.
+          USR_FATAL_CONT(IB, "the initialization expression of the task-private"
+            " variable '%s' throws - this is currently not supported"
+            " for variables of non-POD types", svar->name);
+        return true;
+      }
+    }
+    if (BlockStmt* DB = svar->deinitBlock()) {
+      if (canBlockStmtThrow(DB))
+        // Error handling for the deinit blocks may be unimplemented.
+        USR_FATAL_CONT(DB, "the deinitializer of the task-private variable '%s'"
+                       " throws - this is currently not supported", svar->name);
+    }
+  }
+
+  // Now check the loop body.
+  if (canBlockStmtThrow(fs->loopBody()))
+    return true;
+
+  // Did not find anything that throws.
+  return false;
+}
+
 bool ErrorHandlingVisitor::enterForallStmt(ForallStmt* node) {
   // We assume that fRecIterGetIterator/fRecIterFreeIterator do not throw.
 
-  if (!canBlockStmtThrow(node->loopBody()))
+  if (!canForallStmtThrow(node))
     return true;
 
   SET_LINENO(node);
@@ -519,7 +527,7 @@ void ErrorHandlingVisitor::exitForallLoop(Stmt* node)
   BlockStmt* handler = new BlockStmt();
   // Always wrap errors from foralls in a TaskErrors
   VarSymbol* err = info.errorVar;
-  VarSymbol* normErr = newTemp("forall_error", dtError);
+  VarSymbol* normErr = newTemp("forall_error", dtErrorNilable());
   handler->insertAtTail(new DefExpr(normErr));
 
   handler->insertAtTail(new CallExpr(PRIM_MOVE, normErr,
@@ -561,11 +569,11 @@ void ErrorHandlingVisitor::exitDeferStmt(DeferStmt* node) {
 AList ErrorHandlingVisitor::setOutGotoEpilogue(VarSymbol* error) {
 
   SymExpr* castedError = NULL;
-  AList    ret         = castToError(error, castedError);
+  AList    ret         = castToErrorNilable(error, castedError);
   // Using PRIM_ASSIGN instead of PRIM_MOVE here to work around
   // errors that come up in C compilation.
   ret.insertAtTail(new CallExpr(PRIM_ASSIGN, outError, castedError));
-  ret.insertAtTail(new GotoStmt(GOTO_RETURN, epilogue));
+  ret.insertAtTail(new GotoStmt(GOTO_ERROR_HANDLING_RETURN, epilogue));
 
   return ret;
 }
@@ -585,7 +593,7 @@ AList ErrorHandlingVisitor::setOuterErrorAndGotoHandler(VarSymbol* error) {
   INT_ASSERT(!tryStack.empty());
   TryInfo& outerTry    = tryStack.top();
   SymExpr* castedError = NULL;
-  AList    ret         = castToError(error, castedError);
+  AList    ret         = castToErrorNilable(error, castedError);
   ret.insertAtTail(new CallExpr(PRIM_MOVE, outerTry.errorVar, castedError));
   ret.insertAtTail(gotoHandler());
 
@@ -646,19 +654,10 @@ static bool catchesNotExhaustive(TryStmt* tryStmt) {
 
   for_alist(c, tryStmt->_catches) {
     CatchStmt* catchStmt = toCatchStmt(c);
-    DefExpr*   catchDef  = catchStmt->expr();
 
     // catchall
-    if (catchDef == NULL) {
+    if (catchStmt->isCatchall()) {
       hasCatchAll = true;
-    } else {
-      VarSymbol* errSym  = toVarSymbol(catchDef->sym);
-      Type*      errType = errSym->type;
-
-      // named catchall
-      if (errType == dtError) {
-        hasCatchAll = true;
-      }
     }
   }
 
@@ -667,15 +666,21 @@ static bool catchesNotExhaustive(TryStmt* tryStmt) {
 
 // Returns true if we should raise strict-mode errors
 // for this call.
-static bool shouldEnforceStrict(CallExpr* node) {
+static bool shouldEnforceStrict(CallExpr* node, int taskFunctionDepth) {
   if (FnSymbol* calledFn = node->resolvedFunction()) {
     bool inCompilerGeneratedFn = false;
+    bool inDefaultActualFn = false;
     if (FnSymbol* parentFn = toFnSymbol(node->parentSymbol)) {
-      // Don't check wrapper functions in strict mode.
-      inCompilerGeneratedFn = isCompilerGeneratedFunction(parentFn);
+      // Don't check wrapper functions in strict mode, unless they are task
+      // functions and we know the caller of the task function is not declared
+      // as throws.
+      inCompilerGeneratedFn = isCompilerGeneratedFunction(parentFn) &&
+        !(isTaskFun(parentFn) && taskFunctionDepth > 0);
+      inDefaultActualFn = parentFn->hasFlag(FLAG_DEFAULT_ACTUAL_FUNCTION);
     }
     bool callsUncheckedThrowsFn = isUncheckedThrowsFunction(calledFn);
-    bool strictError = !(inCompilerGeneratedFn || callsUncheckedThrowsFn);
+    bool strictError = !((inCompilerGeneratedFn && !inDefaultActualFn) ||
+                         callsUncheckedThrowsFn);
 
     return strictError;
   }
@@ -683,16 +688,18 @@ static bool shouldEnforceStrict(CallExpr* node) {
 }
 
 
-static AList castToError(Symbol* error, SymExpr* &castedError) {
+static AList castToErrorNilable(Symbol* error, SymExpr* &castedError) {
   AList ret;
 
-  if (error->type == dtError) {
+  Type* nilableError = dtErrorNilable();
+
+  if (error->type == nilableError) {
     castedError = new SymExpr(error);
   } else {
-    VarSymbol* castedErrorVar = newTemp("castedError", dtError);
+    VarSymbol* castedErrorVar = newTemp("castedError", nilableError);
     castedError = new SymExpr(castedErrorVar);
 
-    CallExpr* castError = new CallExpr(PRIM_CAST, dtError->symbol, error);
+    CallExpr* castError = new CallExpr(PRIM_CAST, nilableError->symbol, error);
     ret.insertAtTail(new DefExpr(castedErrorVar));
     ret.insertAtTail(new CallExpr(PRIM_MOVE, castedErrorVar, castError));
   }
@@ -765,7 +772,7 @@ void ImplicitThrowsVisitor::handleCallToFunction(FnSymbol* calledFn,
       // OK
     } else {
 
-      if (call && shouldEnforceStrict(call)) {
+      if (call && shouldEnforceStrict(call, /*taskFunctionDepth=*/0)) {
         if (reasonThrows == NULL)
           reasonThrows = forExpr;
       }
@@ -852,6 +859,8 @@ private:
   bool fnCanThrow;
   error_checking_mode_t mode;
 
+  int taskFunctionDepth;
+
   implicitThrowsReasons_t* reasons;
 
   void checkCatches(TryStmt* tryStmt);
@@ -863,17 +872,22 @@ ErrorCheckingVisitor::ErrorCheckingVisitor(bool inThrowingFn,
   tryDepth = 0;
   fnCanThrow = inThrowingFn;
   mode = inMode;
+  taskFunctionDepth = 0;
   reasons = inReasons;
 }
 
 bool ErrorCheckingVisitor::enterTryStmt(TryStmt* node) {
-  tryDepth++;
+  if (!node->isSyncTry()) {
+    tryDepth++;
+  }
 
   return true;
 }
 
 void ErrorCheckingVisitor::exitTryStmt(TryStmt* node) {
-  tryDepth--;
+  if (!node->isSyncTry()) {
+    tryDepth--;
+  }
 
   checkCatches(node);
 
@@ -894,22 +908,29 @@ void ErrorCheckingVisitor::checkCatches(TryStmt* tryStmt) {
       USR_FATAL_CONT(c->prev, "catchall placed before the end of a catch list");
 
     CatchStmt* catchStmt = toCatchStmt(c);
-    DefExpr*   catchDef  = catchStmt->expr();
 
-    // catchall
-    if (catchDef == NULL) {
+    if (catchStmt->isCatchall())
       hasCatchAll = true;
-    } else {
-      VarSymbol* errSym  = toVarSymbol(catchDef->sym);
-      Type*      errType = errSym->type;
-
-      // named catchall
-      if (errType == dtError) {
-        hasCatchAll = true;
-      }
-    }
   }
 }
+
+static void issueThrowingFnError(FnSymbol* calledFn,
+                                 CallExpr* node,
+                                 implicitThrowsReasons_t* reasons,
+                                 const char* problem) {
+  const char* desc = "cast";
+  bool cast = true;
+  if (calledFn->name != astr_cast) {
+    desc = astr("function ", calledFn->name);
+    cast = false;
+  }
+  USR_FATAL_CONT(node, "call to throwing %s %s", desc, problem);
+  if (!cast) {
+    USR_PRINT(calledFn, "throwing function %s defined here", calledFn->name);
+  }
+  printReason(node, reasons);
+}
+
 
 bool ErrorCheckingVisitor::enterCallExpr(CallExpr* node) {
   bool insideTry = (tryDepth > 0);
@@ -920,6 +941,24 @@ bool ErrorCheckingVisitor::enterCallExpr(CallExpr* node) {
       bool inThrowingFunction = false;
       if (FnSymbol* parentFn = toFnSymbol(node->parentSymbol)) {
         inThrowingFunction = parentFn->throwsError();
+
+        if (!inThrowingFunction && isTaskFun(calledFn)) {
+          taskFunctionDepth++;
+          calledFn->body->accept(this);
+
+          taskFunctionDepth--;
+          return true;
+        } else if (taskFunctionDepth > 0) {
+          if (isTaskFun(calledFn)) {
+            taskFunctionDepth++;
+            calledFn->body->accept(this);
+
+            taskFunctionDepth--;
+            return true;
+          } else {
+            inThrowingFunction = false;
+          }
+        }
       }
 
       if (insideTry || node->tryTag == TRY_TAG_IN_TRYBANG) {
@@ -928,32 +967,20 @@ bool ErrorCheckingVisitor::enterCallExpr(CallExpr* node) {
 
       } else if(node->tryTag == TRY_TAG_IN_TRY) {
         if (!inThrowingFunction) {
-          USR_FATAL_CONT(node, "call to throwing function %s "
-                               "is in a try but not handled",
-                               calledFn->name);
-          USR_PRINT(calledFn, "throwing function %s defined here",
-                              calledFn->name);
-          printReason(node, reasons);
+          issueThrowingFnError(calledFn, node, reasons,
+                               "is in a try but not handled");
         }
 
         // Otherwise, OK, a try in a throwing function
 
       } else {
-        if (shouldEnforceStrict(node)) {
+        if (shouldEnforceStrict(node, taskFunctionDepth)) {
           if (mode == ERROR_MODE_STRICT) {
-            USR_FATAL_CONT(node, "call to throwing function %s "
-                                 "without try or try! (strict mode)",
-                                 calledFn->name);
-            USR_PRINT(calledFn, "throwing function %s defined here",
-                                calledFn->name);
-            printReason(node, reasons);
+            issueThrowingFnError(calledFn, node, reasons,
+                                 "without try or try! (strict mode)");
           } else if (mode == ERROR_MODE_RELAXED && !inThrowingFunction) {
-            USR_FATAL_CONT(node, "call to throwing function %s "
-                                 "without throws, try, or try! (relaxed mode)",
-                                 calledFn->name);
-            USR_PRINT(calledFn, "throwing function %s defined here",
-                                calledFn->name);
-            printReason(node, reasons);
+            issueThrowingFnError(calledFn, node, reasons,
+                                 "without throws, try, or try! (relaxed mode)");
           }
         }
       }
@@ -1120,7 +1147,7 @@ static ArgSymbol* addOutErrorArg(FnSymbol* fn)
 
   SET_LINENO(fn);
 
-  outError = new ArgSymbol(INTENT_REF, "error_out", dtError);
+  outError = new ArgSymbol(INTENT_REF, "error_out", dtErrorNilable());
   outError->addFlag(FLAG_ERROR_VARIABLE);
   fn->insertFormalAtTail(outError);
 

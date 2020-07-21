@@ -83,10 +83,8 @@ writeln();
 // in which we'll store our ``numLocales`` unique locale values
 // redundantly if ``numLocales`` is less than 10:
 //
-var MyLocaleArray: [1..10] locale;
-
-for i in 1..10 do
-  MyLocaleArray[i] = Locales[(i-1)%numLocales];
+var MyLocaleArray: [1..10] locale =
+      for i in 1..10 do Locales[(i-1)%numLocales];
 
 for i in 1..10 do
   on MyLocaleArray[i] do
@@ -107,6 +105,7 @@ writeln();
  number of other queries about their properties.  For example:
 
  * ``locale.name``       : returns a string indicating the locale's name
+ * ``locale.hostname``   : returns a string indicating the locale's hostname
  * ``locale.numPUs()``   : returns the number of processor cores on the locale
  * ``locale.physicalMemory()`` : returns the amount of memory on the locale
  * ``locale.maxTaskPar`` : returns the likely maximum parallelism available
@@ -121,6 +120,7 @@ if printLocaleInfo then
     on loc {
       writeln("locale #", here.id, "...");
       writeln("  ...is named: ", here.name);
+      writeln("  ...has hostname: ", here.hostname);
       writeln("  ...has ", here.numPUs(), " processor cores");
       writeln("  ...has ", here.physicalMemory(unit=MemUnits.GB, retType=real),
               " GB of memory");
@@ -220,7 +220,7 @@ class Data {
   var x:int;
 }
 
-var myData: unmanaged Data; // myData is a class pointer stored on locale 0 whose default value is `nil`
+var myData: unmanaged Data?; // myData is a class pointer stored on locale 0 whose default value is `nil`
 
 on Locales[1 % numLocales] {
   writeln("at start of 'on', myData is on locale ", myData.locale.id);

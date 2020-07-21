@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -58,6 +59,8 @@
    implemented and optimized.
 */
 module Barriers {
+  import HaltWrappers;
+
   /* An enumeration of the different barrier implementations.  Used to choose
      the implementation to use when constructing a new barrier object.
 
@@ -83,7 +86,6 @@ module Barriers {
     proc init(numTasks: int,
               barrierType: BarrierType = BarrierType.Atomic,
               reusable: bool = true) {
-      this.complete();
       select barrierType {
         when BarrierType.Atomic {
           if reusable {
@@ -101,6 +103,7 @@ module Barriers {
         }
         otherwise {
           HaltWrappers.exhaustiveSelectHalt("unknown barrier type");
+          bar = new unmanaged BarrierBaseType(); // dummy
         }
       }
       isowned = true;
@@ -113,7 +116,7 @@ module Barriers {
 
     /* copy initializer */
     pragma "no doc"
-    proc init(b: Barrier) {
+    proc init=(b: Barrier) {
       this.bar = b.bar;
       this.isowned = false;
     }

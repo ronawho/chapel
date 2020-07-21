@@ -12,10 +12,15 @@ record Foo {
     y = true;
   }
 
-  proc init(other: Foo) {
+  proc init=(other: Foo) {
     x = other.x;
     y = false;
   }
+}
+
+proc =(ref lhs: Foo, const ref rhs: Foo) {
+  lhs.x = rhs.x;
+  lhs.y = rhs.y;
 }
 
 var one = new Foo(1);

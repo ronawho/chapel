@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -23,7 +24,8 @@
 // and teardown.  See that module (or its chpldocs) for details.
 //
 module stopInitCommDiags {
-  use CommDiagnostics;
+  private use ChapelBase;
+  private use CommDiagnostics;
 
   if printInitVerboseComm {
     stopVerboseComm();

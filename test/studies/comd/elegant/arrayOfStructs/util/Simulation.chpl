@@ -3,7 +3,7 @@ use AccumStencilDist;
 
 use Configs;
 use Potential;
-use Util;
+public use Util;
 use EAM, LJ;
 
 record SpeciesData {
@@ -37,6 +37,11 @@ record Box {
   }
 }
 
+proc Box.init=(const ref other: Box) {
+  this.count = other.count;
+  this.atoms = other.atoms;
+}
+
 proc =(ref A : Box, B : Box) {
   A.count = B.count;
   if A.count > 0 then
@@ -56,8 +61,8 @@ Timers["total"].start();
 
 timestampMessage("Starting Initialization");
 
-const Pot : unmanaged BasePotential = if doeam then (new unmanaged PotentialEAM()):unmanaged BasePotential
-                            else (new unmanaged PotentialLJ):unmanaged BasePotential;
+const Pot: owned BasePotential = if doeam then (new owned PotentialEAM()): owned BasePotential
+                                          else (new owned PotentialLJ()): owned BasePotential;
 
 const Species = new SpeciesData(Pot.name, Pot.atomicNo, Pot.mass);
 
@@ -66,7 +71,7 @@ const invBoxSize = 1.0/boxSize;
 
 sanityCheck(latticeConstant);
 
-const boxDom   = {1..numBoxes(1), 1..numBoxes(2), 1..numBoxes(3)};
+const boxDom   = {1..numBoxes(0), 1..numBoxes(1), 1..numBoxes(2)};
 const boxSpace = boxDom dmapped AccumStencil(boxDom, targetLocales=ReshapedLocales,
                                              fluff=(1,1,1), periodic=true);
 
@@ -155,12 +160,12 @@ proc createFccLattice(lat : real) {
                                 (T, Q, T),
                                 (T, T, Q)];
   var end : vec3int;
-  for i in 1..3 do end(i) = Math.ceil(globalExtent(i) / lat):int;
+  for i in 0..2 do end(i) = Math.ceil(globalExtent(i) / lat):int;
 
-  const latticeDom = {0..#end(1), 0..#end(2), 0..#end(3)};
+  const latticeDom = {0..#end(0), 0..#end(1), 0..#end(2)};
 
   inline proc inGlobalExtent(r : vec3) {
-    for param i in 1..3 {
+    for param i in 0..2 {
       if r(i) < 0.0 || r(i) > globalExtent(i) then return false;
     }
     return true;
@@ -170,7 +175,7 @@ proc createFccLattice(lat : real) {
     for j in basis.domain {
       const r = ((i:vec3) + basis[j]) * lat;
 
-      const gid = j + nb * (i(3) + nz * (i(2) + ny * i(1)));
+      const gid = j + nb * (i(2) + nz * (i(1) + ny * i(0)));
       const species = 0;
 
       if inGlobalExtent(r) == false then continue;
@@ -255,7 +260,7 @@ proc kineticEnergy() {
 proc randomDisplacements() {
   forall a in allAtoms() {
     var seed = mkSeed(a.gid, 457);
-    for i in 1..3 do
+    for i in 0..2 do
       a.r(i) += (2.0 * lcg61(seed) - 1.0) * Configs.delta;
   }
 }
@@ -291,13 +296,13 @@ iter allAtoms() ref {
 }
 
 iter allAtoms(param tag : iterKind) ref where tag == iterKind.leader {
-  for follow in Boxes._value.these(iterKind.leader) {
+  for follow in Boxes.these(iterKind.leader) {
     yield follow;
   }
 }
 
 iter allAtoms(param tag : iterKind, followThis) ref where tag == iterKind.follower {
-  for box in Boxes._value.these(iterKind.follower, followThis) {
+  for box in Boxes.these(iterKind.follower, followThis) {
     for a in box.liveAtoms() do yield a;
   }
 }
@@ -397,9 +402,9 @@ proc sortAtomsInCell() {
 
   // TODO: seems like we need some kind of "fluff and all" iter
   forall box in Boxes {
-    quickSort(box.atoms[1..box.count], comparator=c);
+    sort(box.atoms[1..box.count], comparator=c);
   }
   forall (box, _) in Boxes.boundaries() {
-    quickSort(box.atoms[1..box.count], comparator=c);
+    sort(box.atoms[1..box.count], comparator=c);
   }
 }

@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -18,6 +19,8 @@
  */
 
 #include "AstVisitorTraverse.h"
+
+#include "ImportStmt.h"
 
 AstVisitorTraverse::AstVisitorTraverse()
 {
@@ -39,12 +42,12 @@ void AstVisitorTraverse::exitAggrType(AggregateType* node)
 
 }
 
-bool AstVisitorTraverse::enterUnmanagedClassType(UnmanagedClassType* node)
+bool AstVisitorTraverse::enterDecoratedClassType(DecoratedClassType* node)
 {
   return true;
 }
 
-void AstVisitorTraverse::exitUnmanagedClassType(UnmanagedClassType* node)
+void AstVisitorTraverse::exitDecoratedClassType(DecoratedClassType* node)
 {
 
 }
@@ -183,6 +186,11 @@ void AstVisitorTraverse::visitUseStmt(UseStmt* node)
 
 }
 
+void AstVisitorTraverse::visitImportStmt(ImportStmt* node)
+{
+
+}
+
 bool AstVisitorTraverse::enterLoopExpr(LoopExpr* node)
 {
   return true;
@@ -199,11 +207,6 @@ bool AstVisitorTraverse::enterBlockStmt(BlockStmt* node)
 }
 
 void AstVisitorTraverse::exitBlockStmt(BlockStmt* node)
-{
-
-}
-
-void AstVisitorTraverse::visitForallIntents(ForallIntents* clause)
 {
 
 }

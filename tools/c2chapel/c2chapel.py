@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 
 #
-# Copyright 2004-2018 Cray Inc.
+# Copyright 2020 Hewlett Packard Enterprise Development LP
+# Copyright 2004-2019 Cray Inc.
 # Other additional copyright holders may be indicated within.
 #
 # The entirety of this work is licensed under the Apache License,
@@ -111,7 +112,7 @@ foundTypes = set()
 chapelKeywords = set(["align","as","atomic","begin","break","by","class",
     "cobegin","coforall","config","const","continue","delete","dmapped","do",
     "domain","else","enum","except","export","extern","for","forall","if",
-    "in","index","inline","inout","iter","label","let","local","module","new",
+    "in","index","inline","inout","iter","label","lambda","let","local","module","new",
     "nil","noinit","on","only","otherwise","out","param","private","proc",
     "public","record","reduce","ref","require","return","scan","select",
     "serial","single","sparse","subdomain","sync","then","type","union","use",
@@ -162,6 +163,8 @@ def getDeclName(decl):
         name = inner.name
     elif type(inner) == c_ast.Decl:
         name = inner.name
+    elif type(inner) == c_ast.Enum:
+        name = "c_int"
     else:
         raise Exception("Unhandled node type: " + str(type(inner)))
     return name
@@ -178,12 +181,32 @@ def computeArgName(decl):
         decl.show()
         raise c_parser.ParseError("Unhandled Node type")
 
+def isStructType(ast):
+    inner = ast
+
+    if type(inner) == c_ast.TypeDecl:
+        inner = inner.type
+
+    if type(inner) == c_ast.IdentifierType:
+        name = " ".join(inner.names)
+        if name in typeDefs:
+            return isStructType(typeDefs[name].type)
+
+    if type(inner) == c_ast.Struct:
+        return True
+
+    return False
+
 def getIntentInfo(ty):
     refIntent = ""
     retType   = ""
     curType   = ty
+    ptrType = ""
 
-    if type(curType) == c_ast.PtrDecl and not (isPointerTo(curType, "char") or isPointerTo(curType, "void")):
+    if type(curType) == c_ast.PtrDecl:
+        ptrType = toChapelType(curType)
+
+    if type(curType) == c_ast.PtrDecl and not (isPointerTo(curType, "char") or isPointerTo(curType, "void") or toChapelType(curType) == "c_fn_ptr"):
         refIntent = "ref"
         curType = curType.type
     else:
@@ -191,27 +214,39 @@ def getIntentInfo(ty):
 
     retType = toChapelType(curType)
 
-    return (refIntent, retType)
+    return (refIntent, retType, ptrType)
 
 # pl - a c_ast.ParamList
 def computeArgs(pl):
     formals = []
+    ptrFormals = []
+
     if pl is None:
-        return ""
+        return ("", "")
 
     for (i, arg) in enumerate(pl.params):
         if type(arg) == c_ast.EllipsisParam:
             formals.append(VARARGS_STR)
+            ptrFormals.append(VARARGS_STR);
         else:
-            (intent, typeName) = getIntentInfo(arg.type)
+            (intent, typeName, ptrTypeName) = getIntentInfo(arg.type)
             argName = computeArgName(arg)
             if typeName != "":
-                if intent != "":
+                if intent == "":
+                    if isStructType(arg.type):
+                        intent = "in "
+                else:
                     intent += " "
                 if argName == "":
                     argName = "arg" + str(i)
                 formals.append(intent + argName + " : " + typeName)
-    return ", ".join(formals)
+
+                if ptrTypeName != "":
+                    ptrFormals.append(argName + " : " + ptrTypeName)
+                else:
+                    ptrFormals.append(intent + argName + " : " + typeName)
+
+    return (", ".join(formals), ", ".join(ptrFormals))
 
 def isPointerTo(ty, text):
     if type(ty) == c_ast.PtrDecl:
@@ -268,7 +303,7 @@ def getFunctionName(ty):
 def genFuncDecl(fn):
     retType = toChapelType(fn.type)
     fnName  = getFunctionName(fn.type)
-    args    = computeArgs(fn.args)
+    (args, ptrArgs) = computeArgs(fn.args)
 
     if fnName in chapelKeywords:
         genComment("Unable to generate function '" + fnName + "' because its name is a Chapel keyword")
@@ -284,6 +319,8 @@ def genFuncDecl(fn):
         retType = "void"
 
     print("extern proc " + fnName + "(" + args + ") : " + retType + ";\n")
+    if ptrArgs != args:
+        print("extern proc " + fnName + "(" + ptrArgs + ") : " + retType + ";\n")
 
     listArgs = args.split(", ")
     if listArgs[-1] == VARARGS_STR:
@@ -319,7 +356,7 @@ def genStruct(struct, name=""):
     if not struct.decls:
         print()
         return
-    
+
     members = ""
     warnKeyword = False
     for decl in struct.decls:
@@ -351,9 +388,9 @@ def genVar(decl):
 
 def genEnum(decl):
     if type(decl) == c_ast.Enum:
-        if decl.name: 
+        if decl.name:
             genComment("Enum: " + decl.name)
-        else: 
+        else:
             genComment("Enum: anonymous")
         for val in decl.values.enumerators:
             print("extern const " + val.name + " :c_int;")

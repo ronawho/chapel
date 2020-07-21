@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -46,10 +47,11 @@ namespace {
     DumpIR(llvmStageNum_t stage) : FunctionPass(ID), stage(stage) {}
 
     bool runOnFunction(Function &F) override {
-      if (llvmPrintIrCName != NULL && F.getName() == llvmPrintIrCName) {
-        printLlvmIr(&F, stage);
-      } else if (llvmPrintIrName[0] != '\0' && F.getName() == llvmPrintIrName) {
-        printLlvmIr(&F, stage);
+      std::string str = F.getName().str();
+      if (shouldLlvmPrintIrName(str.c_str())) {
+        printLlvmIr(str.c_str(), &F, stage);
+      } else if (shouldLlvmPrintIrCName(str.c_str())) {
+        printLlvmIr(str.c_str(), &F, stage);
       }
       return false;
     }

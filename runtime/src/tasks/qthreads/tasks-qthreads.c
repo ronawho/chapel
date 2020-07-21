@@ -8,7 +8,8 @@
 //
 
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -26,9 +27,6 @@
  * limitations under the License.
  */
 
-// For SVID definitions (setenv)
-#define _SVID_SOURCE
-
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
@@ -38,6 +36,7 @@
 #include "arg.h"
 #include "error.h"
 #include "chplcgfns.h"
+#include "chpl-arg-bundle.h"
 #include "chpl-comm.h"
 #include "chpl-env.h"
 #include "chplexit.h"
@@ -49,6 +48,7 @@
 #include "chpl-tasks-callbacks-internal.h"
 #include "chpl-tasks-impl.h"
 #include "chpl-topo.h"
+#include "chpltypes.h"
 
 #include "qthread.h"
 #include "qthread/qtimer.h"
@@ -66,7 +66,8 @@
 #include <unistd.h>
 #include <math.h>
 
-
+#define ALIGN_DN(i, size)  ((i) & ~((size) - 1))
+#define ALIGN_UP(i, size)  ALIGN_DN((i) + (size) - 1, size)
 
 #ifdef CHAPEL_PROFILE
 # define PROFILE_INCR(counter,count) do { (void)qthread_incr(&counter,count); } while (0)
@@ -149,6 +150,7 @@ pthread_t chpl_qthread_process_pthread;
 pthread_t chpl_qthread_comm_pthread;
 
 chpl_task_bundle_t chpl_qthread_process_bundle = {
+                                   .kind = CHPL_ARG_BUNDLE_KIND_TASK,
                                    .is_executeOn = false,
                                    .lineno = 0,
                                    .filename = CHPL_FILE_IDX_MAIN_TASK,
@@ -158,6 +160,7 @@ chpl_task_bundle_t chpl_qthread_process_bundle = {
                                    .id = chpl_nullTaskID };
 
 chpl_task_bundle_t chpl_qthread_comm_task_bundle = {
+                                   .kind = CHPL_ARG_BUNDLE_KIND_TASK,
                                    .is_executeOn = false,
                                    .lineno = 0,
                                    .filename = CHPL_FILE_IDX_COMM_TASK,
@@ -177,6 +180,8 @@ chpl_qthread_tls_t chpl_qthread_comm_task_tls = {
 //
 
 static aligned_t exit_ret = 0;
+
+static chpl_bool guardPagesInUse = true;
 
 void chpl_task_yield(void)
 {
@@ -338,7 +343,7 @@ static chpl_bool chpl_qt_getenv_bool(const char* var,
     chpl_bool ret_val = default_val;
 
     if ((ev = chpl_qt_getenv_str(var)) != NULL) {
-        ret_val = chpl_env_str_to_bool(ev, default_val);
+        ret_val = chpl_env_str_to_bool(var, ev, default_val);
     }
 
     return ret_val;
@@ -390,8 +395,8 @@ static void chpl_qt_setenv(const char* var, const char* val,
             printf("QTHREADS: Overriding the value of %s and %s "
                    "with %s\n", qt_env, qthread_env, val);
         }
-        (void) setenv(qt_env, val, 1);
-        (void) setenv(qthread_env, val, 1);
+        chpl_env_set(qt_env, val, 1);
+        chpl_env_set(qthread_env, val, 1);
     } else if (verbosity >= 2) {
         char* set_env = NULL;
         char* set_val = NULL;
@@ -499,6 +504,24 @@ static void setupAvailableParallelism(int32_t maxThreads) {
             hwpar = maxThreads;
         }
 
+        //
+        // If we have NUMA sublocales we have to have at least that many
+        // shepherds, or we'll get internal errors when the module code
+        // tries to fire tasks on those sublocales.
+        //
+        {
+            int numNumaDomains = chpl_topo_getNumNumaDomains();
+            if (hwpar < numNumaDomains
+                && strcmp(CHPL_LOCALE_MODEL, "flat") != 0) {
+                char msg[100];
+                snprintf(msg, sizeof(msg),
+                         "%d NUMA domains but only %d Qthreads shepherds; "
+                         "may get internal errors",
+                         numNumaDomains, (int) hwpar);
+                chpl_warning(msg, 0, 0);
+            }
+        }
+
         // If there is more parallelism requested than the number of cores, set the
         // worker unit to pu, otherwise core.
         if (hwpar > chpl_topo_getNumCPUsPhysical(true)) {
@@ -539,7 +562,7 @@ static chpl_bool setupGuardPages(void) {
         guardPagesEnabled = false;
     } else if (chpl_getHeapPageSize() != chpl_getSysPageSize()) {
         guardPagesEnabled = false;
-    } else if (strncmp(armArch, CHPL_TARGET_ARCH, strlen(armArch)) == 0) {
+    } else if (strncmp(armArch, CHPL_TARGET_CPU, strlen(armArch)) == 0) {
         guardPagesEnabled = false;
     } else {
         guardPagesEnabled = chpl_qt_getenv_bool("GUARD_PAGES", defaultVal);
@@ -555,15 +578,17 @@ static void setupCallStacks(void) {
     size_t envStackSize;
     char newenv_stack[QT_ENV_S];
 
-    chpl_bool guardPagesEnabled;
+    int guardPagesEnabled;
     size_t pagesize;
     size_t reservedPages;
     size_t qt_rtds_size;
 
     size_t maxPoolAllocSize;
+
     char newenv_alloc[QT_ENV_S];
 
-    guardPagesEnabled = setupGuardPages();
+    guardPagesInUse = setupGuardPages();
+    guardPagesEnabled = (int)guardPagesInUse;
 
     // Setup the base call stack size (Precedence high-to-low):
     // 1) Chapel environment (CHPL_RT_CALL_STACK_SIZE)
@@ -584,11 +609,26 @@ static void setupCallStacks(void) {
     // runtime structure.
     pagesize = chpl_getSysPageSize();
     qt_rtds_size = qthread_readstate(RUNTIME_DATA_SIZE);
-    qt_rtds_size += pagesize - (qt_rtds_size % pagesize); // pagesize align up
+    qt_rtds_size = ALIGN_UP(qt_rtds_size, pagesize);
     reservedPages = qt_rtds_size / pagesize;
-    if (guardPagesEnabled) {
-        reservedPages += 2;
+    reservedPages += 2 * guardPagesEnabled;
+
+    if (reservedPages * pagesize >= stackSize) {
+        char msg[1024];
+        size_t guardSize = 2 * guardPagesEnabled * pagesize;
+        size_t rtdsSize = (reservedPages * pagesize) - guardSize;
+
+        stackSize = (reservedPages + 1) * pagesize;
+
+        sprintf(msg, "Stack size was too small, increasing to %zu bytes (which"
+                     " may still not be enough).\n  Note: guard pages use %zu"
+                     " bytes and qthread task data structures use %zu bytes.",
+                     stackSize, guardSize, rtdsSize);
+        chpl_warning(msg, 0, 0);
+    } else {
+        stackSize = ALIGN_UP(stackSize, pagesize);
     }
+
     actualStackSize = stackSize - (reservedPages * pagesize);
 
     snprintf(newenv_stack, sizeof(newenv_stack), "%zu", actualStackSize);
@@ -632,8 +672,16 @@ static void setupWorkStealing(void) {
 
 static void setupSpinWaiting(void) {
   const char *crayPlatform = "cray-x";
-  if (strncmp(crayPlatform, CHPL_TARGET_PLATFORM, strlen(crayPlatform)) == 0) {
+  if (chpl_env_rt_get_bool("OVERSUBSCRIBED", false)) {
+    chpl_qt_setenv("SPINCOUNT", "300", 0);
+  } else if (strncmp(crayPlatform, CHPL_TARGET_PLATFORM, strlen(crayPlatform)) == 0) {
     chpl_qt_setenv("SPINCOUNT", "3000000", 0);
+  }
+}
+
+static void setupAffinity(void) {
+  if (chpl_env_rt_get_bool("OVERSUBSCRIBED", false)) {
+    chpl_qt_setenv("AFFINITY", "no", 0);
   }
 }
 
@@ -653,6 +701,7 @@ void chpl_task_init(void)
     setupTasklocalStorage();
     setupWorkStealing();
     setupSpinWaiting();
+    setupAffinity();
 
     if (verbosity >= 2) { chpl_qt_setenv("INFO", "1", 0); }
 
@@ -708,37 +757,10 @@ static inline void wrap_callbacks(chpl_task_cb_event_kind_t event_kind,
 }
 
 
-// If we stored chpl_taskID_t in chpl_task_bundleData_t,
-// this struct and the following function may not be necessary.
-typedef void (*main_ptr_t)(void);
-typedef struct {
-  chpl_task_bundle_t arg;
-  main_ptr_t chpl_main;
-} main_wrapper_bundle_t;
-
-static aligned_t main_wrapper(void *arg)
-{
-    chpl_qthread_tls_t         *tls = chpl_qthread_get_tasklocal();
-    main_wrapper_bundle_t *m_bundle = (main_wrapper_bundle_t*) arg;
-    chpl_task_bundle_t      *bundle = &m_bundle->arg;
-    chpl_qthread_tls_t         pv = {.bundle = bundle};
-
-    *tls = pv;
-
-    wrap_callbacks(chpl_task_cb_event_kind_begin, bundle);
-
-    (m_bundle->chpl_main)();
-
-    wrap_callbacks(chpl_task_cb_event_kind_end, bundle);
-
-    return 0;
-}
-
-
 static aligned_t chapel_wrapper(void *arg)
 {
     chpl_qthread_tls_t    *tls = chpl_qthread_get_tasklocal();
-    chpl_task_bundle_t *bundle = (chpl_task_bundle_t*) arg;
+    chpl_task_bundle_t *bundle = chpl_argBundleTaskArgBundle(arg);
     chpl_qthread_tls_t      pv = {.bundle = bundle};
 
     *tls = pv;
@@ -760,7 +782,6 @@ typedef struct {
 static void *comm_task_wrapper(void *arg)
 {
     comm_task_wrapper_info_t *rarg = arg;
-    chpl_moveToLastCPU();
     (*(chpl_fn_p)(rarg->fn))(rarg->arg);
     return 0;
 }
@@ -771,21 +792,21 @@ static void *comm_task_wrapper(void *arg)
 // not use methods that require task context (e.g., task-local storage).
 void chpl_task_callMain(void (*chpl_main)(void))
 {
-    // Be sure to initialize Chapel managed task-local state with zeros
-    main_wrapper_bundle_t arg = { .chpl_main = NULL };
+    // We'll pass this arg to (*chpl_main)(), but it will just ignore it.
+    chpl_task_bundle_t arg =
+        (chpl_task_bundle_t)
+        { .kind            = CHPL_ARG_BUNDLE_KIND_TASK,
+          .is_executeOn    = false,
+          .requestedSubloc = c_sublocid_any_val,
+          .requested_fid   = FID_NONE,
+          .requested_fn    = (void(*)(void*)) chpl_main,
+          .lineno          = 0,
+          .filename        = CHPL_FILE_IDX_MAIN_TASK,
+          .id              = chpl_qthread_process_bundle.id,
+        };
 
-    arg.arg.is_executeOn      = false;
-    arg.arg.requestedSubloc   = c_sublocid_any_val;
-    arg.arg.requested_fid     = FID_NONE;
-    arg.arg.requested_fn      = NULL;
-    arg.arg.lineno            = 0;
-    arg.arg.filename           = CHPL_FILE_IDX_MAIN_TASK;
-    arg.arg.id                = chpl_qthread_process_bundle.id;
-    arg.chpl_main             = chpl_main;
-
-    wrap_callbacks(chpl_task_cb_event_kind_create, &arg.arg);
-
-    qthread_fork_copyargs(main_wrapper, &arg, sizeof(arg), &exit_ret);
+    wrap_callbacks(chpl_task_cb_event_kind_create, &arg);
+    qthread_fork_copyargs(chapel_wrapper, &arg, sizeof(arg), &exit_ret);
     qthread_readFF(NULL, &exit_ret);
 }
 
@@ -802,8 +823,7 @@ int chpl_task_createCommTask(chpl_fn_p fn,
     // safe for it to be static because we will be called at most once
     // on each node.
     //
-    static
-        comm_task_wrapper_info_t wrapper_info;
+    static comm_task_wrapper_info_t wrapper_info;
     wrapper_info.fn = fn;
     wrapper_info.arg = arg;
     return pthread_create(&chpl_qthread_comm_pthread,
@@ -829,13 +849,17 @@ void chpl_task_addToTaskList(chpl_fn_int_t       fid,
     c_sublocid_t execution_subloc =
       chpl_localeModel_sublocToExecutionSubloc(full_subloc);
 
-    arg->is_executeOn      = false;
-    arg->requestedSubloc   = full_subloc;
-    arg->requested_fid     = fid;
-    arg->requested_fn      = requested_fn;
-    arg->lineno            = lineno;
-    arg->filename          = filename;
-    arg->id                = chpl_nullTaskID;
+    *arg = (chpl_task_bundle_t)
+           { .kind            = CHPL_ARG_BUNDLE_KIND_TASK,
+             .is_executeOn    = false,
+             .lineno          = lineno,
+             .filename        = filename,
+             .requestedSubloc = full_subloc,
+             .requested_fid   = fid,
+             .requested_fn    = requested_fn,
+             .id              = chpl_nullTaskID,
+             .infoChapel      = arg->infoChapel, // retain; set by caller
+           };
 
     wrap_callbacks(chpl_task_cb_event_kind_create, arg);
 
@@ -857,17 +881,21 @@ static inline void taskCallBody(chpl_fn_int_t fid, chpl_fn_p fp,
                                 c_sublocid_t full_subloc,
                                 int lineno, int32_t filename)
 {
-    chpl_task_bundle_t *bundle = (chpl_task_bundle_t*) arg;
+    chpl_task_bundle_t *bundle = chpl_argBundleTaskArgBundle(arg);
     c_sublocid_t execution_subloc =
       chpl_localeModel_sublocToExecutionSubloc(full_subloc);
 
-    bundle->is_executeOn       = true;
-    bundle->requestedSubloc    = full_subloc;
-    bundle->requested_fid      = fid;
-    bundle->requested_fn       = fp;
-    bundle->lineno             = lineno;
-    bundle->filename           = filename;
-    bundle->id                 = chpl_nullTaskID;
+    *bundle = (chpl_task_bundle_t)
+              { .kind            = CHPL_ARG_BUNDLE_KIND_TASK,
+                .is_executeOn    = true,
+                .lineno          = lineno,
+                .filename        = filename,
+                .requestedSubloc = full_subloc,
+                .requested_fid   = fid,
+                .requested_fn    = fp,
+                .id              = chpl_nullTaskID,
+                .infoChapel      = bundle->infoChapel, // retain; set by caller
+              };
 
     wrap_callbacks(chpl_task_cb_event_kind_create, bundle);
 
@@ -880,7 +908,7 @@ static inline void taskCallBody(chpl_fn_int_t fid, chpl_fn_p fp,
 }
 
 void chpl_task_taskCallFTable(chpl_fn_int_t fid,
-                              chpl_task_bundle_t *arg, size_t arg_size,
+                              void *arg, size_t arg_size,
                               c_sublocid_t subloc,
                               int lineno, int32_t filename)
 {
@@ -891,7 +919,7 @@ void chpl_task_taskCallFTable(chpl_fn_int_t fid,
 
 void chpl_task_startMovedTask(chpl_fn_int_t       fid,
                               chpl_fn_p           fp,
-                              chpl_task_bundle_t *arg,
+                              void               *arg,
                               size_t              arg_size,
                               c_sublocid_t        subloc,
                               chpl_taskID_t       id)
@@ -998,19 +1026,16 @@ uint32_t chpl_task_getMaxPar(void) {
     return (uint32_t) qthread_num_workers();
 }
 
-c_sublocid_t chpl_task_getNumSublocales(void)
-{
-    // FIXME: What we really want here is the number of NUMA
-    // sublocales we are supporting.  For now we use the number of
-    // shepherds as a proxy for that.
-    return (c_sublocid_t) qthread_num_shepherds();
-}
-
 size_t chpl_task_getCallStackSize(void)
 {
     PROFILE_INCR(profile_task_getCallStackSize,1);
 
     return qthread_readstate(STACK_SIZE);
+}
+
+chpl_bool chpl_task_guardPagesInUse(void)
+{
+  return guardPagesInUse;
 }
 
 // XXX: Should probably reflect all shepherds
@@ -1027,6 +1052,11 @@ int32_t chpl_task_getNumBlockedTasks(void)
 }
 
 // Threads
+
+uint32_t chpl_task_impl_getFixedNumThreads(void) {
+    assert(chpl_qthread_done_initializing);
+    return (uint32_t)qthread_num_workers();
+}
 
 uint32_t chpl_task_getNumThreads(void)
 {

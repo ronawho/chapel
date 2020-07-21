@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -26,11 +27,6 @@ module ChapelUtil {
   pragma "no default functions"
   extern record chpl_main_argument {
   }
-
-  // required by resolveAutoCopies()
-  proc chpl__initCopy(arg: chpl_main_argument) return arg;
-  proc chpl__autoDestroy(arg: chpl_main_argument) {}
-  
 
   //
   // These two are called from the emitted chpl_gen_main(), and

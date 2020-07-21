@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -34,6 +35,8 @@ static inline int chpl_macro_double_isfinite(double x) { return isfinite(x); }
 static inline int chpl_macro_float_isfinite(float x) { return isfinite(x); }
 static inline int chpl_macro_double_isnan(double x) { return isnan(x); }
 static inline int chpl_macro_float_isnan(float x) { return isnan(x); }
+static inline int chpl_macro_double_signbit(double x) { return signbit(x); }
+static inline int chpl_macro_float_signbit(float x) { return signbit(x); }
 
 // 32-bit Bessel functions aren't available on all platforms. For cases where
 // we know they're available use them since they should be faster, but in other

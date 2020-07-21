@@ -16,7 +16,7 @@ writeln();
 
 var D = { 1..2, 1..3 };
 
-var A = [d in D] 100**d(1);
+var A = [d in D] 100**d(0);
 
 writeln("input #1");
 writeln(A.domain);
@@ -52,7 +52,7 @@ writeln();
 var FE1 = PR(
   perElemOp = new borrowed SumReduceScanOp(eltType=int),
   resultDom = { 1..1, 1..3 },
-  sourceExp = [d in D] 100**d(1)
+  sourceExp = [d in D] 100**d(0)
 );
 
 writeln("forall expression - preserving columns");
@@ -63,7 +63,7 @@ writeln();
 var FE2 = PR(
   perElemOp = new borrowed SumReduceScanOp(eltType=int),
   resultDom = { 1..2, 1..1 },
-  sourceExp = [d in D] 100**d(1)
+  sourceExp = [d in D] 100**d(0)
 );
 
 writeln("forall expression - preserving rows");
@@ -73,7 +73,7 @@ writeln();
 
 //---------------------------------
 
-var B = [d in D] d(2);
+var B = [d in D] d(1);
 var C = A + B;
 
 writeln("input #2");
@@ -111,7 +111,12 @@ proc PR(const perElemOp, const resultDom, const sourceArr : []) {
 }
 
 proc PR(const perElemOp, const resultDom, const sourceExp : _iteratorRecord) {
-  var sourceDom = _newDomain(sourceExp._shape_);
+  if ! chpl_iteratorHasDomainShape(sourceExp) then
+   compilerError("cannot compute a partial reduction over an expression without a domain shape");
+  if chpl_iteratorFromForExpr(sourceExp) then
+   compilerError("cannot compute a partial reduction over a  for-expression");
+
+  var sourceDom = new _domain(sourceExp._shape_);
   sourceDom._unowned = true;
   return dsiPartialReduce(perElemOp, resultDom, sourceExp, sourceDom);
 }

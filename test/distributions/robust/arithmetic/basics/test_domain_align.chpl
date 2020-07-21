@@ -20,7 +20,7 @@ proc compare(D, R, a, s=2) {
 
   {
     var failures : int;
-    for i in dd do if !tracker.member(i) then failures += 1;
+    for i in dd do if !tracker.contains(i) then failures += 1;
 
     write("\tserial iter: ");
     if failures == 0 then writeln("SUCCESS");
@@ -29,7 +29,7 @@ proc compare(D, R, a, s=2) {
 
   {
     var failures : atomic int;
-    forall i in dd do if !tracker.member(i) then failures.add(1);
+    forall i in dd do if !tracker.contains(i) then failures.add(1);
 
     const f = failures.read();
     write("\tleader/follower: ");
@@ -41,7 +41,7 @@ proc compare(D, R, a, s=2) {
 proc test(ref D) {
   D = rangeTuple(D.rank, 1..10);
   var R : domain(D.rank, D.idxType, D.stridable);
-  R = D;
+  R; R = D; // disable split init because warning text differs per dist
 
   compare(D, R, 0);
   compare(D, R, 1);
@@ -49,6 +49,6 @@ proc test(ref D) {
 
 proc rangeTuple(param rank : int, rng) {
   var ret : rank*rng.type;
-  for param i in 1..rank do ret(i) = rng;
+  for param i in 0..rank-1 do ret(i) = rng;
   return ret;
 }

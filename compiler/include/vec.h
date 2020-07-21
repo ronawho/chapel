@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -53,6 +54,7 @@ WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 #include <cstring>
 #include <stdint.h>
 #include <cstdlib>
+#include <vector>
 
 // Simple Vector class, also supports open hashed sets
 
@@ -116,6 +118,7 @@ class Vec {
   void copy(const Vec<C,S> &v);
   void fill(int n);
   void append(const Vec<C,S> &v);
+  void append(const std::vector<C> &v);
   void remove(int index);
   void insert(int index, C a);
   void reverse();
@@ -313,7 +316,7 @@ Vec<C,S>::move_internal(Vec<C,S> &vv)  {
   i = vv.i;
   v = vv.v;
   if (vv.v == &vv.e[0]) { 
-    memcpy(e, &vv.e[0], sizeof(e));
+    memcpy((void*)e, &vv.e[0], sizeof(e));
     v = e;
   } else
     vv.v = 0;
@@ -330,7 +333,7 @@ Vec<C,S>::copy(const Vec<C,S> &vv)  {
   n = vv.n;
   i = vv.i;
   if (vv.v == &vv.e[0]) { 
-    memcpy(e, &vv.e[0], sizeof(e));
+    memcpy((void*)e, &vv.e[0], sizeof(e));
     v = e;
   } else {
     if (vv.v) 
@@ -353,6 +356,14 @@ Vec<C,S>::append(const Vec<C,S> &vv)  {
       add(*c);
 }
 
+// Added to ease the transition from using Vec to std::vector
+template <class C, int S> inline void
+Vec<C,S>::append(const std::vector<C> &v) {
+  for (uint64_t i = 0; i < v.size(); i++) {
+    add(v[i]);
+  }
+}
+
 template <class C, int S> inline void 
 Vec<C,S>::addx() {
   if (!n) {
@@ -361,7 +372,7 @@ Vec<C,S>::addx() {
   }
   if (v == e) {
     v = (C*)malloc(VEC_INITIAL_SIZE * sizeof(C));
-    memcpy(v, &e[0], n * sizeof(C));
+    memcpy((void*)v, &e[0], n * sizeof(C));
   } else {
     if ((n & (VEC_INITIAL_SIZE -1)) == 0) {
       int l = n, nl = (1 + VEC_INITIAL_SHIFT);
@@ -372,8 +383,8 @@ Vec<C,S>::addx() {
         void *vv = (void*)v;
         nl = 1 << nl;
         v = (C*)malloc(nl * sizeof(C));
-        memcpy(v, vv, n * sizeof(C));
-        memset(&v[n], 0, (nl - n) * sizeof(C));
+        memcpy((void*)v, vv, n * sizeof(C));
+        memset((void*)&v[n], 0, (nl - n) * sizeof(C));
         free(vv);
       }
     }
@@ -400,7 +411,7 @@ Vec<C,S>::set_expand() {
     i = i + 1;
   n = prime2[i];
   v = (C*)malloc(n * sizeof(C));
-  memset(v, 0, n * sizeof(C));
+  memset((void*)v, 0, n * sizeof(C));
 }
 
 template <class C, int S> C *
@@ -509,8 +520,8 @@ Vec<C,S>::copy_internal(const Vec<C,S> &vv) {
   while (l) { l = l >> 1; nl++; }
   nl = 1 << nl;
   v = (C*)malloc(nl * sizeof(C));
-  memcpy(v, vv.v, n * sizeof(C));
-  memset(v + n, 0, (nl - n) * sizeof(C)); 
+  memcpy((void*)v, vv.v, n * sizeof(C));
+  memset((void*)(v + n), 0, (nl - n) * sizeof(C));
 }
 
 void test_vec();

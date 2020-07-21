@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -25,6 +26,7 @@
 
 #include "expr.h"
 #include "IfExpr.h"
+#include "ImportStmt.h"
 #include "log.h"
 #include "LoopExpr.h"
 #include "stmt.h"
@@ -36,9 +38,11 @@
 #include "CForLoop.h"
 #include "ForallStmt.h"
 #include "ForLoop.h"
+#include "LoopStmt.h"
 #include "ParamForLoop.h"
 #include "TryStmt.h"
 #include "CatchStmt.h"
+#include "DeferStmt.h"
 
 AstDump::AstDump() {
   mName      =     0;
@@ -88,6 +92,11 @@ bool AstDump::open(const ModuleSymbol* module, const char* passName, int passNum
 
   if (mFP != 0) {
     fprintf(mFP, "AST dump for %s after pass %s.\n", module->name, passName);
+    fprintf(mFP, "Module use list: ");
+    for_vector(ModuleSymbol, usedMod, module->modUseList) {
+      fprintf(mFP, "%s ", usedMod->name);
+    }
+    fprintf(mFP, "\n");
   }
 
   return (mFP != 0) ? true : false;
@@ -174,6 +183,13 @@ bool AstDump::enterDefExpr(DefExpr* node) {
   bool    retval = true;
 
   if (isModuleSymbol(sym)) {
+    newline();
+    write("def");
+    write("module");
+    write(sym->name);
+    if (fLogIds)
+      fprintf(mFP, "[%d]", sym->id);
+    write(" ");
     retval = false;
 
   } else {
@@ -376,10 +392,48 @@ void AstDump::visitUseStmt(UseStmt* node) {
 
   node->src->accept(this);
 
+  if (node->isARename()) {
+    fprintf(mFP, " 'as' %s", node->getRename());
+  }
+
   if (!node->isPlainUse()) {
     node->writeListPredicate(mFP);
     bool first = outputVector(mFP, node->named);
     outputRenames(mFP, node->renamed, first);
+  }
+
+  write(false, ")", true);
+}
+
+//
+// ImportStmt
+//
+void AstDump::visitImportStmt(ImportStmt* node) {
+  if (isBlockStmt(node->parentExpr)) {
+    newline();
+  }
+
+  if (fLogIds) {
+    fprintf(mFP, "(%d ", node->id);
+  } else {
+    write(true, "(", false);
+  }
+
+  fprintf(mFP, "'import'");
+
+  mNeedSpace = true;
+
+  node->src->accept(this);
+
+  if (node->isARename()) {
+    fprintf(mFP, " 'as' %s", node->getRename());
+  }
+
+  if (node->providesUnqualifiedAccess()) {
+    fprintf(mFP, ".{");
+    bool first = outputVector(mFP, node->unqualified);
+    outputRenames(mFP, node->renamed, first);
+    fprintf(mFP, "}");
   }
 
   write(false, ")", true);
@@ -399,6 +453,13 @@ bool AstDump::enterBlockStmt(BlockStmt* node) {
 
   write("{");
   printBlockID(node);
+  if ((node->blockTag & BLOCK_SCOPELESS))
+    write("scopeless");
+  if ((node->blockTag & BLOCK_TYPE_ONLY))
+    write("type");
+  if ((node->blockTag & BLOCK_EXTERN))
+    write("extern");
+
   ++mIndent;
 
   return true;
@@ -409,18 +470,6 @@ void AstDump::exitBlockStmt(BlockStmt* node) {
   newline();
   write(false, "}", true);
   printBlockID(node);
-}
-
-void AstDump::visitForallIntents(ForallIntents* clause) {
-  newline();
-  write("with (");
-  for (int i = 0; i < clause->numVars(); i++) {
-    if (i > 0) write(false, ",", true);
-    if (clause->isReduce(i)) clause->riSpecs[i]->accept(this);
-    write(forallIntentTagDescription(clause->fIntents[i]));
-    clause->fiVars[i]->accept(this);
-  }
-  write(false, ")", true);
 }
 
 
@@ -475,6 +524,14 @@ bool AstDump::enterForallStmt(ForallStmt* node) {
   }
   --mIndent;
   newline();
+  write("other variables");
+  ++mIndent;
+  if (node->fRecIterIRdef) node->fRecIterIRdef->accept(this);
+  if (node->fRecIterICdef) node->fRecIterICdef->accept(this);
+  if (node->fRecIterGetIterator) node->fRecIterGetIterator->accept(this);
+  if (node->fRecIterFreeIterator) node->fRecIterFreeIterator->accept(this);
+  newline();
+  --mIndent;
   write("forall body");
   node->loopBody()->accept(this);
   --mIndent;
@@ -496,6 +553,7 @@ bool AstDump::enterWhileDoStmt(WhileDoStmt* node) {
       write(false, "where ", false);
 
   write("WhileDo");
+  printLoopStmtDetails(node);
   newline();
   write("{");
   printBlockID(node);
@@ -523,6 +581,7 @@ bool AstDump::enterDoWhileStmt(DoWhileStmt* node) {
       write(false, "where ", false);
 
   write("DoWhile");
+  printLoopStmtDetails(node);
   newline();
   write("{");
   printBlockID(node);
@@ -550,6 +609,11 @@ bool AstDump::enterForLoop(ForLoop* node) {
       write(false, "where ", false);
 
   write("ForLoop");
+  printLoopStmtDetails(node);
+  if (node->isLoweredForallLoop())
+    write("lowered-forall");
+  if (node->isForExpr())
+    write("for-expr");
   newline();
   write("{");
   printBlockID(node);
@@ -577,6 +641,7 @@ bool AstDump::enterCForLoop(CForLoop* node) {
       write(false, "where ", false);
 
   write("CForLoop");
+  printLoopStmtDetails(node);
   newline();
   write("{");
   printBlockID(node);
@@ -604,6 +669,7 @@ bool AstDump::enterParamForLoop(ParamForLoop* node) {
       write(false, "where ", false);
 
   write("ParamForLoop");
+  printLoopStmtDetails(node);
   newline();
   write("{");
   printBlockID(node);
@@ -653,6 +719,7 @@ bool AstDump::enterGotoStmt(GotoStmt* node) {
     case GOTO_ITER_END:       write("gotoIterEnd");       break;
     case GOTO_ERROR_HANDLING: write("gotoErrorHandling"); break;
     case GOTO_BREAK_ERROR_HANDLING: write("gotoBreakErrorHandling"); break;
+    case GOTO_ERROR_HANDLING_RETURN: write("gotoErrorHandlingReturn"); break;
   }
 
   if (SymExpr* label = toSymExpr(node->label)) {
@@ -686,6 +753,7 @@ bool AstDump::enterDeferStmt(DeferStmt* node) {
   write("Defer");
   newline();
   write("{");
+  printBlockID(node);
   ++mIndent;
   return true;
 }
@@ -725,6 +793,15 @@ void AstDump::exitTryStmt(TryStmt* node) {
 bool AstDump::enterCatchStmt(CatchStmt* node) {
   newline();
   write("Catch");
+  if (node->name() != NULL)
+    write(node->name());
+  if (UnresolvedSymExpr* urse = toUnresolvedSymExpr(node->type())) {
+    write(":");
+    write(urse->unresolved);
+  } else if (SymExpr* se = toSymExpr(node->type())) {
+    write(":");
+    write(se->symbol()->name);
+  }
   newline();
   write("{");
   ++mIndent;
@@ -856,7 +933,7 @@ void AstDump::writeSymbol(Symbol* sym, bool def) {
   }
 
   if (sym->hasFlag(FLAG_GENERIC))
-    write(false, "?", false);
+    write(false, "(?)", false);
 
   if (def)
     if (ArgSymbol* arg = toArgSymbol(sym))
@@ -882,6 +959,15 @@ void AstDump::write(bool spaceBefore, const char* text, bool spaceAfter) {
 void AstDump::printBlockID(Expr* expr) {
   if (fdump_html_print_block_IDs)
     fprintf(mFP, " %d", expr->id);
+}
+
+void AstDump::printLoopStmtDetails(LoopStmt* loop) {
+  if (fLogIds)
+    fprintf(mFP, "[%d]", loop->id);
+  if (loop->hasVectorizationHazard())
+    write("hazard");
+  if (loop->isOrderIndependent())
+    write("order-independent");
 }
 
 void AstDump::newline() {

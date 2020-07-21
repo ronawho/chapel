@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -21,7 +22,7 @@
 #define _AST_VISITOR_H_
 
 class AggregateType;
-class UnmanagedClassType;
+class DecoratedClassType;
 class EnumType;
 class PrimitiveType;
 
@@ -43,8 +44,8 @@ class UnresolvedSymExpr;
 class LoopExpr;
 
 class UseStmt;
+class ImportStmt;
 class BlockStmt;
-class ForallIntents;
 class ForallStmt;
 class WhileDoStmt;
 class DoWhileStmt;
@@ -65,6 +66,17 @@ public:
                  AstVisitor();
   virtual       ~AstVisitor();
 
+  // Generally an AST visitor has one or two routine per type of AST node.
+  // For nodes that can contain other nodes, it has 2 routines:
+  //   bool enterSomething(Something* node)
+  //   void exitSomething(Something* node)
+  // And for nodes that do not contain other nodes, it has
+  //   void visitSomething(Something* node)
+  //
+  // If enterSomething returns `true`, it indicates that:
+  //   * nested nodes should be visited
+  //   * exitSomething should be called for that node
+
   //
   // The first implementation of this pattern used a traditional naming
   // convention that relied on overloading of virtual functions.  Although
@@ -80,8 +92,8 @@ public:
   virtual bool   enterAggrType       (AggregateType*     node) = 0;
   virtual void   exitAggrType        (AggregateType*     node) = 0;
 
-  virtual bool   enterUnmanagedClassType(UnmanagedClassType*     node) = 0;
-  virtual void   exitUnmanagedClassType (UnmanagedClassType*     node) = 0;
+  virtual bool   enterDecoratedClassType(DecoratedClassType*     node) = 0;
+  virtual void   exitDecoratedClassType (DecoratedClassType*     node) = 0;
 
   virtual bool   enterEnumType       (EnumType*          node) = 0;
   virtual void   exitEnumType        (EnumType*          node) = 0;
@@ -139,10 +151,11 @@ public:
   //
   virtual void   visitUseStmt        (UseStmt*           node) = 0;
 
+  virtual void   visitImportStmt     (ImportStmt*        node) = 0;
+
   virtual bool   enterBlockStmt      (BlockStmt*         node) = 0;
   virtual void   exitBlockStmt       (BlockStmt*         node) = 0;
 
-  virtual void   visitForallIntents  (ForallIntents*   clause) = 0;
   virtual bool   enterForallStmt     (ForallStmt*        node) = 0;
   virtual void   exitForallStmt      (ForallStmt*        node) = 0;
 

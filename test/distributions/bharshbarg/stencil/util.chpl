@@ -7,12 +7,12 @@ proc verifyStencil(A : [?dom], debug = false) {
   var Neighs : domain(rank);
   {
     var n : rank*range;
-    for i in 1..rank do n(i) = -1..1;
+    for i in 0..#rank do n(i) = -1..1;
     Neighs = {(...n)};
   }
 
   var abstr : rank*int;
-  for i in 1..rank do
+  for i in 0..rank-1 do
     abstr(i) = abs(dom.dim(i).stride);
   const max = dom.expand(halo*abstr);
 
@@ -23,9 +23,17 @@ proc verifyStencil(A : [?dom], debug = false) {
     const base : rank*int;
     if neigh == base then continue; // skip when neigh is all 0s
 
-    var ghost : rank*dom.dim(1).type;
-    var actual : rank*dom.dim(1).type;
-    for i in 1..rank {
+    // If halo(i) is zero, then there is nothing to check when neigh(i) != 0
+    //
+    // For example, if halo is '(1, 0)', then there is no fluff in the second
+    // dimension. Therefore the only valid 'neigh' values can be:
+    //   (-1, 0) (1, 0)
+    const skip = || reduce for (h,n) in zip(halo, neigh) do (h == 0 && n != 0);
+    if skip then continue;
+
+    var ghost : rank*dom.dim(0).type;
+    var actual : rank*dom.dim(0).type;
+    for i in 0..#rank {
       const h = halo(i);
       const str = dom.dim(i).stride;
       if neigh(i) < 0 {

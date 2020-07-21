@@ -1,11 +1,8 @@
 import os
 import re
-import sys
 
-chplenv_dir = os.path.dirname(__file__)
-sys.path.insert(0, os.path.abspath(chplenv_dir))
-
-import chpl_arch, chpl_compiler, chpl_locale_model, chpl_platform
+import chpl_cpu, chpl_arch, chpl_compiler
+import chpl_lib_pic, chpl_locale_model, chpl_platform
 from chpl_home_utils import get_chpl_home, get_chpl_third_party, using_chapel_module
 from utils import error, memoize, run_command
 
@@ -15,10 +12,13 @@ from utils import error, memoize, run_command
 #
 @memoize
 def default_uniq_cfg_path():
-    return '{0}-{1}-{2}'.format(chpl_platform.get('target'),
-                                chpl_compiler.get('target'),
-                                chpl_arch.get('target', map_to_compiler=True,
-                                         get_lcd=using_chapel_module()).arch)
+    cpu_val = chpl_cpu.get('target', map_to_compiler=True,
+                           get_lcd=using_chapel_module()).cpu
+    return '{0}-{1}-{2}-{3}-{4}'.format(chpl_platform.get('target'),
+                                        chpl_arch.get('target'),
+                                        cpu_val,
+                                        chpl_compiler.get('target'),
+                                        chpl_lib_pic.get())
 
 #
 # Returns the path to the packages install directory
@@ -56,6 +56,36 @@ def handle_la(la_path):
                         else:
                             args.append(tok)
     return args
+
+#
+# Return compiler arguments required to use a library known to
+# pkgconfig. The pkg can be a path to a .pc file or the name of a
+# system-installed package or the name of a third-party package.
+#
+# if system=True, searches for a system-instaled package.
+@memoize
+def pkgconfig_get_compile_args(pkg, ucp='', system=True):
+  havePcFile = pkg.endswith('.pc')
+  pcArg = pkg
+  if not havePcFile:
+    if system:
+      # check that pkg-config knows about the package in question
+      run_command(['pkg-config', '--exists', pkg])
+    else:
+      # look for a .pc file
+      if ucp == '':
+        ucp = default_uniq_cfg_path()
+      pcfile = pkg + '.pc' # maybe needs to be an argument later?
+
+      pcArg = os.path.join(get_cfg_install_path(pkg, ucp), 'lib',
+                           'pkgconfig', pcfile)
+
+      if not os.access(pcArg, os.R_OK):
+        error("Could not find '{0}'".format(pcArg), ValueError)
+
+  cflags_line = run_command(['pkg-config', '--cflags'] + [pcArg]);
+  cflags = cflags_line.split()
+  return cflags
 
 #
 # Return linker arguments required to link with a library
@@ -107,16 +137,32 @@ def pkgconfig_get_system_version(pkg):
 #
 # This returns the default link args for the given third-party package.
 #
-def default_get_link_args(pkg, ucp='', libs=[]):
+def default_get_compile_args(pkg, ucp=''):
+    if ucp == '':
+        ucp = default_uniq_cfg_path()
+    inc_dir = os.path.join(get_cfg_install_path(pkg, ucp), 'include')
+    return ['-I' + inc_dir]
+
+
+#
+# This returns the default link args for the given third-party package.
+#
+def default_get_link_args(pkg, ucp='', libs=[], add_L_opt=False):
     if ucp == '':
         ucp = default_uniq_cfg_path()
     if libs == []:
         libs = [ 'lib' + pkg + '.la' ]
     all_args = []
+    lib_dir = os.path.join(get_cfg_install_path(pkg, ucp), 'lib')
+    if add_L_opt:
+        all_args.append('-L' + lib_dir)
+        all_args.append('-Wl,-rpath,' + lib_dir)
     for lib_arg in libs:
         if lib_arg.endswith('.la'):
-            la = os.path.join(get_cfg_install_path(pkg, ucp), 'lib', lib_arg)
+            la = os.path.join(lib_dir, lib_arg)
             all_args.extend(handle_la(la))
         else:
             all_args.append(lib_arg)
+    if all_args == []:
+        all_args.append('-l' + pkg)
     return all_args

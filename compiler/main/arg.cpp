@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -680,7 +681,9 @@ static void process_arg(const ArgumentState*       state,
           break;
 
         case 'P':
-          strncpy((char*) desc->location, arg, FILENAME_MAX);
+          if (desc->location != NULL) {
+            strncpy((char*) desc->location, arg, FILENAME_MAX);
+          }
           break;
 
         case 'S':
@@ -730,8 +733,7 @@ static void print_suggestions(const char* flag, const ArgumentDescription* desc)
     const char* devFlags = "Developer Flags";
     if (desc[i].description &&
         // Does the description start with devFlags?
-        strlen(desc[i].description) > strlen(devFlags) &&
-        0 == memcmp(desc[i].description, devFlags, strlen(devFlags))) {
+        startsWith(desc[i].description, devFlags)) {
       firstDeveloperOnly = i;
       break;
     }
@@ -743,6 +745,10 @@ static void print_suggestions(const char* flag, const ArgumentDescription* desc)
     // Skip developer-only options for non-developer compile
     if (!developer && i >= firstDeveloperOnly)
       break;
+
+    // Ignore empty entries
+    if (desc[i].name[0] == '\0')
+      continue;
 
     if (usearg[0] == desc[i].key && usearg[1] == '\0') {
       // e.g. --s was used instead of -s
@@ -768,9 +774,11 @@ static void print_suggestions(const char* flag, const ArgumentDescription* desc)
       if (!developer && i >= firstDeveloperOnly)
         break;
 
-      if (desc[i].name[0] != '\0' &&
-          strlen(usearg) > strlen(desc[i].name) &&
-          0 == memcmp(usearg, desc[i].name, strlen(desc[i].name))) {
+      // Ignore empty entries
+      if (desc[i].name[0] == '\0')
+        continue;
+
+      if (startsWith(usearg, desc[i].name)) {
         fprintf(stderr, "       Did you mean --%s ?\n", desc[i].name);
         helped = true;
       }
@@ -784,9 +792,11 @@ static void print_suggestions(const char* flag, const ArgumentDescription* desc)
       if (!developer && i >= firstDeveloperOnly)
         break;
 
-      if (desc[i].name[0] != '\0' &&
-          strlen(usearg) < strlen(desc[i].name) &&
-          0 == memcmp(usearg, desc[i].name, strlen(usearg))) {
+      // Ignore empty entries
+      if (desc[i].name[0] == '\0')
+        continue;
+
+      if (startsWith(desc[i].name, usearg)) {
         fprintf(stderr, "       Did you mean --%s ?\n", desc[i].name);
       }
     }

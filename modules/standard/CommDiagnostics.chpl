@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -66,8 +67,8 @@
   option results in the following output::
 
     0: remote task created on 1
-    1: t.chpl:6: remote get from 0
-    1: t.chpl:6: remote put to 0
+    1: t.chpl:6: remote get from 0, 8 bytes
+    1: t.chpl:6: remote put to 0, 8 bytes
 
   The initial number refers to the locale reporting the communication
   event.  The file name and line number point to the place in the
@@ -167,6 +168,18 @@
  */
 module CommDiagnostics
 {
+  /*
+    If this is `false`, a written `commDiagnostics` value does not
+    include "unstable" fields even when they are non-zero.  Unstable
+    fields are those expected to have unpredictable values for multiple
+    executions of the same code sequence.  Setting this to `true` causes
+    such fields, if non-zero, to be included when a `commDiagnostics`
+    value is written.  At present the only unstable field is the `amo`
+    counter, whose instability is due to the use of atomic reads in spin
+    loops that wait for parallelism and on-statements to complete.
+   */
+  config param commDiagsPrintUnstable = false;
+
   /* Aggregated communication operation counts.  This record type is
      defined in the same way by both the underlying comm layer(s) and
      this module, because we don't have a good way to inherit types back
@@ -203,6 +216,10 @@ module CommDiagnostics
      */
     var try_nb: uint(64);
     /*
+      atomic memory operations
+     */
+    var amo: uint(64);
+    /*
       blocking remote executions, in which initiator waits for completion
      */
     var execute_on: uint(64);
@@ -216,16 +233,19 @@ module CommDiagnostics
      */
     var execute_on_nb: uint(64);
 
-    proc writeThis(c) {
+    proc writeThis(c) throws {
       use Reflection;
 
       var first = true;
       c <~> "(";
-      for param i in 1..numFields(chpl_commDiagnostics) {
+      for param i in 0..<numFields(chpl_commDiagnostics) {
+        param name = getFieldName(chpl_commDiagnostics, i);
         const val = getField(this, i);
         if val != 0 {
-          if first then first = false; else c <~> ", ";
-          c <~> getFieldName(chpl_commDiagnostics, i) <~> " = " <~> val;
+          if commDiagsPrintUnstable || name != 'amo' {
+            if first then first = false; else c <~> ", ";
+            c <~> name <~> " = " <~> val;
+          }
         }
       }
       if first then c <~> "<no communication>";
@@ -238,72 +258,76 @@ module CommDiagnostics
    */
   type commDiagnostics = chpl_commDiagnostics;
 
-  private extern proc chpl_startVerboseComm();
+  private extern proc chpl_comm_startVerbose(print_unstable: bool);
 
-  private extern proc chpl_stopVerboseComm();
+  private extern proc chpl_comm_stopVerbose();
 
-  private extern proc chpl_startVerboseCommHere();
+  private extern proc chpl_comm_startVerboseHere(print_unstable: bool);
 
-  private extern proc chpl_stopVerboseCommHere();
+  private extern proc chpl_comm_stopVerboseHere();
 
-  private extern proc chpl_gen_startCommDiagnostics();
+  private extern proc chpl_comm_startDiagnostics(print_unstable: bool);
 
-  private extern proc chpl_gen_stopCommDiagnostics();
+  private extern proc chpl_comm_stopDiagnostics();
 
-  private extern proc chpl_gen_startCommDiagnosticsHere();
+  private extern proc chpl_comm_startDiagnosticsHere(print_unstable: bool);
 
-  private extern proc chpl_gen_stopCommDiagnosticsHere();
+  private extern proc chpl_comm_stopDiagnosticsHere();
 
-  private extern proc chpl_resetCommDiagnosticsHere();
+  private extern proc chpl_comm_resetDiagnosticsHere();
 
-  private extern proc chpl_getCommDiagnosticsHere(out cd: commDiagnostics);
+  private extern proc chpl_comm_getDiagnosticsHere(out cd: commDiagnostics);
 
   /*
     Start on-the-fly reporting of communication initiated on any locale.
    */
-  proc startVerboseComm() { chpl_startVerboseComm(); }
+  proc startVerboseComm() {
+    chpl_comm_startVerbose(commDiagsPrintUnstable);
+  }
 
   /*
     Stop on-the-fly reporting of communication initiated on any locale.
    */
-  proc stopVerboseComm() { chpl_stopVerboseComm(); }
+  proc stopVerboseComm() { chpl_comm_stopVerbose(); }
 
   /*
     Start on-the-fly reporting of communication initiated on this locale.
    */
-  proc startVerboseCommHere() { chpl_startVerboseCommHere(); }
+  proc startVerboseCommHere() {
+    chpl_comm_startVerboseHere(commDiagsPrintUnstable);
+  }
 
   /*
     Stop on-the-fly reporting of communication initiated on this locale.
    */
-  proc stopVerboseCommHere() { chpl_stopVerboseCommHere(); }
+  proc stopVerboseCommHere() { chpl_comm_stopVerboseHere(); }
 
   /*
     Start counting communication operations across the whole program.
    */
   proc startCommDiagnostics() {
-    chpl_gen_startCommDiagnostics();
+    chpl_comm_startDiagnostics(commDiagsPrintUnstable);
   }
 
   /*
     Stop counting communication operations across the whole program.
    */
   proc stopCommDiagnostics() {
-    chpl_gen_stopCommDiagnostics();
+    chpl_comm_stopDiagnostics();
   }
 
   /*
     Start counting communication operations initiated on this locale.
    */
   proc startCommDiagnosticsHere() {
-    chpl_gen_startCommDiagnosticsHere();
+    chpl_comm_startDiagnosticsHere(commDiagsPrintUnstable);
   }
 
   /*
     Stop counting communication operations initiated on this locale.
    */
   proc stopCommDiagnosticsHere() {
-    chpl_gen_stopCommDiagnosticsHere();
+    chpl_comm_stopDiagnosticsHere();
   }
 
   /*
@@ -318,7 +342,7 @@ module CommDiagnostics
     Reset aggregate communication counts on the calling locale.
    */
   inline proc resetCommDiagnosticsHere() {
-    chpl_resetCommDiagnosticsHere();
+    chpl_comm_resetDiagnosticsHere();
   }
 
   /*
@@ -343,10 +367,85 @@ module CommDiagnostics
    */
   proc getCommDiagnosticsHere() {
     var cd: commDiagnostics;
-    chpl_getCommDiagnosticsHere(cd);
+    chpl_comm_getDiagnosticsHere(cd);
     return cd;
   }
 
+
+  /*
+    Print the current communication counts in a markdown table using a
+    row per locale and a column per operation.  By default, operations
+    for which all locales have a count of zero are not displayed in
+    the table, though an argument can be used to reverse that
+    behavior.
+
+    :arg printEmptyColumns: Indicates whether empty columns should be printed (defaults to ``false``)
+    :type printEmptyColumns: `bool`
+  */
+  proc printCommDiagnosticsTable(printEmptyColumns=false) {
+    use Reflection;
+    param unstable = "unstable";
+
+    // grab all comm diagnostics
+    var CommDiags = getCommDiagnostics();
+
+    // cache number of fields and store vector of whether field is active
+    param nFields = numFields(chpl_commDiagnostics);
+
+    // How wide should the column be for this field?  A negative value
+    // indicates an unstable field.  0 indicates that the field should
+    // be skipped in the table.
+    var fieldWidth: [0..<nFields] int;
+
+    // print column headers while determining which fields are active
+    writef("| %6s ", "locale");
+    for param fieldID in 0..<nFields {
+      param name = getFieldName(chpl_commDiagnostics, fieldID);
+      // We should be able to write this as follows:
+      //
+      //      const maxval = max reduce [locID in LocaleSpace] getField(CommDiags[locID], fieldID);
+      //
+      // except that it doesn't work due to #16042.  So I'm using this
+      // annoying workaround instead:
+
+      var maxval = 0;
+      for locID in LocaleSpace do
+        maxval = max(maxval, getField(CommDiags[locID], fieldID).safeCast(int));
+
+      if printEmptyColumns || maxval != 0 {
+        const width = if commDiagsPrintUnstable == false && name == "amo"
+                        then -unstable.size
+                        else max(name.size, ceil(log10(maxval+1)):int);
+        fieldWidth[fieldID] = width;
+
+        writef("| %*s ", abs(width), name);
+      }
+    }
+    writeln("|");
+
+    writef("| -----: ");
+    for param fieldID in 0..<nFields {
+      const width = abs(fieldWidth[fieldID]);
+      if width != 0 {
+        writef("| %.*s: ", width-1, "------------------");
+      }
+    }
+    writeln("|");
+
+    // print a row per locale showing the active fields
+    for locID in LocaleSpace {
+      writef("| %6s ", locID:string);
+      for param fieldID in 0..<nFields {
+        var width = fieldWidth[fieldID];
+        const count = if width < 0 then unstable
+                                   else getField(CommDiags[locID],
+                                                 fieldID):string;
+        if width != 0 then
+          writef("| %*s ", abs(width), count);
+      }
+      writeln("|");
+    }
+  }
 
   /*
     If this is set, on-the-fly reporting of communication operations

@@ -1,4 +1,5 @@
-# Copyright 2004-2018 Cray Inc.
+# Copyright 2020 Hewlett Packard Enterprise Development LP
+# Copyright 2004-2019 Cray Inc.
 # Other additional copyright holders may be indicated within.
 # 
 # The entirety of this work is licensed under the Apache License,
@@ -36,14 +37,14 @@ printstuff:
 	@echo CHPL_MAKE_HOST_COMPILER = $(CHPL_MAKE_HOST_COMPILER)
 	@echo CHPL_MAKE_TARGET_COMPILER = $(CHPL_MAKE_TARGET_COMPILER)
 	@echo AR = $(AR)
-	@echo GOOPY = $(GOOPY)
+	@echo RANLIB = $(RANLIB)
 	@echo $(CHPL_MAKE_HOME)/make/platform/Makefile.$(CHPL_MAKE_PLATFORM)
 	@echo CHPL_MAKE_MEM = $(CHPL_MAKE_MEM)
 	@echo CHPL_MAKE_HOST_TARGET = $(CHPL_MAKE_HOST_TARGET)
-	@echo CHPL_MAKE_TARGET_ARCH = $(CHPL_MAKE_TARGET_ARCH)
-	@echo CHPL_MAKE_RUNTIME_ARCH = $(CHPL_MAKE_RUNTIME_ARCH)
-	@echo CHPL_MAKE_TARGET_ARCH_FLAG = $(CHPL_MAKE_TARGET_ARCH_FLAG)
-	@echo CHPL_MAKE_TARGET_BACKEND_ARCH = $(CHPL_MAKE_TARGET_BACKEND_ARCH)
+	@echo CHPL_MAKE_TARGET_CPU = $(CHPL_MAKE_TARGET_CPU)
+	@echo CHPL_MAKE_RUNTIME_CPU = $(CHPL_MAKE_RUNTIME_CPU)
+	@echo CHPL_MAKE_TARGET_CPU_FLAG = $(CHPL_MAKE_TARGET_CPU_FLAG)
+	@echo CHPL_MAKE_TARGET_BACKEND_CPU = $(CHPL_MAKE_TARGET_BACKEND_CPU)
 	@echo CHPL_ORIG_TARGET_COMPILER = $(CHPL_ORIG_TARGET_COMPILER)
 	@echo CXX_STD = $(CXX_STD)
 	@echo RUNTIME_CXXFLAGS += $(RUNTIME_CXXFLAGS)
@@ -70,13 +71,13 @@ include src/qio/Makefile.include
 SUBDIRS = \
 	src \
 
-SVN_SRCS = 
+SRCS =
 
 RUNTIME_OBJS = \
 	$(COMMON_OBJS) \
 	$(TASKS_OBJS) \
 	$(THREADS_OBJS) \
-        $(TIMERS_OBJS) \
+	$(TIMERS_OBJS) \
 	$(COMM_OBJS) \
 	$(MEM_COMMON_OBJS) \
 	$(QIO_OBJS) \
@@ -88,7 +89,8 @@ RUNTIME_OBJS = \
 LAUNCH_LIB_OBJS = \
 	$(COMMON_LAUNCHER_OBJS) \
 	$(COMM_LAUNCHER_OBJS) \
-	$(LAUNCHER_OBJS)
+	$(LAUNCHER_OBJS) \
+	$(ONLY_LAUNCHER_OBJS)
 
 RUNTIME_DIR = ../$(LIB_RT_DIR)
 RUNTIME_LIB = $(RUNTIME_DIR)/libchpl.a
@@ -108,8 +110,7 @@ RUNTIME_TARGETS = \
 ifneq ($(CHPL_MAKE_LAUNCHER),none)
 LAUNCHER_TARGETS = \
 	$(LAUNCHER_LIB) \
-	$(LAUNCHER_DIR)/main_launcher.o \
-
+	$(LAUNCHER_DIR)/main_launcher.o
 endif
 
 ifeq ($(MAKE_LAUNCHER),0)
@@ -176,7 +177,6 @@ $(LAUNCHER_LIB): $(LAUNCH_LIB_OBJS) $(LAUNCHER_DIR_TIMESTAMP)
 
 $(LAUNCHER_DIR)/main_launcher.o: $(LAUNCHER_OBJDIR)/src/main_launcher.o
 	cp $< $@
-
 
 #
 # include standard footer for runtime

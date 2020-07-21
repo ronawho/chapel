@@ -8,7 +8,7 @@ include $(CHPL_MAKE_HOME)/make/Makefile.base
 #
 # Cray X* builds are cross-compilations.
 #
-ifneq (, $(filter cray-x%,$(CHPL_MAKE_TARGET_PLATFORM)))
+ifneq (, $(filter cray-x% cray-shasta,$(CHPL_MAKE_TARGET_PLATFORM)))
 CHPL_JEMALLOC_CFG_OPTIONS += --host=$(shell uname -m)-cle-linux-gnu
 else ifneq ($(CHPL_MAKE_HOST_PLATFORM),$(CHPL_MAKE_TARGET_PLATFORM))
 CHPL_JEMALLOC_CFG_OPTIONS += --host=$(CHPL_MAKE_TARGET_PLATFORM)-unknown-linux-gnu
@@ -17,16 +17,6 @@ endif
 CHPL_JEMALLOC_CFG_OPTIONS += --prefix=$(JEMALLOC_INSTALL_DIR) \
 			     --with-jemalloc-prefix=$(CHPL_JEMALLOC_PREFIX) \
 			     --with-private-namespace=chpl_
-
-# Can't build under CCE with high levels of interprocedural analysis on. We get
-# runtime errors with -hipa3 (the default) or higher so limit to -hipa2.
-ifeq ($(CHPL_MAKE_TARGET_COMPILER),cray-prgenv-cray)
-ifeq ($(OPTIMIZE), 1)
-CFLAGS += -hipa2
-else
-CFLAGS += -hipa0
-endif
-endif
 
 
 # Unless the user explicitly asks for stats gathering, disable it since
@@ -43,7 +33,7 @@ CHPL_JEMALLOC_CFG_OPTIONS += --with-malloc-conf=purge:decay
 # from git history & out-of-tree builds, explicitly set the version
 CHPL_JEMALLOC_CFG_OPTIONS += --with-version=`cat $(JEMALLOC_SUBDIR)/VERSION`
 
-ifeq ($(CHPL_LIBMODE),shared)
+ifeq ($(CHPL_LIB_PIC),pic)
 CFLAGS += $(SHARED_LIB_CFLAGS)
 endif
 

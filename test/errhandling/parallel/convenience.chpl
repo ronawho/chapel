@@ -18,21 +18,22 @@ proc test() {
     writeln("before coforall block");
     coforall i in 1..3 {
       if i < 3 then
-        throw new MyError("test error");
+        throw new owned MyError("test error");
       else
-        throw new StringError("other error");
+        throw new owned StringError("other error");
     }
     writeln("after coforall block");
   } catch errors: TaskErrors {
     var hasMyError = errors.contains(borrowed MyError);
     writeln("contains MyError? ", hasMyError);
     writeln("iterating MyError:");
-    for error in errors.filter(borrowed MyError) {
-      writeln(error.x);
+    for error in errors.filter(borrowed MyError?) {
+      var e = error!:borrowed MyError;
+      writeln(e.x);
     }
     writeln("iterating everything else:");
     for error in errors {
-      var e = error:borrowed MyError;
+      var e = error:borrowed MyError?;
       if e == nil then
         writeln(error);
     }

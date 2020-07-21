@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -80,8 +81,32 @@ static void markTaskFunctionsInIterators(Vec<FnSymbol*>& nestedFunctions) {
 //
 static bool
 isOuterVar(Symbol* sym, FnSymbol* fn, Symbol* parent = NULL) {
-  if (!parent)
+  if (!parent) {
     parent = fn->defPoint->parentSymbol;
+
+    // If the symbol is at module scope and the type should always be
+    // RVF'd and the symbol doesn't have the "locale private" flag
+    // applied to it then we should RVF it, so add it to the
+    // function's argument list so that it can be considered in the
+    // remoteValueForwarding pass (Otherwise, symbols at module scope
+    // tend not to be RVF'd... but maybe they should be?  A
+    // disadvantage to doing so is that they have to be added as
+    // arguments in the flattenFunctions pass to be considered, but if
+    // they're not going to be RVF'd, this is unnecessary...  And if
+    // they're const, they'll be broadcast proactively at module
+    // initialization time).)
+    //
+    // Why skip "locale private" variables?  Because these variables
+    // already have special handling to localize them, and RVFing them
+    // causes the `Locales` to be RVF'd which caused extra
+    // communications to take place (and generally seems confusing).
+    //
+    if (isModuleSymbol(sym->defPoint->parentSymbol) &&
+        sym->getValType()->symbol->hasFlag(FLAG_ALWAYS_RVF) &&
+        !sym->hasFlag(FLAG_LOCALE_PRIVATE)) {
+      return true;
+    }
+  }
 
   if (!isFnSymbol(parent))
     return false;
@@ -100,12 +125,12 @@ isOuterVar(Symbol* sym, FnSymbol* fn, Symbol* parent = NULL) {
 static void
 findOuterVars(FnSymbol* fn, SymbolMap* uses) {
   std::vector<SymExpr*> SEs;
-  collectSymExprs(fn, SEs);
+  collectLcnSymExprs(fn, SEs);
 
   for_vector(SymExpr, symExpr, SEs) {
       Symbol* sym = symExpr->symbol();
 
-      if (isLcnSymbol(sym) && isOuterVar(sym, fn)) {
+      if (isOuterVar(sym, fn)) {
         uses->put(sym,gNil);
       }
   }
@@ -221,7 +246,7 @@ addVarsToFormals(FnSymbol* fn, SymbolMap* vars) {
       //
       // BHARSH: TODO: The arg intent set here can have a large impact on
       // RVF later on. For RVF to be more effective, this might be a good
-      // place to do some analysis and mark arguments as 'const in' and 
+      // place to do some analysis and mark arguments as 'const in' and
       // 'const ref', even if the actual is not marked with FLAG_CONST.
       //
       // Prior to the QualifiedType changes this section would make the type
@@ -257,6 +282,7 @@ addVarsToFormals(FnSymbol* fn, SymbolMap* vars) {
           arg->addFlag(FLAG_CONST_DUE_TO_TASK_FORALL_INTENT);
       if (sym->hasFlag(FLAG_COFORALL_INDEX_VAR))
           arg->addFlag(FLAG_COFORALL_INDEX_VAR);
+      arg->addFlag(FLAG_OUTER_VARIABLE);
 
       fn->insertFormalAtTail(new DefExpr(arg));
       vars->put(sym, arg);
@@ -272,11 +298,16 @@ replaceVarUsesWithFormals(FnSymbol* fn, SymbolMap* vars) {
 
   collectSymExprs(fn->body, symExprs);
 
+  size_t firstInLifetimeConstraint = symExprs.size();
+  if (fn->lifetimeConstraints)
+    collectSymExprs(fn->lifetimeConstraints, symExprs);
+
   form_Map(SymbolMapElem, e, *vars) {
     if (Symbol* sym = e->key) {
       ArgSymbol* arg  = toArgSymbol(e->value);
       Type*      type = arg->type;
 
+      size_t i = 0;
       for_vector(SymExpr, se, symExprs) {
         if (se->symbol() == sym) {
           if (type == sym->type) {
@@ -298,13 +329,19 @@ replaceVarUsesWithFormals(FnSymbol* fn, SymbolMap* vars) {
               }
             }
 
-            if ((call->isPrimitive(PRIM_MOVE)       && call->get(1) == se) ||
-                (call->isPrimitive(PRIM_ASSIGN)     && call->get(1) == se) ||
-                (call->isPrimitive(PRIM_SET_MEMBER) && call->get(1) == se) ||
-                (call->isPrimitive(PRIM_GET_MEMBER))                       ||
-                (call->isPrimitive(PRIM_GET_MEMBER_VALUE))                 ||
-                (call->isPrimitive(PRIM_WIDE_GET_LOCALE))                  ||
-                (call->isPrimitive(PRIM_WIDE_GET_NODE))                    ||
+            // check if call is in a lifetime clause
+            if (i >= firstInLifetimeConstraint)
+              canPassToFn = true;
+
+            if (( (call->isPrimitive(PRIM_MOVE)       ||
+                   call->isPrimitive(PRIM_ASSIGN)     ||
+                   call->isPrimitive(PRIM_SET_MEMBER) )
+                  && call->get(1) == se)                                   ||
+                call->isPrimitive(PRIM_GET_MEMBER)                         ||
+                call->isPrimitive(PRIM_GET_MEMBER_VALUE)                   ||
+                call->isPrimitive(PRIM_WIDE_GET_LOCALE)                    ||
+                call->isPrimitive(PRIM_WIDE_GET_NODE)                      ||
+                call->isPrimitive(PRIM_END_OF_STATEMENT)                   ||
                 canPassToFn) {
               se->setSymbol(arg); // do not dereference argument in these cases
 
@@ -333,6 +370,7 @@ replaceVarUsesWithFormals(FnSymbol* fn, SymbolMap* vars) {
             se->setSymbol(arg);
           }
         }
+        i++;
       }
     }
   }
@@ -349,8 +387,15 @@ addVarsToActuals(CallExpr* call, SymbolMap* vars, bool outerCall) {
   }
 }
 
+static void deleteCalledby(FnSymbol* fn) {
+  if (fn->calledBy != NULL)  { delete fn->calledBy; fn->calledBy = NULL; }
+}
+static void deleteAllCalledby() {
+  for_alive_in_Vec(FnSymbol, fn, gFnSymbols)  deleteCalledby(fn);
+}
+
 void flattenNestedFunctions(Vec<FnSymbol*>& nestedFunctions) {
-  compute_call_sites();
+  if (fVerify) deleteAllCalledby();
 
   Vec<FnSymbol*> outerFunctionSet;
   Vec<FnSymbol*> nestedFunctionSet;
@@ -378,8 +423,10 @@ void flattenNestedFunctions(Vec<FnSymbol*>& nestedFunctions) {
     change = false;
 
     forv_Vec(FnSymbol, fn, nestedFunctions) {
-      std::vector<BaseAST*> asts;
+      if (!fVerify) deleteCalledby(fn);
+      computeAllCallSites(fn);
 
+      std::vector<BaseAST*> asts;
       collect_top_asts(fn, asts);
 
       SymbolMap* uses = args_map.get(fn);

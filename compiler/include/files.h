@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -28,6 +29,7 @@
 
 extern char executableFilename[FILENAME_MAX+1];
 extern char libmodeHeadername[FILENAME_MAX+1];
+extern char fortranModulename[FILENAME_MAX+1];
 extern char pythonModulename[FILENAME_MAX+1];
 extern char saveCDir[FILENAME_MAX+1];
 extern std::string ccflags;
@@ -53,6 +55,8 @@ void deleteTmpDir();
 const char* objectFileForCFile(const char* cfile);
 
 const char* genIntermediateFilename(const char* filename);
+const char* getDirectory(const char* filename);
+const char* stripdirectories(const char* filename);
 
 void openCFile(fileinfo* fi, const char* name, const char* ext = NULL);
 void closeCFile(fileinfo* fi, bool beautifyIt=true);
@@ -76,7 +80,7 @@ bool isCHeader(const char* filename);
 bool isCSource(const char* filename);
 bool isObjFile(const char* filename);
 void addSourceFiles(int numFilenames, const char* filename[]);
-void addSourceFile(const char* filename);
+void addSourceFile(const char* filename, const char* modFilename);
 const char* nthFilename(int i);
 void addLibPath(const char* filename);
 void addLibFile(const char* filename);
@@ -100,6 +104,7 @@ void readArgsFromFile(std::string path, std::vector<std::string>& cmds);
 void expandInstallationPaths(std::string& arg);
 void expandInstallationPaths(std::vector<std::string>& args);
 
+char*       chplRealPath(const char* path);
 char*       dirHasFile(const char* dir, const char* file);
 char*       findProgramPath(const char* argv0);
 bool        isSameFile(const char* pathA, const char* pathB);

@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -21,7 +22,7 @@
 #define _STMT_H_
 
 #include "expr.h"
-#include "foralls.h"
+#include "stlUtil.h"
 
 #include <cstdio>
 #include <map>
@@ -55,6 +56,41 @@ public:
 *                                                                             *
 *                                                                             *
 ************************************** | *************************************/
+class ResolveScope;
+
+class VisibilityStmt: public Stmt {
+ public:
+  VisibilityStmt(AstTag astTag);
+
+  virtual ~VisibilityStmt();
+
+  bool isARename() const;
+  bool isARenamedSym(const char* name) const;
+  const char* getRename() const;
+  const char* getRenamedSym(const char* name) const;
+
+  virtual bool skipSymbolSearch(const char* name) const = 0;
+
+  virtual BaseAST* getSearchScope() const = 0;
+
+  Symbol* checkIfModuleNameMatches(const char* name);
+
+ protected:
+  void updateEnclosingBlock(ResolveScope* scope,
+                            Symbol* sym);
+
+  void validateRenamed();
+  void noRepeatsInRenamed() const;
+
+public:
+  Expr* src;
+  bool isPrivate;
+  std::map<const char*, const char*> renamed;
+
+protected:
+  const char* modRename;
+
+};
 
 #include "UseStmt.h"
 
@@ -81,7 +117,6 @@ public:
                       BlockStmt(Expr*    initBody     = NULL,
                                 BlockTag initBlockTag = BLOCK_NORMAL);
                       BlockStmt(BlockTag initBlockTag);
-  virtual            ~BlockStmt();
 
   DECLARE_COPY(BlockStmt);
 
@@ -108,10 +143,7 @@ public:
   virtual bool        isCForLoop()                                 const;
 
   virtual void        checkConstLoops();
-  void                removeForallIntents();
-
   virtual bool        deadBlockCleanup();
-
   void                appendChapelStmt(BlockStmt* stmt);
   void                flattenAndRemove();
 
@@ -133,10 +165,14 @@ public:
 
   int                 length()                                     const;
 
-  void                useListAdd(ModuleSymbol* mod);
-  void                useListAdd(UseStmt*      use);
+  void                useListAdd(ModuleSymbol* mod, bool isPrivate);
+  void                useListAdd(VisibilityStmt* stmt);
   bool                useListRemove(ModuleSymbol* mod);
   void                useListClear();
+
+  void                modRefsAdd(ModuleSymbol* mod);
+  bool                modRefsRemove(ModuleSymbol* mod);
+  void                modRefsClear();
 
   virtual CallExpr*   blockInfoGet()                               const;
   virtual CallExpr*   blockInfoSet(CallExpr* expr);
@@ -144,9 +180,9 @@ public:
   BlockTag            blockTag;
   AList               body;
   CallExpr*           useList;       // module/enum uses for this block
+  CallExpr*           modRefs;       // modules referenced directly
   const char*         userLabel;
   CallExpr*           byrefVars;     // task intents - task constructs only
-  ForallIntents*      forallIntents; // only for forall-body blocks
 
 private:
   bool                canFlattenChapelStmt(const BlockStmt* stmt)  const;
@@ -163,7 +199,8 @@ class CondStmt : public Stmt {
 public:
                       CondStmt(Expr*    iCondExpr,
                                BaseAST* iThenStmt,
-                               BaseAST* iElseStmt = NULL);
+                               BaseAST* iElseStmt = NULL,
+                               bool     isIfExpr = false);
 
                       DECLARE_COPY(CondStmt);
 
@@ -175,11 +212,16 @@ public:
   virtual Expr*       getFirstExpr();
   virtual Expr*       getNextExpr(Expr* expr);
 
-  CallExpr*           foldConstantCondition();
+  CallExpr*           foldConstantCondition(bool addEndOfStatement);
 
   Expr*               condExpr;
   BlockStmt*          thenStmt;
   BlockStmt*          elseStmt;
+
+  bool                isIfExpr() const;
+
+private:
+  bool                fIsIfExpr;
 };
 
 /************************************* | **************************************
@@ -196,7 +238,8 @@ enum GotoTag {
   GOTO_ITER_RESUME,
   GOTO_ITER_END,
   GOTO_ERROR_HANDLING,
-  GOTO_BREAK_ERROR_HANDLING
+  GOTO_BREAK_ERROR_HANDLING,
+  GOTO_ERROR_HANDLING_RETURN,
 };
 
 
@@ -305,12 +348,12 @@ public:
 extern Vec<LabelSymbol*>         removedIterResumeLabels;
 extern Map<GotoStmt*, GotoStmt*> copiedIterResumeGotos;
 
+const char*  gotoTagToString(GotoTag gotoTag);
+CondStmt*    isConditionalInCondStmt(Expr* expr);
+
 // Probably belongs in Expr; doesn't really mean Stmt, but rather
 // statement-level expression.
 void         codegenStmt(Expr* stmt);
-
-// Serving ForallStmt and forall intents.
-bool isDirectlyUnderBlockStmt(const Expr* expr);
 
 // Extract (e.toGotoStmt)->(label.toSymExpr)->var and var->->iterResumeGoto,
 // if possible; NULL otherwise.

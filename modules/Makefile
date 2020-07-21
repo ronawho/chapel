@@ -1,4 +1,5 @@
-# Copyright 2004-2018 Cray Inc.
+# Copyright 2020 Hewlett Packard Enterprise Development LP
+# Copyright 2004-2019 Cray Inc.
 # Other additional copyright holders may be indicated within.
 #
 # The entirety of this work is licensed under the Apache License,
@@ -32,7 +33,7 @@ endif
 CHPL_MAKE_HOST_TARGET = --target
 include $(CHPL_MAKE_HOME)/make/Makefile.base
 
-SYS_MODULES_DIR=standard/gen/$(CHPL_MAKE_PLATFORM)-$(CHPL_MAKE_COMPILER)
+SYS_MODULES_DIR=standard/gen/$(CHPL_MAKE_PLATFORM)-$(CHPL_MAKE_ARCH)-$(CHPL_MAKE_COMPILER)
 SYS_CTYPES_MODULE_DOC=standard/SysCTypes.chpl
 SYS_CTYPES_MODULE=$(SYS_MODULES_DIR)/SysCTypes.chpl
 
@@ -69,6 +70,7 @@ MODULES_TO_DOCUMENT = \
 	standard/Barriers.chpl \
 	standard/BigInteger.chpl \
 	standard/BitOps.chpl \
+	standard/Builtins.chpl \
 	standard/CommDiagnostics.chpl \
 	standard/DateTime.chpl \
 	standard/DynamicIters.chpl \
@@ -76,39 +78,46 @@ MODULES_TO_DOCUMENT = \
 	standard/GMP.chpl \
 	standard/Help.chpl \
 	standard/IO.chpl \
+	standard/LinkedLists.chpl \
 	standard/List.chpl \
+	standard/Map.chpl \
 	standard/Math.chpl \
 	standard/Memory.chpl \
 	standard/Path.chpl \
 	standard/Random.chpl \
 	standard/Reflection.chpl \
 	standard/Regexp.chpl \
+	standard/Set.chpl \
 	standard/Spawn.chpl \
 	standard/Sys.chpl \
 	standard/SysBasic.chpl \
 	standard/SysError.chpl \
 	standard/Time.chpl \
 	standard/Types.chpl \
+	standard/Version.chpl \
 	$(SYS_CTYPES_MODULE_DOC)
 
 PACKAGES_TO_DOCUMENT = \
 	packages/AllLocalesBarriers.chpl \
+	packages/AtomicObjects.chpl \
 	packages/BLAS.chpl \
-	packages/BufferedAtomics.chpl \
 	packages/Buffers.chpl \
 	packages/Crypto.chpl \
 	packages/Curl.chpl \
+	packages/EpochManager.chpl \
 	packages/FFTW.chpl \
-	packages/FFTW_MT.chpl \
+	packages/FunctionalOperations.chpl \
 	packages/Futures.chpl \
 	packages/HDF5.chpl \
 	packages/HDFS.chpl \
-	packages/HDFSiterator.chpl \
 	packages/LAPACK.chpl \
 	packages/LinearAlgebra.chpl \
+	packages/LockFreeQueue.chpl \
+	packages/LockFreeStack.chpl \
 	packages/MPI.chpl \
 	packages/NetCDF.chpl \
 	packages/Norm.chpl \
+	packages/PeekPoke.chpl \
 	packages/RangeChunk.chpl \
 	packages/RecordParser.chpl \
 	packages/ReplicatedVar.chpl \
@@ -120,13 +129,18 @@ PACKAGES_TO_DOCUMENT = \
 	packages/DistributedBag.chpl \
 	packages/DistributedDeque.chpl \
 	packages/DistributedIters.chpl \
-	packages/TOML.chpl
+	packages/TOML.chpl \
+	packages/UnitTest.chpl \
+	packages/UnorderedAtomics.chpl \
+	packages/UnorderedCopy.chpl \
+	packages/URL.chpl
 
 DISTS_TO_DOCUMENT = \
 	dists/BlockCycDist.chpl \
 	dists/BlockDist.chpl \
 	dists/CyclicDist.chpl \
 	dists/DimensionalDist2D.chpl \
+	dists/HashedDist.chpl \
 	dists/PrivateDist.chpl \
 	dists/ReplicatedDist.chpl \
 	dists/StencilDist.chpl \
@@ -145,6 +159,7 @@ INTERNAL_MODULES_TO_DOCUMENT =                \
 	internal/ChapelLocale.chpl            \
 	internal/UtilMisc_forDocs.chpl 	      \
 	internal/ChapelRange.chpl             \
+	internal/Bytes.chpl                   \
 	internal/String.chpl                  \
 	internal/ChapelSyncvar.chpl           \
 	internal/ChapelTuple.chpl             \
@@ -156,7 +171,7 @@ INTERNAL_MODULES_TO_DOCUMENT =                \
 
 documentation: $(SYS_CTYPES_MODULE_DOC)
 	@echo "Generating module documentation with chpldoc"
-	export CHPLDOC_AUTHOR='Cray Inc' && \
+	export CHPLDOC_AUTHOR='Hewlett Packard Enterprise Development LP' && \
 	$(CHPLDOC) --save-sphinx ${MODULE_SPHINX} --no-html $(MODULES_TO_DOCUMENT) $(DISTS_TO_DOCUMENT) $(PACKAGES_TO_DOCUMENT) $(INTERNAL_MODULES_TO_DOCUMENT)
 	@echo "Running post-processing scripts"
 	./internal/fixInternalDocs.sh ${MODULE_SPHINX}

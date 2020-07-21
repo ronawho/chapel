@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -22,7 +23,9 @@
    arrays
  */
 module Search {
-  use Sort;
+  public use Sort only defaultComparator, DefaultComparator,
+                       reverseComparator, ReverseComparator;
+  private use Sort;
 
 
 /*
@@ -42,7 +45,7 @@ module Search {
    General purpose searching interface for searching through a 1D array.
    For pre-sorted arrays, denoted by passing ``sorted=true`` as an argument,
    this function wraps :proc:`binarySearch`, otherwise it wraps
-   :proc`linearSearch`.
+   :proc:`linearSearch`.
 
    :arg Data: The array to be searched
    :type Data: [] `eltType`

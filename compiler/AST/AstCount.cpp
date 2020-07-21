@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -30,7 +31,6 @@ AstCount::AstCount() {
 
   // Initialize other member variables for AST types
   // not handled by the baseAST macro.
-  numForallIntents = 0;
   numWhileDoStmt = 0;
   numDoWhileStmt = 0;
   numCForLoop = 0;
@@ -50,7 +50,6 @@ foreach_ast(count_members);
 #undef count_members
 
   // and then add those not covered by the baseAST macro
-  sum += numForallIntents;
   sum += numWhileDoStmt;
   sum += numDoWhileStmt;
   sum += numCForLoop;
@@ -60,12 +59,12 @@ foreach_ast(count_members);
   return sum;
 }
 
-bool AstCount::enterUnmanagedClassType(UnmanagedClassType* node) {
-  numUnmanagedClassType++;
+bool AstCount::enterDecoratedClassType(DecoratedClassType* node) {
+  numDecoratedClassType++;
   return true;
 }
 
-void AstCount::exitUnmanagedClassType(UnmanagedClassType* node) {
+void AstCount::exitDecoratedClassType(DecoratedClassType* node) {
 }
 
 
@@ -193,16 +192,16 @@ void AstCount::visitUseStmt(UseStmt* node) {
   numUseStmt++;
 }
 
+void AstCount::visitImportStmt(ImportStmt* node) {
+  numImportStmt++;
+}
+
 bool AstCount::enterBlockStmt(BlockStmt* node) {
   numBlockStmt++;
   return true;
 }
 
 void AstCount::exitBlockStmt(BlockStmt* node) {
-}
-
-void AstCount::visitForallIntents(ForallIntents* clause) {
-  numForallIntents++;
 }
 
 bool AstCount::enterForallStmt(ForallStmt* node)

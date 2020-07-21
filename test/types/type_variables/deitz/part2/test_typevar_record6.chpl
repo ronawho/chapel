@@ -1,14 +1,14 @@
 class node {
   type t;
   var element : t;
-  var next : unmanaged node(t);
+  var next : unmanaged node(t)?;
 }
 
 record foo {
   type t;
   var length : int;
-  var first : unmanaged node(t);
-  var last : unmanaged node(t);
+  var first : unmanaged node(t)?;
+  var last : unmanaged node(t)?;
 
   proc append(e : t) {
    var anew : unmanaged node(t) = new unmanaged node(t);
@@ -16,7 +16,7 @@ record foo {
     anew.element = e;
 
     if length > 0 {
-      last.next = anew;
+      last!.next = anew;
       last = anew;
     } else {
       first = anew;
@@ -33,23 +33,34 @@ record foo {
     var tmp = first;
 
     while tmp != nil {
-      anew.append(tmp.element);
-      tmp  = tmp.next;
+      anew.append(tmp!.element);
+      tmp  = tmp!.next;
     }
 
     return anew;
   }
+
+  proc cleanup() {
+    var cursor: unmanaged node(t)?;
+    var next: unmanaged node(t)?;
+    cursor = first;
+    while (cursor != nil) {
+      next = cursor!.next;
+      delete cursor;
+      cursor = next;
+    }
+  }
 }
 
-proc foo.writeThis(fp) {
+proc foo.writeThis(fp) throws {
   fp.write("(/");
 
   var tmp = first;
 
   while tmp != nil {
-    fp.write(tmp.element);
+    fp.write(tmp!.element);
 
-    tmp = tmp.next;
+    tmp = tmp!.next;
 
     if (tmp != nil) {
       fp.write(", ");
@@ -66,6 +77,9 @@ f.append(2);
 
 writeln(f);
 
-f.copy();
+var f2 = f.copy();
 
 writeln(f);
+
+f2.cleanup();
+f.cleanup();

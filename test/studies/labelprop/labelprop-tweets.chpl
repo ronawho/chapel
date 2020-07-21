@@ -52,9 +52,11 @@ config param distributed = false; // NOTE - could default to CHPL_COMM != none
 use FileSystem;
 use Spawn;
 use Time;
+use IO;
 use Graph;
 use Random;
-use UserMapAssoc;
+use HashedDist;
+use LinkedLists;
 use BlockDist;
 
 // packing twitter user IDs to numbers
@@ -64,7 +66,7 @@ var max_user_id : atomic int;
 
 proc main(args:[] string) {
   var files = args[1..];
-  var todo:list(string);
+  var todo:LinkedList(string);
 
   for arg in files {
     if isDir(arg) {
@@ -78,10 +80,10 @@ proc main(args:[] string) {
   }
 
   // TODO - using 2 functions because of lack of
-  // domain assignment in UserMapAssoc
+  // domain assignment in Hashed
   // Pairs is for collecting twitter  user ID to user ID mentions
   if distributed {
-    var Pairs: domain( (int, int) ) dmapped UserMapAssoc(idxType=(int, int));
+    var Pairs: domain( (int, int) ) dmapped Hashed(idxType=(int, int));
     run(todo, Pairs);
   } else {
     var Pairs: domain( (int, int) );
@@ -91,11 +93,11 @@ proc main(args:[] string) {
 
 
 
-proc run(ref todo:list(string), ref Pairs) {
+proc run(ref todo:LinkedList(string), ref Pairs) {
   var t:Timer;
   t.start();
 
-  const FilesSpace = {1..todo.length};
+  const FilesSpace = {1..todo.size};
   const BlockSpace = if distributed then
                        FilesSpace dmapped Block(boundingBox=FilesSpace)
                      else
@@ -122,7 +124,7 @@ proc run(ref todo:list(string), ref Pairs) {
   if verbose {
     if distributed {
       // TODO -- this is not portable code
-      // need UserMapAssoc to support localDomain
+      // need HashedDist to support localDomain
       for i in 0..#numLocales {
         writeln("on locale ", i, " there are ",
                 Pairs._value.locDoms[i].myInds.size,
@@ -158,7 +160,7 @@ record TweetUser {
 record TweetEntities {
   // read somethig like user_mentions=[1, 3, 4, 5]
   //var user_mentions:[1..0] TweetUser; // TODO - support this
-  var user_mentions:list(TweetUser);
+  var user_mentions:LinkedList(TweetUser);
 }
 
 record User {
@@ -240,7 +242,7 @@ proc process_json(logfile:channel, fname:string, ref Pairs) {
   while true {
     var got = max_user_id.read();
     var id = if got > max_id then got else max_id;
-    var success = max_user_id.compareExchangeWeak(got, id);
+    var success = max_user_id.compareAndSwap(got, id);
     if success then break;
   }
 }
@@ -248,7 +250,7 @@ proc process_json(logfile:channel, fname:string, ref Pairs) {
 proc process_json(fname: string, ref Pairs)
 {
 
-  var last3chars = fname[fname.length-2..fname.length];
+  var last3chars = fname[fname.size-3..];
   if last3chars == ".gz" {
     var sub = spawn(["gunzip", "-c", fname], stdout=PIPE);
     process_json(sub.stdout, fname, Pairs);
@@ -285,7 +287,7 @@ proc create_and_analyze_graph(Pairs)
   var userIds:domain(int);
 
   forall (id, other_id) in Pairs with (ref userIds) {
-    if Pairs.member( (other_id, id) ) {
+    if Pairs.contains( (other_id, id) ) {
       //writeln("Reciprocal match! ", (id, other_id) );
 
       // add to userIds
@@ -333,7 +335,7 @@ proc create_and_analyze_graph(Pairs)
     writeln("creating triples");
 
   var triples = [(id, other_id) in Pairs]
-                   if id < other_id && Pairs.member( (other_id, id) ) then
+                   if id < other_id && Pairs.contains( (other_id, id) ) then
                      new Triple(idToNode[id], idToNode[other_id]);
 
   if printall {
@@ -395,7 +397,7 @@ proc create_and_analyze_graph(Pairs)
   forall (lab,i) in zip(labels,1:int(32)..) {
     // TODO -- elegance - use "atomic counter" that acts as normal var
     // or change the default for the atomic
-    labels[i].write(i, memory_order_relaxed);
+    labels[i].write(i, memoryOrder.relaxed);
   }
 
   // label propagation for community detection according to
@@ -437,11 +439,11 @@ proc create_and_analyze_graph(Pairs)
   // Or we could just do it in the normal order...
 
   var go: atomic bool;
-  go.write(true, memory_order_relaxed);
+  go.write(true, memoryOrder.relaxed);
 
   var i = 0;
 
-  while go.read(memory_order_relaxed) && i < maxiter {
+  while go.read(memoryOrder.relaxed) && i < maxiter {
     // TODO: brad recommends changing the above to a for
     // look and then adding a break. He suggests:
     /*
@@ -457,7 +459,7 @@ proc create_and_analyze_graph(Pairs)
     */
 
     // stop unless we determine we should continue
-    go.write(false, memory_order_relaxed);
+    go.write(false, memoryOrder.relaxed);
 
     // TODO:  -> forall, but handle races in vertex labels?
     // iterate over G.vertices in a random order
@@ -477,24 +479,24 @@ proc create_and_analyze_graph(Pairs)
 
         if printall then
           writeln("on neighbor ", nid);
-        var nlabel = labels[nid].read(memory_order_relaxed);
+        var nlabel = labels[nid].read(memoryOrder.relaxed);
         if printall then
           writeln("with label ", nlabel);
 
-        if ! foundLabels.member(nlabel) {
+        if ! foundLabels.contains(nlabel) {
           foundLabels += nlabel;
         }
         counts[nlabel] += 1;
       }
 
-      var mylabel = labels[vid].read(memory_order_relaxed);
+      var mylabel = labels[vid].read(memoryOrder.relaxed);
 
       // TODO: ties should be broken uniformly randomly
       var maxlabel:int(32) = 0;
       var maxcount = 0;
       // TODO -- performance -- this allocates memory.
       // There might not be a tie.
-      var tiebreaker = makeRandomStream(seed+vid, eltType=bool,
+      var tiebreaker = createRandomStream(seed+vid, eltType=bool,
                                         parSafe=false, algorithm=RNG.PCG);
       for (count,lab) in zip(counts, counts.domain) {
         if count > maxcount || (count == maxcount && tiebreaker.getNext()) {
@@ -507,13 +509,13 @@ proc create_and_analyze_graph(Pairs)
       // Did the existing label correspond to a maximal label?
       // stop when every node has a label a maximum number of neighbors have
       // (e.g. there might be 2 labels each attaining the maximum)
-      if foundLabels.member[mylabel] && counts[mylabel] < maxlabel {
-        go.write(true, memory_order_relaxed);
+      if foundLabels.contains[mylabel] && counts[mylabel] < maxlabel {
+        go.write(true, memoryOrder.relaxed);
       }
 
       // set the current label to the maximum label.
       if mylabel != maxlabel then
-        labels[vid].write(maxlabel, memory_order_relaxed);
+        labels[vid].write(maxlabel, memoryOrder.relaxed);
     }
     i += 1;
   } }
@@ -529,7 +531,7 @@ proc create_and_analyze_graph(Pairs)
     for vid in G.vertices {
       writeln("twitter user ", nodeToId[vid],
               " is in group ",
-              nodeToId[labels[vid].read(memory_order_relaxed)]);
+              nodeToId[labels[vid].read(memoryOrder.relaxed)]);
     }
   }
 

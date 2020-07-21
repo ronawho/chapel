@@ -21,7 +21,7 @@ iter myiter(nn: int, nt: int, param tag: iterKind) throws where tag == iterKind.
 
 // for loop in follower with yield should get vector pragma
 iter myiter(nn:int, nt: int, followThis, param tag: iterKind) throws where tag == iterKind.follower {
-  throw new StringError("Test error");
+  throw new owned StringError("Test error");
   for i in followThis {
     yield i;
   }
@@ -36,7 +36,9 @@ proc test() {
     writeln("after forall block");
   } catch errors: TaskErrors {
     for e in errors { 
-      writeln("Caught group error e ", e.message());
+      if e != nil {
+        writeln("Caught group error e ", e!.message());
+      }
     }
   } catch e {
     writeln("Caught other error ", e.message());

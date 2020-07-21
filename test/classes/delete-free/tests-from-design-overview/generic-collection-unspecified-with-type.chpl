@@ -5,19 +5,18 @@ record Collection {
   var element: elementType;
 }
 
-pragma "unsafe" // TODO
-proc Collection.addElement(arg: elementType) {
+proc Collection.addElement(in arg: elementType) lifetime this < arg {
   element = arg;
 }
 
 proc test() {
-  var c: Collection(owned MyClass);
+  var c: Collection(owned MyClass?);
   c.addElement( new owned MyClass() ); // transferred to element
 
   var global = new owned MyClass();
 
-  var d: Collection(int);     d.addElement( 1 ); // OK
-  var e: Collection(MyClass); e.addElement(global.borrow()); // OK
+  var d: Collection(int);      d.addElement( 1 ); // OK
+  var e: Collection(borrowed MyClass?); e.addElement(global.borrow()); // OK
 }
 
 test();

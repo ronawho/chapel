@@ -131,9 +131,7 @@ proc rank(iteration: int) {
 
   if useBuckets {
     bucketSize.write(0);
-    // workaround -- see https://github.com/chapel-lang/chapel/issues/10575
-    // bucketSize(keyArray >> shift).add(1);
-    forall k in keyArray do bucketSize(k >> shift).add(1);
+    bucketSize(keyArray >> shift).add(1);
 
     bucketPtrs(0) = 0;
     for i in 1..numBuckets-1 do
@@ -252,16 +250,13 @@ proc fullVerify() {
   var failures = 0;
   buffer = keyArray;
 
-  serial {
-    [i in D] {
-      atomic {
-	keyBuff1(buffer(i)) -= 1;
-	keyArray(keyBuff1(buffer(i))) = buffer(i);
-      }
-    }
+  for i in D {
+    keyBuff1(buffer(i)) -= 1;
+    keyArray(keyBuff1(buffer(i))) = buffer(i);
+  }
 
-    [i in 0..D.numIndices-2 with (ref failures)] // no race - in 'serial'
-      if (keyArray(i) > keyArray(i+1)) then failures += 1;
+  for i in 0..D.size-2 {
+    if (keyArray(i) > keyArray(i+1)) then failures += 1;
   }
 
   if (failures != 0) then

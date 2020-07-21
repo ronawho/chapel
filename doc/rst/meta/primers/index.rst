@@ -12,10 +12,13 @@ Language Basics
    Variables <variables>
    Procedures <procedures>
    Classes <classes>
-   Generic Classes <genericClasses>
+   Records <records>
+   Special Methods on Classes and Records <specialMethods>
+   Generic Classes and Records <genericClasses>
+   Tuples <tuples>
    Variadic Arguments (var args) <varargs>
    Modules <modules>
-   Void Variables <voidVariables>
+   Nothing Variables <nothingVariables>
    Error Handling <errorHandling>
 
 Iterators
@@ -56,10 +59,8 @@ Data Parallelism
    Domains <domains>
    Arrays <arrays>
    Slices <slices>
-   Array Vector Operations <arrayVectorOps>
    Sparse Domains and Arrays <sparse>
    Associative Domains and Arrays <associative>
-   Opaque Domains and Arrays <opaque-domains>
    Reductions <reductions>
    Distributions <distributions>
    Replicated Distribution <replicated>
@@ -71,6 +72,7 @@ Library Utilities
    :maxdepth: 1
 
    File I/O <fileIO>
+   List <listOps>
    Timers <timers>
 
 Numerical Libraries

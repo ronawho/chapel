@@ -1,5 +1,6 @@
-
+module OuterModule {
   module Test {
+    import OuterModule.{NBUCKETS, PER};
     /* these should already be defined:
     param NBUCKETS;
     param PER;
@@ -9,16 +10,35 @@
       type eltType;
       var counts:NBUCKETS*int;
 
-      proc accumulate(x) {
-        counts[1 + x/PER] += 1;
+      proc identity {
+        var result:NBUCKETS*int;
+        return result;
       }
-      proc combine(x) {
-        for i in 1..NBUCKETS {
-          counts[i] += x.counts[i];
+
+      proc accumulateOntoState(ref counts, x:eltType) {
+        counts[x/PER] += 1;
+      }
+
+      proc accumulate(x:eltType) {
+        accumulateOntoState(counts, x);
+      }
+
+      proc accumulate(other:NBUCKETS*int) {
+        for i in 0..#NBUCKETS {
+          counts[i] += other[i];
         }
       }
+
+      proc combine(x) {
+        accumulate(x.counts);
+      }
+
       proc generate() {
         return counts;
+      }
+
+      proc clone() {
+        return new unmanaged myhisto(eltType=eltType);
       }
     }
   }
@@ -38,4 +58,4 @@
   var counts = myhisto reduce array;
 
   writeln(counts);
-
+}

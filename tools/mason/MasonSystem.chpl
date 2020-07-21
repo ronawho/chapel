@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -18,6 +19,8 @@
  */
 
 
+private use List;
+private use Map;
 use Path;
 use MasonUtils;
 use MasonHelp;
@@ -62,7 +65,7 @@ proc masonSystem(args) {
 proc pkgConfigExists() throws {
   var status = runWithStatus("pkg-config --version", false);
   if status != 0 {
-    throw new MasonError("pkg-config is not installed");
+    throw new owned MasonError("pkg-config is not installed");
   }
   return true;
 }
@@ -95,9 +98,9 @@ proc pkgSearch(args) throws {
     }
   }
   if pkgName == "" {
-    throw new MasonError("Must include a package name");
+    throw new owned MasonError("Must include a package name");
   }
-  const pattern = compile(pkgName, ignorecase=true);
+  const pattern = compile(pkgName, ignoreCase=true);
   const command = "pkg-config --list-all";
   const cmd = command.split();
   var sub = spawn(cmd, stdout=PIPE);
@@ -146,7 +149,11 @@ proc printPkgPc(args) throws {
     try! {
       const pkgName = args[3];
       if pkgExists(pkgName) {
-        var pcDir = "".join(getPkgVariable(pkgName, "--variable=pcfiledir")).strip();
+        //
+        // Add a these call, since `string.join` has an iterator overload but
+        // not one for list.
+        //
+        var pcDir = "".join(getPkgVariable(pkgName, "--variable=pcfiledir").these()).strip();
         var pcFile = joinPath(pcDir, pkgName + ".pc");
         var pc = open(pcFile, iomode.r);
         writeln("\n------- " + pkgName + ".pc -------\n");
@@ -156,7 +163,7 @@ proc printPkgPc(args) throws {
         writeln("\n-------------------\n");
       }
       else {
-        throw new MasonError("Mason could not find " + pkgName + " on your system");
+        throw new owned MasonError("Mason could not find " + pkgName + " on your system");
       }
     }
     catch e: FileNotFoundError {
@@ -177,15 +184,15 @@ proc getPkgVariable(pkgName: string, option: string) {
 
   var command = " ".join("pkg-config", pkgName, option);
 
-  var lines: [1..0] string;
+  var lines: list(string);
   var cmd = command.split();
   var sub = spawn(cmd, stdout=PIPE);
   sub.wait();
 
   var line:string;
   for line in sub.stdout.lines() {
-    if line.length > 1 then
-    lines.push_back(line);
+    if line.size > 1 then
+      lines.append(line);
   }
 
   return lines;
@@ -207,25 +214,26 @@ proc pkgExists(pkgName: string) : bool {
 proc getPkgInfo(pkgName: string, version: string) throws {
 
   var pkgDom: domain(string);
-  var pkgToml: [pkgDom] unmanaged Toml;
-  var pkgInfo: unmanaged Toml = pkgToml;
+  var pkgToml: [pkgDom] unmanaged Toml?;
+  var pkgInfo = new unmanaged Toml(pkgToml);
 
   if pkgExists(pkgName) {
-    const pcVersion = "".join(getPkgVariable(pkgName, "--modversion")).strip();
-    const libs = "".join(getPkgVariable(pkgName, "--libs")).strip();
-    const include = "".join(getPkgVariable(pkgName, "--variable=includedir")).strip();
+    // Pass "these" to join instead of converting the list to an array.
+    const pcVersion = "".join(getPkgVariable(pkgName, "--modversion").these()).strip();
+    const libs = "".join(getPkgVariable(pkgName, "--libs").these()).strip();
+    const includePath = "".join(getPkgVariable(pkgName, "--variable=includedir").these()).strip();
 
-    pkgInfo["name"] = pkgName;
-    pkgInfo["version"] = pcVersion;
-    pkgInfo["libs"] = libs;
-    pkgInfo["include"] = include;
+    pkgInfo.set("name", pkgName);
+    pkgInfo.set("version", pcVersion);
+    pkgInfo.set("libs", libs);
+    pkgInfo.set("include", includePath);
 
     if pcVersion != version && version != "*" {
-      throw new MasonError("Unable to locate " + pkgName + ": " +version + "\n Found " + pcVersion);
+      throw new owned MasonError("Unable to locate " + pkgName + ": " +version + "\n Found " + pcVersion);
     }
   }
   else {
-    throw new MasonError("No pkg-config package by the name of: " + pkgName);
+    throw new owned MasonError("No pkg-config package by the name of: " + pkgName);
   }
   return pkgInfo;
 }
@@ -235,12 +243,13 @@ proc getPkgInfo(pkgName: string, version: string) throws {
 proc getPCDeps(exDeps: unmanaged Toml) {
 
   var exDom: domain(string);
-  var exDepTree: [exDom] unmanaged Toml;
+  var exDepTree: [exDom] unmanaged Toml?;
 
-  for (name, vers) in zip(exDeps.D, exDeps.A) {
+  for (name, vers) in exDeps.A.items() {
     try! {
       if pkgConfigExists() {
-        const pkgInfo = getPkgInfo(name, vers.s);
+        const pkgInfo = getPkgInfo(name, vers!.s);
+        exDom += name;
         exDepTree[name] = pkgInfo;
       }
     }

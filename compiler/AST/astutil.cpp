@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -22,15 +23,18 @@
 #include "baseAST.h"
 #include "CatchStmt.h"
 #include "CForLoop.h"
+#include "DecoratedClassType.h"
 #include "DeferStmt.h"
 #include "ForallStmt.h"
 #include "ForLoop.h"
 #include "IfExpr.h"
+#include "ImportStmt.h"
+#include "iterator.h"
 #include "expr.h"
 #include "LoopExpr.h"
-#include "UnmanagedClassType.h"
 #include "passes.h"
 #include "ParamForLoop.h"
+#include "resolution.h"
 #include "stlUtil.h"
 #include "stmt.h"
 #include "symbol.h"
@@ -82,8 +86,8 @@ void collectDefExprs(BaseAST* ast, std::vector<DefExpr*>& defExprs) {
 
 void collectForallStmts(BaseAST* ast, std::vector<ForallStmt*>& forallStmts) {
   AST_CHILDREN_CALL(ast, collectForallStmts, forallStmts);
-  if (ForallStmt* defExpr = toForallStmt(ast))
-    forallStmts.push_back(defExpr);
+  if (ForallStmt* forall = toForallStmt(ast))
+    forallStmts.push_back(forall);
 }
 
 void collectCallExprs(BaseAST* ast, std::vector<CallExpr*>& callExprs) {
@@ -106,24 +110,59 @@ void collectGotoStmts(BaseAST* ast, std::vector<GotoStmt*>& gotoStmts) {
     gotoStmts.push_back(gotoStmt);
 }
 
+// This is a specialized helper for lowerIterators.
+// Collects the gotos whose target is inTree() into 'GOTOs' and
+// the iterator break blocks into 'IBBs'.
+void collectTreeBoundGotosAndIteratorBreakBlocks(BaseAST* ast,
+                                                 std::vector<GotoStmt*>& GOTOs,
+                                                 std::vector<CondStmt*>& IBBs) {
+  if (CondStmt* condStmt = isIBBCondStmt(ast)) {
+    IBBs.push_back(condStmt);
+    // Do not descend into the IBB to avoid its "goto return".
+    // We do not expect it to contain nested IBBs.
+    return;
+  }
+
+  AST_CHILDREN_CALL(ast, collectTreeBoundGotosAndIteratorBreakBlocks, GOTOs,
+                                                                      IBBs);
+  // Include only the gotos whose target is inTree().
+  if (GotoStmt* gt = toGotoStmt(ast))
+    if (SymExpr* labelSE = toSymExpr(gt->label))
+      if (labelSE->symbol()->inTree())
+        GOTOs.push_back(gt);
+}
+
+
 void collectSymExprs(BaseAST* ast, std::vector<SymExpr*>& symExprs) {
   AST_CHILDREN_CALL(ast, collectSymExprs, symExprs);
   if (SymExpr* symExpr = toSymExpr(ast))
     symExprs.push_back(symExpr);
 }
 
-static void collectMySymExprsHelp(BaseAST*               ast,
-                                  std::vector<SymExpr*>& symExprs) {
-  if (isSymbol(ast)) return; // do not descend into nested symbols
-  AST_CHILDREN_CALL(ast, collectMySymExprsHelp, symExprs);
-  if (SymExpr* se = toSymExpr(ast))
-    symExprs.push_back(se);
+// Same as collectSymExprs(), including only SymExprs for 'sym'.
+void collectSymExprsFor(BaseAST* ast, Symbol* sym,
+                        std::vector<SymExpr*>& symExprs) {
+  AST_CHILDREN_CALL(ast, collectSymExprsFor, sym, symExprs);
+  if (SymExpr* symExpr = toSymExpr(ast))
+    if (symExpr->symbol() == sym)
+      symExprs.push_back(symExpr);
 }
 
-// The same for std::vector.
-void collectMySymExprs(Symbol* me, std::vector<SymExpr*>& symExprs) {
-  // skip the isSymbol(ast) check in collectMySymExprsHelp()
-  AST_CHILDREN_CALL(me, collectMySymExprsHelp, symExprs);
+// Same as collectSymExprs(), including only SymExprs for 'sym1' and 'sym2'.
+void collectSymExprsFor(BaseAST* ast, const Symbol* sym1, const Symbol* sym2,
+                        std::vector<SymExpr*>& symExprs) {
+  AST_CHILDREN_CALL(ast, collectSymExprsFor, sym1, sym2, symExprs);
+  if (SymExpr* symExpr = toSymExpr(ast))
+    if (symExpr->symbol() == sym1 || symExpr->symbol() == sym2)
+      symExprs.push_back(symExpr);
+}
+
+// Same as collectSymExprs(), including only LcnSymbols.
+void collectLcnSymExprs(BaseAST* ast, std::vector<SymExpr*>& symExprs) {
+  AST_CHILDREN_CALL(ast, collectLcnSymExprs, symExprs);
+  if (SymExpr* symExpr = toSymExpr(ast))
+    if (isLcnSymbol(symExpr->symbol()))
+      symExprs.push_back(symExpr);
 }
 
 void collectSymbols(BaseAST* ast, std::vector<Symbol*>& symbols) {
@@ -167,6 +206,20 @@ void collect_top_asts(BaseAST* ast, std::vector<BaseAST*>& asts) {
   asts.push_back(ast);
 }
 
+static void do_containsSymExprFor(BaseAST* ast, Symbol* sym, SymExpr** found) {
+  AST_CHILDREN_CALL(ast, do_containsSymExprFor, sym, found);
+  if (SymExpr* symExpr = toSymExpr(ast))
+    if (symExpr->symbol() == sym)
+      *found = symExpr;
+}
+
+// returns true if the AST contains a SymExpr pointing to sym
+SymExpr* findSymExprFor(BaseAST* ast, Symbol* sym) {
+  SymExpr* ret = NULL;
+  do_containsSymExprFor(ast, sym, &ret);
+  return ret;
+}
+
 void reset_ast_loc(BaseAST* destNode, BaseAST* sourceNode) {
   reset_ast_loc(destNode, sourceNode->astloc);
 }
@@ -176,23 +229,19 @@ void reset_ast_loc(BaseAST* destNode, astlocT astlocArg) {
   AST_CHILDREN_CALL(destNode, reset_ast_loc, astlocArg);
 }
 
-void compute_fn_call_sites(FnSymbol* fn) {
-/* If present, fn->calledBy needs to be set up in advance.
-   See the comment in compute_call_sites() */
-
+// Gather into fn->calledBy all direct calls to 'fn'.
+// This is a specialization of computeAllCallSites()
+// for use during resolveDynamicDispatches().
+void computeNonvirtualCallSites(FnSymbol* fn) {
   if (fn->calledBy == NULL) {
     fn->calledBy = new Vec<CallExpr*>();
   }
 
+  INT_ASSERT(virtualRootsMap.get(fn) == NULL);
+
   for_SymbolSymExprs(se, fn) {
     if (CallExpr* call = toCallExpr(se->parentExpr)) {
-      if (call->isEmpty()) {
-        assert(0); // not possible
-
-      } else if (!isAlive(call)) {
-        assert(0); // not possible
-
-      } else if (fn == call->resolvedFunction()) {
+      if (fn == call->resolvedFunction()) {
         fn->calledBy->add(call);
 
       } else if (call->isPrimitive(PRIM_FTABLE_CALL)) {
@@ -202,40 +251,53 @@ void compute_fn_call_sites(FnSymbol* fn) {
       } else if (call->isPrimitive(PRIM_VIRTUAL_METHOD_CALL)) {
         FnSymbol* vFn = toFnSymbol(toSymExpr(call->get(1))->symbol());
         if (vFn == fn) {
-          Vec<FnSymbol*>* children = virtualChildrenMap.get(fn);
-
-          fn->calledBy->add(call);
-
-          forv_Vec(FnSymbol, child, *children) {
-            if (!child->calledBy)
-              child->calledBy = new Vec<CallExpr*>();
-
-            child->calledBy->add(call);
-          }
+          INT_FATAL(call, "unexpected case calling %s", fn->name);
         }
       }
     }
   }
 }
 
-void compute_call_sites() {
-  /* Set up and clear the calledBy vector for all functions.  This cannot
-     be done one function at a time in compute_fn_call_sites(fn) because
-     compute_fn_call_sites(fn) can add calls to the calledBy vector of
-     other functions besides its argument. In particular a virtual method
-     call is considered to be calledBy all of the virtual methods in the
-     inheritance chain.
-   */
-  forv_Vec(FnSymbol, fn, gFnSymbols) {
-    if (fn->calledBy)
-      fn->calledBy->clear();
-    else
-      fn->calledBy = new Vec<CallExpr*>();
+// Gather into fn->calledBy all calls to 'fn', regular or virtual,
+// and all virtual calls to all its virtual parents, if any.
+void computeAllCallSites(FnSymbol* fn) {
+  Vec<CallExpr*>* calledBy = fn->calledBy;
+  if (calledBy == NULL)
+    fn->calledBy = calledBy = new Vec<CallExpr*>();
+  else 
+    calledBy->clear();
+  
+  for_SymbolSymExprs(se, fn) {
+    if (CallExpr* call = toCallExpr(se->parentExpr)) {
+      if (fn == call->resolvedFunction()) {
+        calledBy->add(call);
+
+      } else if (call->isPrimitive(PRIM_FTABLE_CALL)) {
+        // sjd: do we have to do anything special here?
+        //      should this call be added to some function's calledBy list?
+
+      } else if (call->isPrimitive(PRIM_VIRTUAL_METHOD_CALL)) {
+        FnSymbol* vFn = toFnSymbol(toSymExpr(call->get(1))->symbol());
+        if (vFn == fn)
+          calledBy->add(call);
+      }
+    }
   }
 
-  forv_Vec(FnSymbol, fn, gFnSymbols) {
-    compute_fn_call_sites(fn);
-  }
+  // Add all virtual calls on parents.
+  if (Vec<FnSymbol*>* parents = virtualParentsMap.get(fn))
+    forv_Vec(FnSymbol, pfn, *parents)
+      for_SymbolSymExprs(pse, pfn)
+        if (CallExpr* pcall = toCallExpr(pse->parentExpr))
+          if (pcall->isPrimitive(PRIM_VIRTUAL_METHOD_CALL) &&
+              pfn == toFnSymbol(toSymExpr(pcall->get(1))->symbol()))
+            calledBy->add(pcall);
+}
+
+// computeAllCallSites() for all FnSymbols.
+void compute_call_sites() {
+  for_alive_in_Vec(FnSymbol, fn, gFnSymbols)
+    computeAllCallSites(fn);
 }
 
 // builds the def and use maps for every variable/argument
@@ -446,6 +508,8 @@ int isDefAndOrUse(SymExpr* se) {
       } else {
         return USE; // ? = se;
       }
+    } else if (call->isPrimitive(PRIM_END_OF_STATEMENT)) {
+      return 0; // neither def nor use
     } else if (isOpEqualPrim(call) && isFirstActual) {
       // Both a def and a use:
       // se   =   se <op> ?
@@ -457,7 +521,7 @@ int isDefAndOrUse(SymExpr* se) {
       // BHARSH TODO: get rid of this 'isRecord' special case
       if (arg->intent == INTENT_REF ||
           arg->intent == INTENT_INOUT ||
-          (fn->name == astrSequals &&
+          (fn->name == astrSassign &&
            fn->getFormal(1) == arg &&
            isRecord(arg->type))) {
         return DEF_USE;
@@ -673,6 +737,23 @@ bool givesType(Symbol* sym) {
   return retval;
 }
 
+static bool isNumericTypeSymExpr(Expr* expr) {
+  if (SymExpr* se = toSymExpr(expr)) {
+    Symbol* sym = se->symbol();
+    Type* t = sym->type;
+    // if it's the actual type symbol for that type
+    if (t->symbol == sym && sym->hasFlag(FLAG_TYPE_VARIABLE))
+      return is_bool_type(t) ||
+             is_int_type(t) ||
+             is_uint_type(t) ||
+             is_real_type(t) ||
+             is_imag_type(t) ||
+             is_complex_type(t);
+  }
+
+  return false;
+}
+
 bool isTypeExpr(Expr* expr) {
   bool retval = false;
 
@@ -686,7 +767,7 @@ bool isTypeExpr(Expr* expr) {
     } else if (call->isPrimitive(PRIM_GET_MEMBER_VALUE) == true ||
                call->isPrimitive(PRIM_GET_MEMBER)       == true) {
       SymExpr*       left = toSymExpr(call->get(1));
-      Type*          t    = canonicalClassType(left->getValType());
+      Type*          t    = canonicalDecoratedClassType(left->getValType());
       AggregateType* ct   = toAggregateType(t);
 
       INT_ASSERT(ct != NULL);
@@ -709,6 +790,17 @@ bool isTypeExpr(Expr* expr) {
           retval = field->hasFlag(FLAG_TYPE_VARIABLE);
         }
       }
+
+    } else if (call->isPrimitive(PRIM_GET_RUNTIME_TYPE_FIELD)) {
+      bool isType = false;
+      getPrimGetRuntimeTypeFieldReturnType(call, isType);
+      retval = isType;
+
+    } else if (call->numActuals() == 1 &&
+               call->baseExpr &&
+               isNumericTypeSymExpr(call->baseExpr)) {
+      // e.g. call 'int' 64 is a type expression (resulting in int(64))
+      retval = true;
 
     } else if (FnSymbol* fn = call->resolvedFunction()) {
       retval = fn->retTag == RET_TYPE;
@@ -779,7 +871,6 @@ static void
 visitVisibleFunctions(Vec<FnSymbol*>& fns, Vec<TypeSymbol*>& types)
 {
   // chpl_gen_main is always visible (if it exists).
-  // --ipe does not build chpl_gen_main
   if (chpl_gen_main)
     pruneVisit(chpl_gen_main, fns, types);
 
@@ -923,7 +1014,7 @@ static void changeDeadTypesToVoid(Vec<TypeSymbol*>& types)
         isAggregateType(def->sym->type)  ==  true &&
         isTypeSymbol(def->sym)           == false &&
         !types.set_in(def->sym->type->symbol))
-      def->sym->type = dtVoid;
+      def->sym->type = dtNothing;
   }
 }
 
@@ -936,7 +1027,7 @@ static void removeVoidMoves()
       continue;
 
     SymExpr* se = toSymExpr(call->get(1));
-    if (se->symbol()->type != dtVoid)
+    if (se->symbol()->type != dtNothing)
       continue;
 
     // the RHS of the move could be a function with side effects.
@@ -979,9 +1070,9 @@ void prune2() { prune(); } // Synonym for prune.
 
 /*
  * Takes a call that is a PRIM_SVEC_GET_MEMBER* and returns the symbol of the
- * field. Normally the call is something of the form PRIM_SVEC_GET_MEMBER(p, 1)
+ * field. Normally the call is something of the form PRIM_SVEC_GET_MEMBER(p, 0)
  * and what this function gets out is the symbol that is the first field
- * instead of just the number 1.
+ * instead of just the number 0.
  */
 Symbol* getSvecSymbol(CallExpr* call) {
   INT_ASSERT(call->isPrimitive(PRIM_GET_SVEC_MEMBER)       ||
@@ -994,8 +1085,8 @@ Symbol* getSvecSymbol(CallExpr* call) {
   if (fieldSym) {
     int immediateVal = fieldSym->immediate->int_value();
 
-    INT_ASSERT(immediateVal >= 1 && immediateVal <= tuple->fields.length);
-    return tuple->getField(immediateVal);
+    INT_ASSERT(immediateVal >= 0 && immediateVal < tuple->fields.length);
+    return tuple->getField(immediateVal+1);
   } else {
     // GET_SVEC_MEMBER(p, i), where p is a star tuple
     return NULL;
@@ -1079,8 +1170,4 @@ void convertToQualifiedRefs() {
     }
   }
 #undef fixRefSymbols
-}
-
-bool isTupleTypeConstructor(FnSymbol* fn) {
-  return fn->hasFlag(FLAG_TYPE_CONSTRUCTOR) && fn->hasFlag(FLAG_TUPLE);
 }

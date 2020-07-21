@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -132,6 +133,7 @@ class LayeredValueTable
     void getCDecl(llvm::StringRef name, clang::TypeDecl** cTypeOut,
         clang::ValueDecl** cValueOut, const char** cCastedToTypeOut=NULL,
         astlocT *astlocOut=NULL);
+    bool isCArray(llvm::StringRef name);
     VarSymbol* getVarSymbol(llvm::StringRef name);
  
     bool isAlreadyInChapelAST(llvm::StringRef name);

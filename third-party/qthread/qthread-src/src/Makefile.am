@@ -16,6 +16,7 @@ libqthread_la_SOURCES = \
 	feb.c \
 	hazardptrs.c \
 	io.c \
+	performance.c \
 	locks.c \
 	qalloc.c \
 	qloop.c \
@@ -33,6 +34,7 @@ libqthread_la_SOURCES = \
 	affinity/common.c \
 	affinity/@qthread_topo@.c \
 	touch.c \
+	tls.c \
 	teams.c
 
 EXTRA_DIST = 
@@ -59,7 +61,6 @@ include qtimer/Makefile.inc
 include ds/Makefile.inc
 include patterns/Makefile.inc
 include syscalls/Makefile.inc
-include rcrtool/Makefile.inc
 
 if COMPILE_MULTINODE
 libqthread_la_SOURCES += spr.c

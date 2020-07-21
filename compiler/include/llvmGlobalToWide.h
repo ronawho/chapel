@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -26,6 +27,7 @@
 namespace llvm {
   class Type;
   class Function;
+  class FunctionType;
   class ModulePass;
 }
 
@@ -119,7 +121,7 @@ struct GlobalPointerInfo {
 
 typedef llvm::DenseMap<llvm::Type*, GlobalPointerInfo> globalTypes_t;
 typedef std::vector<llvm::WeakVH> specialFunctions_t;
-typedef llvm::TrackingVH<llvm::Constant> runtime_fn_t;
+typedef llvm::TrackingVH<llvm::Value> runtime_fn_t;
 
 struct GlobalToWideInfo {
   unsigned globalSpace;
@@ -140,26 +142,37 @@ struct GlobalToWideInfo {
 
   // args:  dst local address, src nodeid, src address, num bytes, atomicness
   runtime_fn_t getFn;
+  llvm::FunctionType* getFnType;
+
   // args:  dst nodeid, dst address, local address, num bytes, atomicness
   runtime_fn_t putFn;
+  llvm::FunctionType* putFnType;
 
   // args:  dst nodeid, dst address
   //        src nodeid, src address
   //        num bytes
   runtime_fn_t getPutFn;
+  llvm::FunctionType* getPutFnType;
 
   // args:  dst nodeid, dst addr, c (byte), num bytes
   runtime_fn_t memsetFn;
+  llvm::FunctionType* memsetFnType;
 
   // Dummy function storing the runtime dependencies
   // so that they are not removed by the inliner.
   // This function should be removed from the module
   // once GlobalToWide completes.
+  bool hasPreservingFn;
   runtime_fn_t preservingFn;
 
   GlobalToWideInfo()
     : globalSpace(0), wideSpace(0), globalPtrBits(0),
-      localeIdType(NULL), nodeIdType(NULL), gTypes(), specialFunctions() { }
+      localeIdType(NULL), nodeIdType(NULL), gTypes(), specialFunctions(),
+      getFn(NULL), getFnType(NULL),
+      putFn(NULL), putFnType(NULL),
+      getPutFn(NULL), getPutFnType(NULL),
+      memsetFn(NULL), memsetFnType(NULL),
+      hasPreservingFn(false), preservingFn(NULL) { }
 };
 
 llvm::ModulePass *createGlobalToWide(GlobalToWideInfo* info,

@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -45,8 +46,8 @@ public:
   virtual bool   enterAggrType       (AggregateType*     node);
   virtual void   exitAggrType        (AggregateType*     node);
 
-  virtual bool   enterUnmanagedClassType(UnmanagedClassType* node);
-  virtual void   exitUnmanagedClassType (UnmanagedClassType* node);
+  virtual bool   enterDecoratedClassType(DecoratedClassType* node);
+  virtual void   exitDecoratedClassType (DecoratedClassType* node);
 
   virtual bool   enterEnumType       (EnumType*          node);
   virtual void   exitEnumType        (EnumType*          node);
@@ -104,10 +105,11 @@ public:
   //
   virtual void   visitUseStmt        (UseStmt*           node);
 
+  virtual void   visitImportStmt     (ImportStmt*        node);
+
   virtual bool   enterBlockStmt      (BlockStmt*         node);
   virtual void   exitBlockStmt       (BlockStmt*         node);
 
-  virtual void   visitForallIntents  (ForallIntents*   clause);
   virtual bool   enterForallStmt     (ForallStmt*        node);
   virtual void   exitForallStmt      (ForallStmt*        node);
 

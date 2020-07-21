@@ -67,10 +67,10 @@ users/npadmana/npb-mg/mg-b.graph
 arrays/diten/time_iterate.graph
 arrays/diten/time_array_vs_tuple.graph
 arrays/diten/time_array_vs_ddata.graph
-arrays/diten/timeVectorArray.graph
 arrays/ferguson/return-array-40000000.graph
 arrays/lydia/time_access.graph
 domains/ferguson/build-associative.graph
+domains/elliot/primes.graph
 types/atomic/ferguson/atomictest.graph
 performance/bradc/parOpEquals.graph
 performance/sungeun/assign.1024.graph
@@ -91,12 +91,13 @@ users/franzf/v0/chpl/main.graph
 reductions/diten/testSerialReductions.graph
 reductions/vass/reductions-perf.graph
 studies/rbc/tvandoren/RBC.graph
-exercises/c-ray/c-ray.graph
+exercises/c-ray/old/c-ray.graph
 users/npadmana/twopt/twopt-buildtrees.graph
 users/npadmana/twopt/twopt-paircount.graph
 performance/compiler/bradc/AllCompTime.graph
 memleaksfull.graph
 studies/jacobi/jacobi.graph
+library/standard/List/perf/listBenchmark1.graph
 # suite: HPC Challenge
 studies/hpcc/STREAM_study_fragmented.graph
 studies/hpcc/STREAM_study.graph
@@ -214,6 +215,8 @@ arrays/ferguson/return-array-8.graph
 arrays/ferguson/return-array-20000000.graph
 arrays/ferguson/return-array-40000000.graph
 domains/ferguson/build-associative.graph
+performance/sparse/domainAssignment-similar.graph
+performance/sparse/domainAssignment-dissimilar.graph
 # suite: Atomic performance
 types/atomic/ferguson/atomictest.graph
 # suite: Dynamic iterators
@@ -230,6 +233,7 @@ parallel/taskCompare/lydia/loopCompare.graph
 # suite: Task Spawning
 parallel/taskCompare/elliot/taskSpawn.graph
 parallel/taskCompare/elliot/serialTaskSpawn.graph
+studies/hpcc/STREAMS/elliot/stream-task-placement.graph
 # suite: Barrier
 performance/comm/barrier/empty-chpl-barrier.graph
 studies/hpcc/STREAMS/elliot/stream-spmd-barrier.graph
@@ -241,6 +245,9 @@ performance/compiler/bradc/AllCompTime.graph
 # suite: Memory tracking
 memleaks.graph
 memleaksfull.graph
+ml-memleaksfull.graph
+# suite: Memory allocation
+memory/lifetime/allocation.graph
 # suite: Code size tracking
 studies/jacobi/jacobi.graph
 # suite: Startup tracking
@@ -272,11 +279,13 @@ library/packages/Sort/RadixSort/radixsortMSB.graph
 users/franzf/v0/chpl/main.graph
 reductions/diten/testSerialReductions.graph
 reductions/vass/reductions-perf.graph
-spectests.graph
+parallel/forall/reduce-intents/ri-a2-AoA.graph
 studies/paracr/asenjo/PARACR-BC.graph
 library/standard/BitOps/c-tests/performance/bitops.graph
+library/standard/Random/performance/getNextPerf.graph
 studies/rbc/tvandoren/RBC.graph
-exercises/c-ray/c-ray.graph
+exercises/c-ray/old/c-ray.graph
+scan/scanPerf.graph
 # suite: Colorado State University
 studies/colostate/Jacobi1D.graph
 studies/colostate/Jacobi2D.graph
@@ -304,6 +313,7 @@ statements/lydia/ifVersusSelect.alternates.graph
 statements/lydia/moduleVersusFunctionBaseline.graph
 statements/lydia/moduleVersusFunctionDifAccess.graph
 statements/lydia/moduleVersusFunction.graph
+library/standard/Map/timeMapMinusEqual.graph
 # suite: - Chapel versus C Comparisons
 patterns/primality/prime.graph
 statements/lydia/forCompare.graph

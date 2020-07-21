@@ -57,7 +57,7 @@ var None: [0..-1] real;
 
 // Check if we have None.
 proc isNone(x) {
-    return x.numElements == 0;
+    return x.size == 0;
 }
 
 class LocTree {
@@ -83,7 +83,7 @@ class LocTree {
      */
     proc this(node: Node) ref {
         oneAtATime$;
-        if !nodes.member(node) {
+        if !nodes.contains(node) {
             nodes += node;
         }
        
@@ -93,7 +93,7 @@ class LocTree {
     }
     proc this(node: Node) const ref {
         oneAtATime$;
-        if !nodes.member(node) {
+        if !nodes.contains(node) {
           // This is a getter so it shouldn't be modifying what
           // we return, should be safe to return the zero vector.
           // FIXME: Zeroes should really be a const, but can't
@@ -141,7 +141,7 @@ class LocTree {
      */
     proc has_coeffs(node: Node) {
         oneAtATime$;
-        const b = nodes.member(node);
+        const b = nodes.contains(node);
         oneAtATime$ = true;
         return b;
     }
@@ -151,7 +151,7 @@ class LocTree {
      */
     proc remove(node: Node) {
         oneAtATime$;
-        if nodes.member(node) then nodes.remove(node);
+        if nodes.contains(node) then nodes.remove(node);
         oneAtATime$ = true;
     }
 
@@ -184,10 +184,11 @@ class FTree {
 
         this.order = order;
         this.coeffDom = {0..order-1};
-        this.complete();
 
+        var tree: [LocaleSpace] unmanaged LocTree?;
         coforall loc in Locales do
             on loc do tree[loc.id] = new unmanaged LocTree(coeffDom);
+        this.tree = tree!;
     }
 
     proc deinit() {

@@ -2,7 +2,7 @@ prototype module outermod {
 
   proc throwAnotherError() throws {
     use ExampleErrors;
-    throw new StringError("test");
+    throw new owned StringError("test");
   }
 
   proc testThrows() {
@@ -10,7 +10,7 @@ prototype module outermod {
   }
 
   module innermod {
-    use ExampleErrors;
+    use ExampleErrors, outermod;
 
     proc propError() {
       throwAnError();

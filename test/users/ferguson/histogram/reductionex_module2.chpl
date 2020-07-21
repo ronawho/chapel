@@ -1,24 +1,44 @@
-
+module OuterModule {
   module Test {
+    import OuterModule.{NBUCKETS, per};
     /* these should already be defined:
     param NBUCKETS;
-    param PER;
+    var per;
     */
 
     class myhisto: ReduceScanOp {
       type eltType;
       var counts:NBUCKETS*int;
 
-      proc accumulate(x) {
-        counts[1 + x/per] += 1;
+      proc identity {
+        var result:NBUCKETS*int;
+        return result;
       }
-      proc combine(x) {
-        for i in 1..NBUCKETS {
-          counts[i] += x.counts[i];
+
+      proc accumulateOntoState(ref counts, x:eltType) {
+        counts[x/per] += 1;
+      }
+
+      proc accumulate(x:eltType) {
+        accumulateOntoState(counts, x);
+      }
+
+      proc accumulate(other:NBUCKETS*int) {
+        for i in 0..#NBUCKETS {
+          counts[i] += other[i];
         }
       }
+
+      proc combine(x) {
+        accumulate(x.counts);
+      }
+
       proc generate() {
         return counts;
+      }
+
+      proc clone() {
+        return new unmanaged myhisto(eltType=eltType);
       }
     }
   }
@@ -38,4 +58,4 @@
   var counts = myhisto reduce array;
 
   writeln(counts);
-
+}

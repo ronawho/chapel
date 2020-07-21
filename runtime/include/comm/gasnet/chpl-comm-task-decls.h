@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -20,9 +21,6 @@
 #ifndef _COMM_TASK_DECLS_H_
 #define _COMM_TASK_DECLS_H_
 
-// The type of the communication handle.
-typedef void* chpl_comm_nb_handle_t;
-
 // The type of task private data.
 #include "chpl-cache-task-decls.h"
 #define HAS_CHPL_CACHE_FNS
@@ -39,5 +37,8 @@ typedef struct {
 
   void* ack; // address on caller to post acknowledgement
 } chpl_comm_bundleData_t;
+
+// The type of the communication handle.
+typedef void* chpl_comm_nb_handle_t;
 
 #endif

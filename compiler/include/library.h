@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -21,12 +22,14 @@
 #define LIBRARY_H
 
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 #include <utility>
 
 #include "files.h"
 
+class ArgSymbol;
 class FnSymbol;
 class Symbol;
 class Type;
@@ -44,8 +47,14 @@ extern std::map<Symbol*, TypeSymbol*> exportedArrayElementType;
 
 extern char libDir[FILENAME_MAX + 1];
 extern std::map<TypeSymbol*, std::pair<std::string, std::string> > pythonNames;
+extern std::map<TypeSymbol*, std::string> fortranKindNames;
+extern std::map<TypeSymbol*, std::string> fortranTypeNames;
+
+extern std::map<ArgSymbol*, std::string> exportedDefaultValues;
+extern std::set<FnSymbol*> exportedStrRets;
 
 void codegen_library_header(std::vector<FnSymbol*> functions);
+void codegen_library_fortran(std::vector<FnSymbol*> functions);
 void codegen_library_makefile();
 void codegen_library_python(std::vector<FnSymbol*> functions);
 void codegen_make_python_module();
@@ -56,5 +65,9 @@ void openLibraryHelperFile(fileinfo* fi,
                            const char* ext = NULL);
 void closeLibraryHelperFile(fileinfo* fi, bool beautifyIt = true);
 const char* getLibraryExtension();
+
+bool isUserRoutine(FnSymbol* fn);
+
+std::string getPythonTypeName(Type* type, PythonFileType pxd);
 
 #endif //LIBRARY_H

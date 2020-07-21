@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -29,7 +30,6 @@
 #include "error.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 
@@ -40,6 +40,7 @@ typedef struct _configVarType { /* table entry */
   const char* moduleName;
   char* defaultValue;
   char* setValue;
+  int private;
 
   struct _configVarType* nextInBucket;
   struct _configVarType* nextInstalled;
@@ -47,22 +48,18 @@ typedef struct _configVarType { /* table entry */
 
 
 /* hash table */
-static configVarType* configVarTable[HASHSIZE]; 
+static configVarType* configVarTable[HASHSIZE];
 static configVarType* firstInTable = NULL;
 static configVarType* lastInTable = NULL;
 
 static configVarType _ambiguousConfigVar;
 static configVarType* ambiguousConfigVar = &_ambiguousConfigVar;
 
-static configVarType* lookupConfigVar(const char* moduleName, 
+static configVarType* lookupConfigVar(const char* moduleName,
                                       const char* varName);
-static void handleDeprecatedConfig(const char* varName,
-                                   const char* value,
-                                   const char* envVarName);
-static void checkDeprecatedConfig(const char* varName, const char* value);
 
 
-static void parseModVarName(char* modVarName, const char** moduleName, 
+static void parseModVarName(char* modVarName, const char** moduleName,
                             char** varName) {
   char* dot = strrchr(modVarName, '.');
   if (dot) {
@@ -76,10 +73,10 @@ static void parseModVarName(char* modVarName, const char** moduleName,
 }
 
 
-/* This function parses a config var of type string, and sets its value in 
-   the hash table.  
+/* This function parses a config var of type string, and sets its value in
+   the hash table.
 */
-static int aParsedString(FILE* argFile, char* setConfigBuffer, 
+static int aParsedString(FILE* argFile, char* setConfigBuffer,
                          int32_t lineno, int32_t filename) {
   char* equalsSign = strchr(setConfigBuffer, '=');
   int stringLength = strlen(setConfigBuffer);
@@ -103,7 +100,7 @@ static int aParsedString(FILE* argFile, char* setConfigBuffer,
   lastChar = setConfigBuffer[stringLength - 1];
 
   parseModVarName(setConfigBuffer, &moduleName, &varName);
-  
+
   if ((firstChar != lastChar) || (strlen(value) == 0)) {
     int nextChar = fgetc(argFile);
     do {
@@ -121,7 +118,7 @@ static int aParsedString(FILE* argFile, char* setConfigBuffer,
         {
           char* message;
           setConfigBuffer[stringLength] = '\0';
-          message = chpl_glom_strings(2, "Found newline while reading string: ", 
+          message = chpl_glom_strings(2, "Found newline while reading string: ",
                                       equalsSign + 1);
           chpl_error(message, lineno, filename);
           break;
@@ -170,7 +167,7 @@ static unsigned hash(const char* varName) {
 
 
 void printConfigVarTable(void) {
-  configVarType* configVar = NULL; 
+  configVarType* configVar = NULL;
   int longestName = 0;
   const char* moduleName = NULL;
   int foundUserConfigs = 0;
@@ -200,8 +197,8 @@ void printConfigVarTable(void) {
     fprintf(stdout, "CONFIG VARS:\n");
     fprintf(stdout, "============\n");
 
-    for (configVar = firstInTable; 
-         configVar != NULL; 
+    for (configVar = firstInTable;
+         configVar != NULL;
          configVar = configVar->nextInstalled) {
 
         if (foundMultipleModules) {
@@ -217,8 +214,18 @@ void printConfigVarTable(void) {
         }
         fprintf(stdout, "  %*s: ", longestName, configVar->varName);
         fprintf(stdout, "%s", configVar->defaultValue);
-        if (configVar->setValue) {
-          fprintf(stdout, " (configured to %s)", configVar->setValue);
+        if (configVar->setValue || configVar->private) {
+          fprintf(stdout, " (");
+          if (configVar->private) {
+            fprintf(stdout, "private");
+            if (configVar->setValue) {
+              fprintf(stdout, ", ");
+            }
+          }
+          if (configVar->setValue) {
+            fprintf(stdout, "configured to %s", configVar->setValue);
+          }
+          fprintf(stdout, ")");
         }
         fprintf(stdout, "\n");
       }
@@ -227,27 +234,30 @@ void printConfigVarTable(void) {
 }
 
 
-static configVarType* lookupConfigVar(const char* moduleName, 
+static configVarType* lookupConfigVar(const char* moduleName,
                                       const char* varName) {
   configVarType* configVar = NULL;
-  configVarType* foundConfigVar = NULL; 
+  configVarType* foundConfigVar = NULL;
   unsigned hashValue;
   int numTimesFound = 0;
   hashValue = hash(varName);
 
-  /* This loops walks through the list of configuration variables 
+  /* This loops walks through the list of configuration variables
      hashed to this location in the table. */
-  for (configVar = configVarTable[hashValue]; 
-       configVar != NULL; 
+  for (configVar = configVarTable[hashValue];
+       configVar != NULL;
        configVar = configVar->nextInBucket) {
 
     if (strcmp(configVar->varName, varName) == 0) {
       if (strcmp(moduleName, "") == 0) {
-        numTimesFound++;
-        if (numTimesFound == 1) {
-          foundConfigVar = configVar;
-        } else {
-          foundConfigVar = ambiguousConfigVar;
+        // only public configs can be referred to in an unqualified manner
+        if (!configVar->private) {
+          numTimesFound++;
+          if (numTimesFound == 1) {
+            foundConfigVar = configVar;
+          } else {
+            foundConfigVar = ambiguousConfigVar;
+          }
         }
       } else {
         if (strcmp(configVar->moduleName, moduleName) == 0) {
@@ -260,36 +270,8 @@ static configVarType* lookupConfigVar(const char* moduleName,
 }
 
 
-static void handleDeprecatedConfig(const char* varName,
-                                   const char* value,
-                                   const char* envVarName) {
-  if (getenv(envVarName) == NULL) {
-    chpl_msg(0,
-             "warning: The config variable \"%s\" is deprecated.  Please use\n"
-             "         the environment variable \"%s\" instead.\n",
-             varName, envVarName);
-    if (value != NULL)
-      setenv(envVarName, value, 0);
-  }
-  else
-    chpl_msg(0,
-             "warning: The config variable \"%s\" is deprecated, and is\n"
-             "         overridden by the environment variable \"%s\".\n",
-             varName, envVarName);
-}
-
-
-static void checkDeprecatedConfig(const char* varName,
-                                  const char* value) {
-  if (strcmp(varName, "callStackSize") == 0)
-    handleDeprecatedConfig(varName, value, "CHPL_RT_CALL_STACK_SIZE");
-  else if (strcmp(varName, "numThreadsPerLocale") == 0)
-    handleDeprecatedConfig(varName, value, "CHPL_RT_NUM_THREADS_PER_LOCALE");
-}
-
-
-void initSetValue(const char* varName, const char* value, 
-                  const char* moduleName, 
+void initSetValue(const char* varName, const char* value,
+                  const char* moduleName,
                   int32_t lineno, int32_t filename) {
   configVarType* configVar;
   if  (*varName == '\0') {
@@ -340,14 +322,14 @@ const char* lookupSetValue(const char* varName, const char* moduleName) {
 }
 
 
-void installConfigVar(const char* varName, const char* value, 
-                      const char* moduleName) {
+void installConfigVar(const char* varName, const char* value,
+                      const char* moduleName, int private) {
   unsigned hashValue;
-  configVarType* configVar = (configVarType*) 
+  configVarType* configVar = (configVarType*)
     chpl_mem_allocMany(1, sizeof(configVarType), CHPL_RT_MD_CF_TABLE_DATA, 0, 0);
 
   hashValue = hash(varName);
-  configVar->nextInBucket = configVarTable[hashValue]; 
+  configVar->nextInBucket = configVarTable[hashValue];
   configVar->nextInstalled = NULL;
   configVarTable[hashValue] = configVar;
   if (firstInTable == NULL) {
@@ -360,13 +342,14 @@ void installConfigVar(const char* varName, const char* value,
   configVar->moduleName = chpl_glom_strings(1, moduleName);
   configVar->defaultValue = chpl_glom_strings(1, value);
   configVar->setValue = NULL;
-} 
+  configVar->private = private;
+}
 
 
-static configVarType* breakIntoPiecesAndLookup(char* str, char** equalsSign, 
-                                               const char** moduleName, 
+static configVarType* breakIntoPiecesAndLookup(char* str, char** equalsSign,
+                                               const char** moduleName,
                                                char** varName,
-                                               int32_t lineno, 
+                                               int32_t lineno,
                                                int32_t filename) {
   configVarType* configVar;
 
@@ -377,12 +360,12 @@ static configVarType* breakIntoPiecesAndLookup(char* str, char** equalsSign,
   parseModVarName(str, moduleName, varName);
   configVar = lookupConfigVar(*moduleName, *varName);
   if (configVar == ambiguousConfigVar) {
-    const char* message = chpl_glom_strings(5, "Configuration variable '", 
-                                            *varName, 
+    const char* message = chpl_glom_strings(5, "Configuration variable '",
+                                            *varName,
                                             "' is defined in more than one "
                                             "module.  Use '--help' for a list "
                                             "of configuration variables and "
-                                            "'-s<module>.", 
+                                            "'-s<module>.",
                                             *varName, "' to disambiguate.");
     chpl_error(message, lineno, filename);
   }
@@ -394,8 +377,8 @@ static void handleUnexpectedConfigVar(const char* moduleName, char* varName,
                                       int32_t lineno, int32_t filename) {
   const char* message;
   if (moduleName[0]) {
-    message = chpl_glom_strings(5, "Module '", moduleName, 
-                                "' has no configuration variable named '", 
+    message = chpl_glom_strings(5, "Module '", moduleName,
+                                "' has no configuration variable named '",
                                 varName, "'");
   } else if (varName[0]) {
     message = chpl_glom_strings(3, "Unrecognized configuration variable '",
@@ -407,7 +390,7 @@ static void handleUnexpectedConfigVar(const char* moduleName, char* varName,
 }
 
 
-int handlePossibleConfigVar(int* argc, char* argv[], int argnum, 
+int handlePossibleConfigVar(int* argc, char* argv[], int argnum,
                             int32_t lineno, int32_t filename) {
   int retval = 0;
   int arglen = strlen(argv[argnum]+2)+1;
@@ -430,14 +413,13 @@ int handlePossibleConfigVar(int* argc, char* argv[], int argnum,
     }
   } else {
     char* value = equalsSign + 1;
-    checkDeprecatedConfig(varName, equalsSign ? value : equalsSign);
     if (equalsSign && *value) {
       initSetValue(varName, value, moduleName, lineno, filename);
     } else if (!strcmp(configVar->defaultValue, "bool")) {
       initSetValue(varName, "true", moduleName, lineno, filename);
     } else {
       if (argnum + 1 >= *argc) {
-        char* message = chpl_glom_strings(3, "Configuration variable '", varName, 
+        char* message = chpl_glom_strings(3, "Configuration variable '", varName,
                                           "' is missing its initialization value");
         chpl_error(message, lineno, filename);
       } else {
@@ -452,7 +434,7 @@ int handlePossibleConfigVar(int* argc, char* argv[], int argnum,
 }
 
 // TODO: Change all the 0 linenos below into real line numbers
-void parseConfigFile(const char* configFilename, 
+void parseConfigFile(const char* configFilename,
                      int32_t lineno, int32_t filename) {
   FILE* argFile = fopen(configFilename, "r");
   if (!argFile) {
@@ -487,7 +469,6 @@ void parseConfigFile(const char* configFilename,
                                     CHPL_FILE_IDX_SAVED_FILENAME);
         } else {
           char* value = equalsSign + 1;
-          checkDeprecatedConfig(varName, equalsSign ? value : equalsSign);
           if (equalsSign && *value) {
             initSetValue(varName, value, moduleName, 0,
                          CHPL_FILE_IDX_SAVED_FILENAME);
@@ -513,14 +494,14 @@ void parseConfigFile(const char* configFilename,
 }
 
 
-chpl_bool chpl_config_has_value(c_string v, c_string m) { 
+chpl_bool chpl_config_has_value(c_string v, c_string m) {
   return lookupSetValue(v, m) != NULL;
 }
 
 
 // Returning a c_string here is thread-safe because config consts
 // are constant for the duration of the program.
-c_string chpl_config_get_value(c_string v, c_string m) { 
+c_string chpl_config_get_value(c_string v, c_string m) {
   return lookupSetValue(v, m);
 }
 

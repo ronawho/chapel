@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -22,6 +23,7 @@
 #include "arg.h"
 #include "chplcast.h"
 #include "chplcgfns.h"
+#include "chpl-env.h"
 #include "chplexit.h"
 #include "chplio.h"
 #include "chpl-mem.h"
@@ -35,11 +37,11 @@
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 
 static int gdbFlag = 0;
+static int lldbFlag = 0;
 int32_t blockreport = 0; // report locations of blocked threads on SIGINT
 int32_t taskreport = 0;  // report thread hierarchy on SIGINT
 
@@ -65,6 +67,7 @@ static const flagType flagList[] = {
   { "t", "", "taskreport",
     "report list of pending and executing tasks on SIGINT", 'g' },
   { "", "", "gdb", "run program in gdb", 'g' },
+  { "", "", "lldb", "run program in lldb", 'g' },
   { "E", "<envVar>=<val>", "",
     "set the value of an environment variable", 'g' },
 
@@ -78,6 +81,10 @@ const int numFlags = sizeof(flagList) / sizeof(flagList[0]);
 
 int _runInGDB(void) {
   return gdbFlag;
+}
+
+int _runInLLDB(void) {
+  return lldbFlag;
 }
 
 
@@ -107,9 +114,7 @@ static void defineEnvVar(const char* currentArg,
   }
 
   *eqp = '\0';
-  if (setenv(currentArg, eqp + 1, 0) != 0) {
-    chpl_error("Cannot setenv() -E argument", lineno, filename);
-  }
+  chpl_env_set(currentArg, eqp + 1, 0);
   *eqp = '=';
 }
 
@@ -274,6 +279,7 @@ void parseArgs(chpl_bool isLauncher, chpl_parseArgsMode_t mode,
   int printAbout = 0;
   int origargc = *argc;
   int stop_parsing = 0;
+  int saw_socket_conn = 0;
 
   //
   // Handle the pre-parse for '-E' arguments separately.
@@ -326,6 +332,11 @@ void parseArgs(chpl_bool isLauncher, chpl_parseArgsMode_t mode,
             break;
           }
 
+          if (strcmp(flag, "lldb") == 0) {
+            lldbFlag = i;
+            break;
+          }
+
           if (strcmp(flag, "help") == 0) {
             printHelp = 1;
             chpl_gen_main_arg.argv[chpl_gen_main_arg.argc] = "--help";
@@ -350,6 +361,31 @@ void parseArgs(chpl_bool isLauncher, chpl_parseArgsMode_t mode,
           }
           if (strcmp(flag, "quiet") == 0) {
             verbosity = 0;
+            break;
+          }
+          if (strcmp(flag, "chpl-mli-socket-loc") == 0) {
+            if (saw_socket_conn) {
+              chpl_error("multiple uses of --chpl-mli-socket-loc, this flag is "
+                         "intended for internal use only", lineno, filename);
+            }
+            i++;
+            if (i >= *argc) {
+              chpl_error("--chpl-mli-socket-loc developer flag is missing"
+                         "<connection> argument",
+                         lineno, filename);
+            }
+            currentArg = argv[i];
+            if (strncmp(currentArg, "tcp://", 6) != 0) {
+              chpl_error("unexpected start of <connection> for "
+                         "--chpl-mli-socket-loc developer flag, this flag is "
+                         "intended for internal use only", lineno, filename);
+            }
+            saw_socket_conn = 1;
+            // We reached information about the socket in a multilocale library
+            // run.  Save it.
+            chpl_gen_main_arg.argv[chpl_gen_main_arg.argc++] =
+              "--chpl-mli-socket-loc";
+            chpl_gen_main_arg.argv[chpl_gen_main_arg.argc++] = currentArg;
             break;
           }
           if (argLength < 3) {

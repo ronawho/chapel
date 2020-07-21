@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -98,7 +99,7 @@ Declarations
 */
 module ReplicatedVar {
 
-use ReplicatedDist;
+public use ReplicatedDist;
 
 private const rcDomainIx   = 1; // todo convert to param
 /* Use this domain when replicating over a subset of locales,
@@ -144,7 +145,7 @@ proc rcCollect(replicatedVar: [?D] ?MYTYPE, collected: [?CD] MYTYPE): void
 {
   var targetLocales = _rcTargetLocalesHelper(replicatedVar);
   assert(replicatedVar.domain == rcDomainBase);
-  for idx in collected.domain do assert(targetLocales.domain.member(idx));
+  for idx in collected.domain do assert(targetLocales.domain.contains(idx));
   coforall (idx, col) in zip(targetLocales.domain.sorted(), collected) do
     on targetLocales[idx] do
       col = replicatedVar[rcDomainIx];

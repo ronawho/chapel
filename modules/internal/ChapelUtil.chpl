@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -22,7 +23,7 @@
 // Internal data structures module
 //
 module ChapelUtil {
-  use ChapelStandard;
+  private use ChapelStandard;
 
   //
   // safeAdd: If a and b are of type t, return true iff no
@@ -96,6 +97,34 @@ module ChapelUtil {
       }
     }
   }
+
+  //
+  // safeMul: If a and b are of type t, return true iff no
+  //  overflow/underflow would occur for a * b
+  //
+  proc safeMul(a: ?t, b:t){
+    if !isIntegralType(t) then
+      compilerError("Values must be of integral type.");
+    if a>0{
+      if b>0 {
+        if a > max(t)/b then return false;
+      }
+      else {
+        if b < min(t)/a then return false;
+      }
+    }
+    else {
+      if b>0{
+        if a < min(t)/b then return false;
+      }
+      else {
+        if a!=0 && b < max(t)/a then return false;
+      }
+    }
+    // //if all the case are false then multiplication is safe
+    return true;
+ 
+  }
   
   pragma "no default functions"
   extern record chpl_main_argument {
@@ -104,14 +133,9 @@ module ChapelUtil {
     var return_value: int(32);
   }
 
-  proc =(ref lhs:chpl_main_argument, rhs:chpl_main_argument) {
-    __primitive("=", lhs, rhs);
-  }
-
-  proc chpl__initCopy(x:chpl_main_argument) return x;
-
   proc chpl_convert_args(arg: chpl_main_argument) {
     var local_arg = arg;
+    pragma "fn synchronization free"
     extern proc chpl_get_argument_i(ref args:chpl_main_argument, i:int(32)):c_string;
     // This is odd.  Why are the strings inside the array getting destroyed?
     pragma "no auto destroy"
@@ -119,10 +143,29 @@ module ChapelUtil {
 
     for i in 0..#arg.argc {
       // FIX ME: leak c_string
-      array[i] = chpl_get_argument_i(local_arg, i:int(32)):string;
+      try! {
+        array[i] = createStringWithNewBuffer(chpl_get_argument_i(local_arg,
+                                                               i:int(32)));
+      }
     }
 
     return array;
+  }
+
+  proc chpl_get_mli_connection(arg: chpl_main_argument) {
+    var local_arg = arg;
+    pragma "fn synchronization free"
+    extern proc chpl_get_argument_i(ref args:chpl_main_argument, i:int(32)):c_string;
+    var flag: c_string = chpl_get_argument_i(local_arg,
+                                             (local_arg.argc-2): int(32));
+    if (flag != "--chpl-mli-socket-loc") {
+      try! halt("chpl_get_mli_connection called with unexpected arguments, missing "
+           + "'--chpl-mli-socket-loc <connection>', instead got " +
+           createStringWithNewBuffer(flag));
+    }
+    var result: c_string = chpl_get_argument_i(local_arg,
+                                               (local_arg.argc-1): int(32));
+    return result;
   }
 
   //
@@ -149,7 +192,7 @@ module ChapelUtil {
       printf(c"Deinitializing Modules:\n");
     var prev = chpl_moduleDeinitFuns;
     while prev {
-      const curr = prev;
+      const curr = prev!;
       if printModuleDeinitOrder then
         printf(c"  %s\n", curr.moduleName);
       chpl_execute_module_deinit(curr.deinitFun);

@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -24,6 +25,8 @@
 #include "vec.h"
 #include <vector>
 
+class GenRet;
+
 BaseAST* aid(int id);
 BaseAST* aid09(int id);
 Expr*    aidExpr(int id);
@@ -32,8 +35,11 @@ Expr*    aidExpr(int id);
 BaseAST* aid(BaseAST* ast);
 Expr*    aidExpr(BaseAST* ast);
 
-void        list_view_noline(BaseAST* ast);
+void        list_view_noline(const BaseAST* ast);
 void        nprint_view(BaseAST* ast);
+
+// defined in codegen/codegen.cpp
+void        nprint_view(GenRet& gen);
 
 // These are not used by the compiler but are available for use in GDB
 //
@@ -59,7 +65,7 @@ void        nprint_view_noline(BaseAST* ast);
 void        mark_view(BaseAST* ast, int id);
 
 void        list_view(int id);
-void        list_view(BaseAST* ast);
+void        list_view(const BaseAST* ast);
 
 void        astDump_view(int id);
 void        astDump_view(BaseAST* ast);
@@ -75,8 +81,10 @@ void        vec_view(Vec<Symbol*,   VEC_INTEGRAL_SIZE>* v);
 void        vec_view(Vec<Symbol*,   VEC_INTEGRAL_SIZE>& v);
 void        vec_view(Vec<FnSymbol*, VEC_INTEGRAL_SIZE>* v);
 void        vec_view(Vec<FnSymbol*, VEC_INTEGRAL_SIZE>& v);
-void        vec_view(std::vector<Symbol*>* vec);
-void        vec_view(std::vector<Symbol*>& vec);
+void        vec_view(std::vector<Symbol*>* syms);
+void        vec_view(std::vector<Symbol*>& syms);
+void        vec_view(std::vector<FnSymbol*>* syms);
+void        vec_view(std::vector<FnSymbol*>& syms);
 
 
 void        fnsWithName(const char* name);
@@ -87,7 +95,6 @@ void        whocalls(BaseAST* ast);
 
 FnSymbol*   debugGetTheIteratorFn(int id);
 FnSymbol*   debugGetTheIteratorFn(BaseAST* ast);
-FnSymbol*   debugGetTheIteratorFn(Symbol* sym);
 FnSymbol*   debugGetTheIteratorFn(Type* type);
 FnSymbol*   debugGetTheIteratorFn(ForLoop* forLoop);
 

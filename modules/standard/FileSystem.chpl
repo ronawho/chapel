@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -30,6 +31,12 @@
    process's file system state, which are performed on a specified locale
    (:ref:`locale-state`).  The module also contains iterators for traversing the
    file system (:ref:`filerator`).
+
+   .. note::
+
+      Functions in this module can use and return :ref:`escaped strings
+      <string.nonunicode>` on systems where UTF-8 file names are not enforced.
+
 
    .. _file-manip:
 
@@ -85,7 +92,11 @@
  */
 module FileSystem {
 
-use SysError, Path;
+  use SysError;
+  private use Path;
+  private use HaltWrappers;
+  private use SysCTypes;
+  use IO;
 
 /* S_IRUSR and the following constants are values of the form
    S_I[R | W | X][USR | GRP | OTH], S_IRWX[U | G | O], S_ISUID, S_ISGID, or
@@ -150,10 +161,16 @@ extern const S_ISGID: int;
 */
 extern const S_ISVTX: int;
 
+/*
+   Localizes and unescapes string to create a bytes to be used for obtaining a
+   c_string to pass to extern file system operations.
+*/
+private inline proc unescape(str: string) {
+  return str.encode(policy=encodePolicy.unescape);
+}
+
 /* Change the current working directory of the locale in question to the
    specified path `name`.
-
-   Will throw an error message if one occurs.
 
    .. warning::
 
@@ -162,13 +179,15 @@ extern const S_ISVTX: int;
 
    :arg name: The intended current working directory
    :type name: `string`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc locale.chdir(name: string) throws {
   extern proc chpl_fs_chdir(name: c_string):syserr;
 
   var err: syserr = ENOERR;
   on this {
-    err = chpl_fs_chdir(name.localize().c_str());
+    err = chpl_fs_chdir(unescape(name).c_str());
   }
   if err then try ioerror(err, "in chdir", name);
 }
@@ -191,8 +210,6 @@ proc locale.chdir(out error: syserr, name: string) {
 /* Set the permissions of the file or directory specified by the argument
    `name` to that indicated by the argument `mode`.
 
-   Will throw an error message if one occurs.
-
    :arg name: The name of the file or directory whose permissions should be
               altered.
    :type name: `string`
@@ -200,11 +217,16 @@ proc locale.chdir(out error: syserr, name: string) {
               See description of :const:`S_IRUSR`, for instance, for potential
               values.
    :type mode: `int`
+
+   :throws FileNotFoundError: Thrown when the name specified does not correspond
+                              to a file or directory that exists.
+   :throws PermissionError: Thrown when the current user does not have
+                            permission to change the permissions
 */
 proc chmod(name: string, mode: int) throws {
   extern proc chpl_fs_chmod(name: c_string, mode: int): syserr;
 
-  var err = chpl_fs_chmod(name.localize().c_str(), mode);
+  var err = chpl_fs_chmod(unescape(name).c_str(), mode);
   if err then try ioerror(err, "in chmod", name);
 }
 
@@ -225,8 +247,6 @@ proc chmod(out error: syserr, name: string, mode: int) {
    to the specified values.  If `uid` or `gid` are -1, the value in question
    will remain unchanged.
 
-   Halts with an error message if one occurred.
-
    :arg name: The name of the file to be changed.
    :type name: `string`
    :arg uid: The intended new owner(user) id, or -1 if it should remain the
@@ -235,11 +255,13 @@ proc chmod(out error: syserr, name: string, mode: int) {
    :arg gid: The intended new group owner(id), or -1 if it should remain the
              same.
    :type gid: `int`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc chown(name: string, uid: int, gid: int) throws {
   extern proc chpl_fs_chown(name: c_string, uid: c_int, gid: c_int):syserr;
 
-  var err = chpl_fs_chown(name.localize().c_str(), uid:c_int, gid:c_int);
+  var err = chpl_fs_chown(unescape(name).c_str(), uid:c_int, gid:c_int);
   if err then try ioerror(err, "in chown", name);
 }
 
@@ -260,11 +282,10 @@ proc chown(out error: syserr, name: string, uid: int, gid: int) {
 // When basename and joinPath are supported, enable dest to be a directory.
 
 /* Copies the contents and permissions of the file indicated by `src` into
-   the file or directory `dest`.  If `dest` is a directory, will throw a
-   FileNotFoundError.  If `metadata` is set to `true`, will also copy the
-   metadata (uid, gid, time of last access and time of modification) of the
-   file to be copied. A partially copied file or directory may be present
-   in `dest` if there is an error in copying.
+   the file or directory `dest`. If `metadata` is set to `true`, will also
+   copy the metadata (uid, gid, time of last access and time of modification)
+   of the file to be copied. A partially copied file or directory may be
+   present in `dest` if there is an error in copying.
 
    .. note::
 
@@ -280,6 +301,9 @@ proc chown(out error: syserr, name: string, uid: int, gid: int) {
    :arg metadata: This argument indicates whether to copy metadata associated
                   with the source file.  It is set to `false` by default.
    :type metadata: `bool`
+
+   :throws IsADirectoryError: when `dest` is directory.
+   :throws SystemError: thrown to describe another error if it occurs.
 */
 proc copy(src: string, dest: string, metadata: bool = false) throws {
   var destFile = dest;
@@ -305,7 +329,8 @@ proc copy(src: string, dest: string, metadata: bool = false) throws {
 
     // Copies the access time, and time of last modification.
     // Does not copy uid, gid, or mode
-    var err = chpl_fs_copy_metadata(src.localize().c_str(), dest.localize().c_str());
+    var err = chpl_fs_copy_metadata(unescape(src).c_str(),
+                                    unescape(dest).c_str());
     if err then try ioerror(err, "in copy(" + src + ", " + dest + ")");
 
     // Get uid and gid from src
@@ -333,15 +358,18 @@ proc copy(out error: syserr, src: string, dest: string, metadata: bool = false) 
 /* Copies the contents of the file indicated by `src` into the file indicated
    by `dest`, replacing `dest`'s contents if it already exists (and is a
    different file than `src`, i.e. not a symbolic link to `src`).
-
-   If `dest` is not writable, or `src` and `dest` refer to the same file,
-   this function will throw an error.  Does not copy metadata.  May
-   throw other error messages.
+   Does not copy metadata.
 
    :arg src: The source file whose contents are to be copied.
    :type src: `string`
    :arg dest: The intended destination of the contents.
    :type dest: `string`
+
+   :throws FileNotFoundError: when `src` does not exist.
+   :throws IsADirectoryError: when `src` or `dest` is a directory.
+   :throws SystemError: when `src` and `dest` refer to the same file,
+                        when `dest` is not writable,
+                        or to describe another error if it occurs.
 */
 proc copyFile(src: string, dest: string) throws {
   // This implementation is based off of the python implementation for copyfile,
@@ -400,11 +428,11 @@ proc copyFile(src: string, dest: string) throws {
   }
 
   // read in, write out.
-  var buf: string;
+  var buf: bytes;
   var numRead: int = 0;
   // If increasing the read size, make sure there's a test in
   // test/library/standard/FileSystem that copies a file larger than one buffer.
-  while (try srcChnl.readstring(buf, len=4096)) {
+  while (try srcChnl.readbytes(buf, len=4096)) {
     try destChnl.write(buf);
     // From mppf:
     // If you want it to be faster, we can make it only buffer once (sharing
@@ -443,12 +471,15 @@ proc copyFile(out error: syserr, src: string, dest: string) {
 /* Copies the permissions of the file indicated by `src` to the file indicated
    by `dest`, leaving contents, owner and group unaffected.
 
-   Will halt with an error message if one is detected.
-
    :arg src: The source file whose permissions are to be copied.
    :type src: `string`
    :arg dest: The intended destination of the permissions.
    :type dest: `string`
+
+   :throws FileNotFoundError: Thrown when the name specified does not correspond
+                              to a file or directory that exists.
+   :throws PermissionError: Thrown when the current user does not have
+                            permission to change the permissions
 */
 proc copyMode(src: string, dest: string) throws {
   try {
@@ -481,8 +512,6 @@ proc copyMode(out error: syserr, src: string, dest: string) {
    copied as symlinks, otherwise their contents and metadata will be copied
    instead.
 
-   Will halt with an error message if one is detected.
-
    :arg src: The root of the source tree to be copied.
    :type src: `string`
    :arg dest: The root of the destination directory under which the contents of
@@ -493,6 +522,10 @@ proc copyMode(out error: syserr, src: string, dest: string) {
                           symlinks in the source directory.  It is set to
                           `false` by default
    :type copySymbolically: `bool`
+
+   :throws FileExistsError: when the `dest` already exists.
+   :throws NotADirectoryError: when `src` is not a directory.
+   :throws SystemError: thrown to describe another error if it occurs.
 */
 proc copyTree(src: string, dest: string, copySymbolically: bool=false) throws {
   var expectedErrorCases = try exists(dest);
@@ -558,8 +591,6 @@ proc copyTree(out error: syserr, src: string, dest: string, copySymbolically: bo
 
 /* Obtains and returns the current working directory for this locale.
 
-   Will halt with an error message if one was detected.
-
    .. warning::
 
       Another task on this locale can change the current working directory from
@@ -568,6 +599,8 @@ proc copyTree(out error: syserr, src: string, dest: string, copySymbolically: bo
 
    :return: The current working directory for the locale in question.
    :rtype: `string`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc locale.cwd(): string throws {
   extern proc chpl_fs_cwd(ref working_dir:c_string):syserr;
@@ -578,7 +611,11 @@ proc locale.cwd(): string throws {
     var tmp:c_string;
     // c_strings can't cross on statements.
     err = chpl_fs_cwd(tmp);
-    ret = new string(tmp, isowned=true, needToCopy=false);
+    try! {
+      ret = createStringWithNewBuffer(tmp, policy=decodePolicy.escape);
+    }
+    // tmp was qio_malloc'd by chpl_fs_cwd
+    chpl_free_c_string(tmp);
   }
   if err != ENOERR then try ioerror(err, "in cwd");
   return ret;
@@ -601,8 +638,6 @@ proc locale.cwd(out error: syserr): string {
 /* Determines if the file or directory indicated by `name` exists and returns
    the result of this check.
 
-   Will halt with an error message if one was detected.
-
    :arg name: The file or directory whose existence is in question.
    :type name: `string`
 
@@ -610,11 +645,13 @@ proc locale.cwd(out error: syserr): string {
             directory, `false` otherwise.  Also returns `false` for broken
             symbolic links.
    :rtype: `bool`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc exists(name: string): bool throws {
   extern proc chpl_fs_exists(ref result:c_int, name: c_string): syserr;
 
-  if (name.isEmptyString()) {
+  if (name.isEmpty()) {
     // chpl_fs_exists uses stat to determine if a file exists, which throws an
     // error when "" is passed to it.  Check it here early and return false
     // like Python does
@@ -622,7 +659,7 @@ proc exists(name: string): bool throws {
   }
 
   var ret:c_int;
-  var err = chpl_fs_exists(ret, name.localize().c_str());
+  var err = chpl_fs_exists(ret, unescape(name).c_str());
   if err then try ioerror(err, "in exists");
   return ret != 0;
 }
@@ -690,19 +727,19 @@ iter findfiles(startdir: string = ".", recursive: bool = false,
 /* Obtains and returns the group id associated with the file or directory
    specified by `name`.
 
-   Will halt with an error message if one is detected
-
    :arg name: The file or directory whose group id is desired
    :type name: `string`
 
    :return: The group id of the file or directory in question
    :rtype: `int`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc getGID(name: string): int throws {
   extern proc chpl_fs_get_gid(ref result: c_int, filename: c_string): syserr;
 
   var result: c_int;
-  var err = chpl_fs_get_gid(result, name.localize().c_str());
+  var err = chpl_fs_get_gid(result, unescape(name).c_str());
   if err then try ioerror(err, "in getGID");
   return result;
 }
@@ -724,8 +761,6 @@ proc getGID(out error: syserr, name: string): int {
 /* Obtains and returns the current permissions of the file or directory
    specified by `name`.
 
-   Will halt with an error message if one is detected
-
    :arg name: The file or directory whose permissions are desired.
    :type name: `string`
 
@@ -733,12 +768,14 @@ proc getGID(out error: syserr, name: string): int {
             See description of :const:`S_IRUSR`, for instance, for potential
             values.
    :rtype: `int`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc getMode(name: string): int throws {
   extern proc chpl_fs_viewmode(ref result:c_int, name: c_string): syserr;
 
   var ret:c_int;
-  var err = chpl_fs_viewmode(ret, name.localize().c_str());
+  var err = chpl_fs_viewmode(ret, unescape(name).c_str());
   if err then try ioerror(err, "in getMode", name);
   return ret;
 }
@@ -759,19 +796,19 @@ proc getMode(out error: syserr, name: string): int {
 
 /* Obtains and returns the size (in bytes) of the file specified by `name`.
 
-   Will halt with an error message if one is detected
-
    :arg name: The file whose size is desired
    :type name: `string`
 
    :return: The size in bytes of the file in question
    :rtype: `int`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc getFileSize(name: string): int throws {
   extern proc chpl_fs_get_size(ref result: int, filename: c_string):syserr;
 
   var result: int;
-  var err = chpl_fs_get_size(result, name.localize().c_str());
+  var err = chpl_fs_get_size(result, unescape(name).c_str());
   if err then try ioerror(err, "in getFileSize", name);
   return result;
 }
@@ -793,19 +830,19 @@ proc getFileSize(out error: syserr, name: string): int {
 /* Obtains and returns the user id associated with the file or directory
    specified by `name`.
 
-   Will halt with an error message if one is detected.
-
    :arg name: The file or directory whose user id is desired
    :type name: `string`
 
    :return: The user id of the specified file or directory
    :rtype: `int`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc getUID(name: string): int throws {
   extern proc chpl_fs_get_uid(ref result: c_int, filename: c_string): syserr;
 
   var result: c_int;
-  var err = chpl_fs_get_uid(result, name.localize().c_str());
+  var err = chpl_fs_get_uid(result, unescape(name).c_str());
   if err then try ioerror(err, "in getUID");
   return result;
 }
@@ -831,17 +868,19 @@ proc getUID(out error: syserr, name: string): int {
 //
 private module GlobWrappers {
   extern type glob_t;
+  use SysCTypes;
 
   private extern const GLOB_NOMATCH: c_int;
   private extern const GLOB_NOSPACE: c_int;
 
   // glob wrapper that takes care of casting and error checking
   inline proc glob_w(pattern: string, ref ret_glob:glob_t): void {
+    import FileSystem.unescape;
     extern proc chpl_glob(pattern: c_string, flags: c_int,
                           ref ret_glob: glob_t): c_int;
 
     const GLOB_NOFLAGS = 0: c_int;
-    const err = chpl_glob(pattern.localize().c_str(), GLOB_NOFLAGS, ret_glob);
+    const err = chpl_glob(unescape(pattern).c_str(), GLOB_NOFLAGS, ret_glob);
 
     // When no flags are being passed, glob can only fail with GLOB_NOMATCH or
     // GLOB_NOSPACE. GLOB_NOMATCH is fine and will just result in a 0 length
@@ -861,7 +900,11 @@ private module GlobWrappers {
   // glob_index wrapper that takes care of casting
   inline proc glob_index_w(glb: glob_t, idx: int): string {
     extern proc chpl_glob_index(glb: glob_t, idx: size_t): c_string;
-    return chpl_glob_index(glb, idx.safeCast(size_t)): string;
+    try! {
+      return createStringWithNewBuffer(chpl_glob_index(glb,
+                                                       idx.safeCast(size_t)),
+                                       policy=decodePolicy.escape);
+    }
   }
 
   // globfree wrapper that exists only for symmetry in the routine names
@@ -942,12 +985,12 @@ iter glob(pattern: string = "*", followThis, param tag: iterKind): string
   var glb : glob_t;
   if (followThis.size != 1) then
     compilerError("glob() iterator can only be zipped with 1D iterators");
-  var r = followThis(1);
+  var r = followThis(0);
 
   glob_w(pattern, glb);
   const num = glob_num_w(glb);
   if (r.high >= num) then
-    HaltWrappers.zipLengthHalt("glob() is being zipped with something too big; it only has " + num + " matches");
+    HaltWrappers.zipLengthHalt("glob() is being zipped with something too big; it only has " + num:string + " matches");
 
   for i in r do
     yield glob_index_w(glb, i);
@@ -958,14 +1001,15 @@ iter glob(pattern: string = "*", followThis, param tag: iterKind): string
 /* Determine if the provided path `name` corresponds to a directory and return
    the result
 
-   Will halt with an error message if one is detected, including if the path
-   does not refer to a valid file or directory
-
    :arg name: A path that could refer to a directory.
    :type name: `string`
 
    :return: `true` if the path is a directory, `false` if it is not
    :rtype: `bool`
+
+   :throws SystemError: Thrown to describe an error if one occurs,
+                        including the case where the path does not refer
+                        to a valid file or directory.
 */
 proc isDir(name:string):bool throws {
   extern proc chpl_fs_is_dir(ref result:c_int, name: c_string):syserr;
@@ -974,7 +1018,7 @@ proc isDir(name:string):bool throws {
   var doesExist = try exists(name);
   if !doesExist then return false;
 
-  var err = chpl_fs_is_dir(ret, name.localize().c_str());
+  var err = chpl_fs_is_dir(ret, unescape(name).c_str());
   if err then try ioerror(err, "in isDir", name);
   return ret != 0;
 }
@@ -996,14 +1040,15 @@ proc isDir(out error:syserr, name:string):bool {
 /* Determine if the provided path `name` corresponds to a file and return
    the result
 
-   Will halt with an error message if one is detected, including if the path
-   does not refer to a valid file or directory
-
    :arg name: A path that could refer to a file.
    :type name: `string`
 
    :return: `true` if the path is a file, `false` if it is not
    :rtype: `bool`
+
+   :throws SystemError: Thrown to describe an error if one occurs,
+                        including the case where the path does not refer
+                        to a valid file or directory.
 */
 proc isFile(name:string):bool throws {
   extern proc chpl_fs_is_file(ref result:c_int, name: c_string):syserr;
@@ -1012,7 +1057,7 @@ proc isFile(name:string):bool throws {
   var doesExist = try exists(name);
   if !doesExist then return false;
 
-  var err = chpl_fs_is_file(ret, name.localize().c_str());
+  var err = chpl_fs_is_file(ret, unescape(name).c_str());
   if err then try ioerror(err, "in isFile", name);
   return ret != 0;
 }
@@ -1034,20 +1079,21 @@ proc isFile(out error:syserr, name:string):bool {
 /* Determine if the provided path `name` corresponds to a link and return the
    result.  If symbolic links are not supported, will return `false`.
 
-   Will halt with an error message if one is detected, including if the path
-   does not refer to a valid file or directory
-
    :arg name: A path that could refer to a symbolic link.
    :type name: `string`
 
    :return: `true` if the path is a symbolic link, `false` if it is not or
             if symbolic links are not supported.
    :rtype: `bool`
+
+   :throws SystemError: Thrown to describe an error if one occurs,
+                        including the case where the path does not refer
+                        to a valid file or directory.
 */
 proc isLink(name: string): bool throws {
   extern proc chpl_fs_is_link(ref result:c_int, name: c_string): syserr;
 
-  if (name.isEmptyString()) {
+  if (name.isEmpty()) {
     // chpl_fs_is_link uses lstat to determine if a path is a link, which throws
     // an error when "" is passed to it.  Check it here early and return false
     // like Python does
@@ -1055,7 +1101,7 @@ proc isLink(name: string): bool throws {
   }
 
   var ret:c_int;
-  var err = chpl_fs_is_link(ret, name.localize().c_str());
+  var err = chpl_fs_is_link(ret, unescape(name).c_str());
   if err then try ioerror(err, "in isLink", name);
   return ret != 0;
 }
@@ -1077,14 +1123,15 @@ proc isLink(out error:syserr, name: string): bool {
 /* Determine if the provided path `name` corresponds to a mount point and
    return the result.
 
-   Will halt with an error message if one is detected, including if the path
-   does not refer to a valid file or directory.
-
    :arg name: A path that could refer to a mount point.
    :type name: `string`
 
    :return: `true` if the path is a mount point, `false` if it is not.
    :rtype: `bool`
+
+   :throws SystemError: Thrown to describe an error if one occurs,
+                        including the case where the path does not refer
+                        to a valid file or directory.
 */
 proc isMount(name: string): bool throws {
 
@@ -1098,7 +1145,7 @@ proc isMount(name: string): bool throws {
   if doesExistFile then return false;
 
   var ret:c_int;
-  var err = chpl_fs_is_mount(ret, name.localize().c_str());
+  var err = chpl_fs_is_mount(ret, unescape(name).c_str());
   if err then try ioerror(err, "in isMount", name);
   return ret != 0;
 }
@@ -1158,12 +1205,16 @@ iter listdir(path: string = ".", hidden: bool = false, dirs: bool = true,
   var dir: DIRptr;
   var ent: direntptr;
   var err:syserr = ENOERR;
-  dir = opendir(path.localize().c_str());
+  dir = opendir(unescape(path).c_str());
   if (!is_c_nil(dir)) {
     ent = readdir(dir);
     while (!is_c_nil(ent)) {
-      const filename = ent.d_name():string;
-      if (hidden || filename[1] != '.') {
+      var filename: string;
+      try! {
+        filename = createStringWithNewBuffer(ent.d_name(),
+                                             policy=decodePolicy.escape);
+      }
+      if (hidden || filename[0] != '.') {
         if (filename != "." && filename != "..") {
           const fullpath = path + "/" + filename;
 
@@ -1197,8 +1248,6 @@ iter listdir(path: string = ".", hidden: bool = false, dirs: bool = true,
    is `true`, will attempt to create any directory in the path that did not
    previously exist.
 
-   Will halt with an error message if one is detected
-
    .. warning::
 
       In the case where `parents` is `true`, there is a potential security
@@ -1223,11 +1272,16 @@ iter listdir(path: string = ".", hidden: bool = false, dirs: bool = true,
                  set to `false`, any nonexistent parent will cause an error
                  to occur.
    :type parents: `bool`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc mkdir(name: string, mode: int = 0o777, parents: bool=false) throws {
   extern proc chpl_fs_mkdir(name: c_string, mode: int, parents: bool):syserr;
 
-  var err = chpl_fs_mkdir(name.localize().c_str(), mode, parents);
+  if name.isEmpty() then
+    try ioerror(ENOENT:syserr, "mkdir called with illegal path: '" + name + "'");
+
+  var err = chpl_fs_mkdir(unescape(name).c_str(), mode, parents);
   if err then try ioerror(err, "in mkdir", name);
 }
 
@@ -1255,12 +1309,15 @@ proc mkdir(out error: syserr, name: string, mode: int = 0o777,
       exists and is a directory.  When the :mod:`Path` module has been
       expanded further, this support can be enabled.
 
-   Will halt with an error message if one is detected.
-
    :arg src: the location of the directory to be moved
    :type src: `string`
    :arg dest: the location to move it to.
    :type dest: `string`
+
+   :throws IsADirectoryError: when `dest` exists and is a directory.
+   :throws NotADirectoryError: when `dest` exists and is not a directory.
+   :throws IllegalArgumentError: when `src` and `dest` is the same directory.
+   :throws SystemError: thrown to describe another error if it occurs.
 */
 proc moveDir(src: string, dest: string) throws {
   var destExists = try exists(dest);
@@ -1277,7 +1334,7 @@ proc moveDir(src: string, dest: string) throws {
         // source and destination is to fail with a helpful error message.
         // Since this error code shouldn't occur otherwise, it signals to
         // the wrapper function what has happened.
-        throw new IllegalArgumentError("src", "Cannot move a directory \'" + src + "\' into itself \'" + dest + "\'.");
+        throw new owned IllegalArgumentError("src", "Cannot move a directory \'" + src + "\' into itself \'" + dest + "\'.");
       } else {
         // dest is a directory, we'll copy src inside it
         // NOT YET SUPPORTED.  Requires basename and joinPath
@@ -1313,17 +1370,18 @@ proc moveDir(out error: syserr, src: string, dest: string) {
 /* Renames the file specified by `oldname` to `newname`.  The file is not
    opened during this operation.
 
-   Will halt with an error message if one is detected
-
    :arg oldname: Current name of the file
    :type oldname: `string`
    :arg newname: Name which should be used to refer to the file in the future.
    :type newname: `string`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc rename(oldname: string, newname: string) throws {
   extern proc chpl_fs_rename(oldname: c_string, newname: c_string):syserr;
 
-  var err = chpl_fs_rename(oldname.localize().c_str(), newname.localize().c_str());
+  var err = chpl_fs_rename(unescape(oldname).c_str(),
+                           unescape(newname).c_str());
   if err then try ioerror(err, "in rename", oldname);
 }
 
@@ -1343,15 +1401,15 @@ proc rename(out error: syserr, oldname, newname: string) {
 
 /* Removes the file or directory specified by `name`
 
-   Will halt with an error message if one is detected
-
    :arg name: The file/directory to remove
    :type name: `string`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc remove(name: string) throws {
   extern proc chpl_fs_remove(name: c_string):syserr;
 
-  var err = chpl_fs_remove(name.localize().c_str());
+  var err = chpl_fs_remove(unescape(name).c_str());
   if err then try ioerror(err, "in remove", name);
 }
 
@@ -1368,11 +1426,13 @@ proc remove(out error: syserr, name: string) {
 
 /* Delete the entire directory tree specified by root.
 
-   Will halt with an error message if one is detected.
-
    :arg root: path name representing a directory that should be deleted along
               with its entire contents.
    :type root: `string`
+
+   :throws FileNotFoundError: when `root` does not exist.
+   :throws NotADirectoryError: when `root` is not a directory.
+   :throws SystemError: thrown to describe another error if it occurs.
 */
 proc rmTree(root: string) throws {
   // root doesn't exist.  We can't remove something that isn't there
@@ -1426,8 +1486,6 @@ proc rmTree(out error: syserr, root: string) {
    of symbolic links, :data:`~Path.curDir`, or :data:`~Path.parentDir` appearing
    in the path) and returns the result of that check
 
-   Will halt with an error message if one is detected
-
    :arg file1: The first path to be compared.
    :type file1: `string`
    :arg file2: The second path to be compared.
@@ -1436,12 +1494,16 @@ proc rmTree(out error: syserr, root: string) {
    :return: `true` if the two paths refer to the same file or directory,
             `false` otherwise.
    :rtype: `bool`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc sameFile(file1: string, file2: string): bool throws {
-  extern proc chpl_fs_samefile_string(ref ret: c_int, file1: c_string, file2: c_string): syserr;
+  extern proc chpl_fs_samefile_string(ref ret: c_int,
+                                      file1: c_string, file2: c_string): syserr;
 
   var ret:c_int;
-  var err = chpl_fs_samefile_string(ret, file1.localize().c_str(), file2.localize().c_str());
+  var err = chpl_fs_samefile_string(ret, unescape(file1).c_str(),
+                                         unescape(file2).c_str());
   if err then try ioerror(err, "in sameFile(" + file1 + ", " + file2 + ")");
   return ret != 0;
 }
@@ -1466,8 +1528,6 @@ proc sameFile(out error: syserr, file1: string, file2: string): bool {
    :data:`~Path.parentDir` appearing in the path) and returns the result of that
    check
 
-   Will halt with an error message if one is detected
-
    :arg file1: The first file to be compared.
    :type file1: `file`
    :arg file2: The second file to be compared.
@@ -1476,6 +1536,8 @@ proc sameFile(out error: syserr, file1: string, file2: string): bool {
    :return: `true` if the two records refer to the same file, `false`
             otherwise.
    :rtype: `bool`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc sameFile(file1: file, file2: file): bool throws {
   extern proc chpl_fs_samefile(ref ret: c_int, file1: qio_file_ptr_t,
@@ -1510,17 +1572,18 @@ proc sameFile(out error: syserr, file1: file, file2: file): bool {
 
 /* Create a symbolic link pointing to `oldName` with the path `newName`.
 
-   Will halt with an error message if one is detected
-
    :arg oldName: The source file to be linked
    :type oldName: `string`
    :arg newName: The location where the symbolic link should live
    :type newName: `string`
+
+   :throws SystemError: Thrown to describe an error if one occurs.
 */
 proc symlink(oldName: string, newName: string) throws {
   extern proc chpl_fs_symlink(orig: c_string, linkName: c_string): syserr;
 
-  var err = chpl_fs_symlink(oldName.localize().c_str(), newName.localize().c_str());
+  var err = chpl_fs_symlink(unescape(oldName).c_str(),
+                            unescape(newName).c_str());
   if err then try ioerror(err, "in symlink " + oldName, newName);
 }
 

@@ -30,6 +30,8 @@ use Sort;
 
 iter listdir(path: string, hidden=false, dirs=true, files=true, 
     listlinks=true): string {
+  use SysCTypes;
+
   extern type DIRptr;
   extern type direntptr;
   extern proc opendir(name: c_string): DIRptr;
@@ -48,8 +50,8 @@ iter listdir(path: string, hidden=false, dirs=true, files=true,
   if (!is_c_nil(dir)) {
     ent = readdir(dir);
     while (!is_c_nil(ent)) {
-      const filename = ent.d_name():string;
-      if (hidden || filename[1] != '.') {
+      const filename = createStringWithNewBuffer(ent.d_name());
+      if (hidden || filename[0] != '.') {
         if (filename != "." && filename != "..") {
           //
           // use FileSystem;  // Doesn't work, see comment below
@@ -120,7 +122,7 @@ iter walkdirs(path: string=".", topdown=true, depth=max(int), hidden=false,
   if (depth) {
     var subdirs = listdir(path, hidden=hidden, files=false, listlinks=followlinks);
     if (sort) then
-      quickSort(subdirs);
+      QuickSort.quickSort(subdirs);
     for subdir in subdirs {
       const fullpath = path + "/" + subdir;
       for subdir in walkdirs(fullpath, topdown, depth-1, hidden, 

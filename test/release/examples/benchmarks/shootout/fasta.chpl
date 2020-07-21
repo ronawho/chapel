@@ -6,6 +6,7 @@
      as well as previous Chapel versions by Casey Battaglino, Kyle Brady,
      and Preston Sahabu.
 */
+use IO;                           // supports opening a file
 
 config const n = 1000,            // the length of the generated strings
              lineLength = 60,     // the number of columns in the output
@@ -23,11 +24,11 @@ config param IM = 139968,         // parameters for random number generation
 // Nucleotide definitions
 //
 enum nucleotide {
-  A = ascii("A"), C = ascii("C"), G = ascii("G"), T = ascii("T"),
-  a = ascii("a"), c = ascii("c"), g = ascii("g"), t = ascii("t"),
-  B = ascii("B"), D = ascii("D"), H = ascii("H"), K = ascii("K"),
-  M = ascii("M"), N = ascii("N"), R = ascii("R"), S = ascii("S"),
-  V = ascii("V"), W = ascii("W"), Y = ascii("Y")
+  A = "A".toByte(), C = "C".toByte(), G = "G".toByte(), T = "T".toByte(),
+  a = "a".toByte(), c = "c".toByte(), g = "g".toByte(), t = "t".toByte(),
+  B = "B".toByte(), D = "D".toByte(), H = "H".toByte(), K = "K".toByte(),
+  M = "M".toByte(), N = "N".toByte(), R = "R".toByte(), S = "S".toByte(),
+  V = "V".toByte(), W = "W".toByte(), Y = "Y".toByte()
 }
 use nucleotide;
 
@@ -55,8 +56,8 @@ const ALU: [0..286] nucleotide = [
 //
 // Index aliases for use with (nucleotide, probability) tuples
 //
-param nucl = 1,
-      prob = 2;
+param nucl = 0,
+      prob = 1;
 
 //
 // Probability tables for sequences to be randomly generated
@@ -81,7 +82,7 @@ proc main() {
 // Redefine stdout to use lock-free binary I/O and capture a newline
 //
 const stdout = openfd(1).writer(kind=iokind.native, locking=false);
-param newline = ascii("\n");
+param newline = "\n".toByte();
 
 //
 // Repeat 'alu' to generate a sequence of length 'n'
@@ -93,7 +94,7 @@ proc repeatMake(desc, alu, n) {
         s = [i in 0..(r+lineLength)] alu[i % r]: int(8);
 
   for i in 0..n by lineLength {
-    const lo = i % r + 1,
+    const lo = i % r,
           len = min(lineLength, n-i);
     stdout.write(s[lo..#len], newline);
   }
@@ -103,14 +104,13 @@ proc repeatMake(desc, alu, n) {
 // Use 'nuclInfo's probability distribution to generate a random
 // sequence of length 'n'
 //
-proc randomMake(desc, nuclInfo, n) {
+proc randomMake(desc, nuclInfo: [?nuclSpace], n) {
   stdout.writeln(desc);
 
   // compute the cumulative probabilities of the nucleotides
-  const numNucls = nuclInfo.size;
-  var cumulProb: [1..numNucls] randType,
+  var cumulProb: [nuclSpace] randType,
       p = 0.0;
-  for i in 1..numNucls {
+  for i in nuclSpace {
     p += nuclInfo[i](prob);
     cumulProb[i] = 1 + (p*IM):randType;
   }
@@ -128,21 +128,21 @@ proc randomMake(desc, nuclInfo, n) {
 
     // iterate over 0..n-1 in a round-robin fashion across tasks
     for i in tid*chunkSize..n-1 by numTasks*chunkSize {
-      const bytes = min(chunkSize, n-i);
+      const nBytes = min(chunkSize, n-i);
 
-      // Get 'bytes' random numbers in a coordinated manner
+      // Get 'nBytes' random numbers in a coordinated manner
       randGo[tid].waitFor(i);
-      getRands(bytes, myRands);
+      getRands(nBytes, myRands);
       randGo[nextTid].write(i+chunkSize);
 
-      // Compute 'bytes' nucleotides and store in 'myBuff'
+      // Compute 'nBytes' nucleotides and store in 'myBuff'
       var col = 0,
           off = 0;
 
-      for j in 0..#bytes {
+      for j in 0..#nBytes {
         const r = myRands[j];
-        var nid = 1;
-        for k in 1..numNucls do
+        var nid = 0;
+        for k in nuclSpace do
           if r >= cumulProb[k] then
             nid += 1;
 

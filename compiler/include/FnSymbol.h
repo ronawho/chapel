@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -23,12 +24,20 @@
 #include "library.h"
 #include "symbol.h"
 
+class IteratorGroup;
+
 enum RetTag {
   RET_VALUE,
   RET_REF,
   RET_CONST_REF,
   RET_PARAM,
   RET_TYPE
+};
+
+enum TagGenericResult {
+  TGR_ALREADY_TAGGED,
+  TGR_NEWLY_TAGGED,
+  TGR_TAGGING_ABORTED
 };
 
 class FnSymbol : public Symbol {
@@ -42,18 +51,22 @@ public:
   Type*                      retType;
 
   BlockStmt*                 where;
+  BlockStmt*                 lifetimeConstraints;
   BlockStmt*                 retExprType;
   BlockStmt*                 body;
   IntentTag                  thisTag;
   RetTag                     retTag;
 
-  // Attached original (user) iterators before lowering.
+  // Support for iterator lowering.
   IteratorInfo*              iteratorInfo;
+  // Pointers to other iterator variants - serial, standalone, etc.
+  IteratorGroup*             iteratorGroup;
 
   Symbol*                    _this;
-  Symbol*                    _outer;
   FnSymbol*                  instantiatedFrom;
   SymbolMap                  substitutions;
+
+  astlocT                    userInstantiationPointLoc;
 
 private:
   BlockStmt*                 _instantiationPoint;
@@ -103,7 +116,7 @@ public:
   void                       codegenHeaderC();
   void                       codegenPrototype();
   void                       codegenDef();
-
+  void                       codegenFortran(int indent);
   void                       codegenPython(PythonFileType pxd);
   GenRet                     codegenPXDType();
   GenRet                     codegenPYXType();
@@ -127,9 +140,9 @@ public:
   LabelSymbol*               getEpilogueLabel();
   LabelSymbol*               getOrCreateEpilogueLabel();
 
+  // getReturnSymbol returns the variable marked RVV, but if
+  // the return-by-ref transformation has been applied, it returns gVoid.
   Symbol*                    getReturnSymbol();
-  Symbol*                    replaceReturnSymbol(Symbol* newRetSymbol,
-                                                 Type*   newRetType);
 
   // Removes all statements from body and adds all statements from block.
   void                       replaceBodyStmtsWithStmts(BlockStmt* block);
@@ -150,7 +163,7 @@ public:
 
   CallExpr*                  singleInvocation()                          const;
 
-  bool                       tagIfGeneric();
+  TagGenericResult           tagIfGeneric(SymbolMap* map = NULL, bool abortOK = false);
 
   bool                       isNormalized()                              const;
   void                       setNormalized(bool value);
@@ -160,6 +173,7 @@ public:
   bool                       isMethod()                                  const;
   bool                       isMethodOnClass()                           const;
   bool                       isMethodOnRecord()                          const;
+  bool                       isTypeMethod()                              const;
 
   void                       setMethod(bool value);
 
@@ -170,8 +184,14 @@ public:
   bool                       isInitializer()                             const;
   bool                       isPostInitializer()                         const;
   bool                       isDefaultInit()                             const;
+  bool                       isCopyInit()                                const;
 
-  AggregateType*             getReceiver()                               const;
+  bool                       isGeneric();
+  bool                       isGenericIsValid();
+  void                       setGeneric(bool generic);
+  void                       clearGeneric();
+
+  AggregateType*             getReceiverType()                           const;
 
   bool                       isIterator()                                const;
 
@@ -187,13 +207,17 @@ public:
 
   bool                       retExprDefinesNonVoid()                     const;
 
+  const char*                substitutionsToString(const char* sep)      const;
+
 private:
   virtual std::string        docsDirective();
 
-  int                        hasGenericFormals()                         const;
+  bool                       hasGenericFormals(SymbolMap* map)           const;
 
   bool                       mIsNormalized;
   bool                       _throwsError;
+  bool                       mIsGeneric;
+  bool                       mIsGenericIsValid;
 };
 
 const char*                     toString(FnSymbol* fn);

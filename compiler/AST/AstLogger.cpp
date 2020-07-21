@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -36,11 +37,11 @@ bool AstLogger::enterAggrType(AggregateType* node) {
 void AstLogger::exitAggrType(AggregateType* node) {
 }
 
-bool AstLogger::enterUnmanagedClassType(UnmanagedClassType* node) {
+bool AstLogger::enterDecoratedClassType(DecoratedClassType* node) {
   return true;
 }
 
-void AstLogger::exitUnmanagedClassType(UnmanagedClassType* node) {
+void AstLogger::exitDecoratedClassType(DecoratedClassType* node) {
 }
 
 
@@ -135,14 +136,14 @@ void AstLogger::visitUsymExpr(UnresolvedSymExpr* node) {
 void AstLogger::visitUseStmt(UseStmt* node) {
 }
 
+void AstLogger::visitImportStmt(ImportStmt* node) {
+}
+
 bool AstLogger::enterBlockStmt(BlockStmt* node) {
   return true;
 }
 
 void AstLogger::exitBlockStmt(BlockStmt* node) {
-}
-
-void AstLogger::visitForallIntents(ForallIntents* clause) {
 }
 
 bool AstLogger::enterForallStmt(ForallStmt* node) {

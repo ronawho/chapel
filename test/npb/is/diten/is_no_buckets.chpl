@@ -122,9 +122,7 @@ proc rank(iteration: int) {
   keyArray(iteration) = iteration;
   keyArray(iteration+Imax) = Bmax - iteration;
 
-  // workaround -- see https://github.com/chapel-lang/chapel/issues/10575
-  // accum(keyArray).add(1);
-  forall k in keyArray do accum(k).add(1);
+  accum(keyArray).add(1);
   ranks = accum.read();
 
   ranks = + scan ranks;
@@ -230,16 +228,13 @@ proc fullVerify() {
   var failures = 0;
   buffer = keyArray;
 
-  serial {
-    [i in D] {
-      atomic {
-	ranks(buffer(i)) -= 1;
-	keyArray(ranks(buffer(i))) = buffer(i);
-      }
-    }
+  for i in D {
+    ranks(buffer(i)) -= 1;
+    keyArray(ranks(buffer(i))) = buffer(i);
+  }
 
-    [i in 0..D.numIndices-2 with (ref failures)] // no race - in 'serial'
-      if (keyArray(i) > keyArray(i+1)) then failures += 1;
+  for i in 0..D.size-2 {
+    if (keyArray(i) > keyArray(i+1)) then failures += 1;
   }
 
   if (failures != 0) then

@@ -1,4 +1,5 @@
-# Copyright 2004-2018 Cray Inc.
+# Copyright 2020 Hewlett Packard Enterprise Development LP
+# Copyright 2004-2019 Cray Inc.
 # Other additional copyright holders may be indicated within.
 # 
 # The entirety of this work is licensed under the Apache License,
@@ -55,6 +56,13 @@ OPT_CFLAGS = -O3
 #LDFLAGS += -fprofile-arcs
 #endif
 
+include $(CHPL_MAKE_HOME)/make/compiler/Makefile.sanitizers
+CFLAGS += $(SANITIZER_CFLAGS)
+CXXFLAGS += $(SANITIZER_CFLAGS)
+LDFLAGS += $(SANITIZER_LDFLAGS)
+GEN_LFLAGS += $(SANITIZER_LDFLAGS)
+OPT_CFLAGS += $(SANITIZER_OPT_CFLAGS)
+
 #
 # If the compiler's default C version is less than C99, force C99 mode.
 #
@@ -82,10 +90,10 @@ LIB_DYNAMIC_FLAG = -shared
 SHARED_LIB_CFLAGS = -fPIC
 
 # Set the target architecture for optimization
-ifneq ($(CHPL_MAKE_TARGET_ARCH), none)
-ifneq ($(CHPL_MAKE_TARGET_ARCH), unknown)
-ifneq ($(CHPL_MAKE_TARGET_ARCH_FLAG), none)
-SPECIALIZE_CFLAGS = -m$(CHPL_MAKE_TARGET_ARCH_FLAG)=$(CHPL_MAKE_TARGET_BACKEND_ARCH)
+ifneq ($(CHPL_MAKE_TARGET_CPU), none)
+ifneq ($(CHPL_MAKE_TARGET_CPU), unknown)
+ifneq ($(CHPL_MAKE_TARGET_CPU_FLAG), none)
+SPECIALIZE_CFLAGS = -m$(CHPL_MAKE_TARGET_CPU_FLAG)=$(CHPL_MAKE_TARGET_BACKEND_CPU)
 endif
 endif
 endif
@@ -126,6 +134,12 @@ SQUASH_WARN_GEN_CFLAGS = -Wno-unused -Wno-uninitialized
 SQUASH_WARN_GEN_CFLAGS += -Wno-pointer-sign
 
 #
+# Don't warn/error for incompatible pointer types (see
+# https://github.com/chapel-lang/chapel/issues/7983)
+#
+SQUASH_WARN_GEN_CFLAGS += -Wno-incompatible-pointer-types
+
+#
 # Don't warn for unsigned pointer comparisons
 #
 # uint32_t i = foo();
@@ -154,7 +168,7 @@ RUNTIME_CXXFLAGS += $(WARN_CXXFLAGS)
 # -Wno-strict-prototypes has to be used because most GASNet prototypes
 # aren't strict.
 #
-CHPL_GASNET_MORE_CFLAGS = -Wno-strict-prototypes -Wno-missing-prototypes
+CHPL_GASNET_MORE_CFLAGS = -Wno-strict-prototypes -Wno-missing-prototypes -Wno-unused-variable -Wno-unused-function
 endif
 
 ifdef CHPL_COMM_DEBUG

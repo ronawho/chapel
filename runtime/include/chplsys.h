@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -29,8 +30,6 @@ size_t chpl_getHeapPageSize(void); // note: only works after mem layer inited
 uint64_t chpl_sys_physicalMemoryBytes(void);
 int chpl_sys_getNumCPUsPhysical(chpl_bool accessible_only);
 int chpl_sys_getNumCPUsLogical(chpl_bool accessible_only);
-
-void chpl_moveToLastCPU(void);
 
 //
 // returns the name of a locale via uname -n or the like

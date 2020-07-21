@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -20,6 +21,7 @@
 #include "initializerRules.h"
 
 #include "astutil.h"
+#include "AstVisitorTraverse.h"
 #include "expr.h"
 #include "ForallStmt.h"
 #include "InitNormalize.h"
@@ -29,6 +31,15 @@
 #include "TryStmt.h"
 #include "type.h"
 #include "typeSpecifier.h"
+
+#include "LoopStmt.h"
+#include "ForLoop.h"
+#include "WhileDoStmt.h"
+#include "DoWhileStmt.h"
+#include "ParamForLoop.h"
+#include "ForallStmt.h"
+
+#include <stack>
 
 static bool     isInitStmt (CallExpr* stmt);
 
@@ -54,6 +65,8 @@ static bool     isStringLiteral(Expr* expr, const char* name);
 static bool     isSymbolThis(Expr* expr);
 
 static void     addSuperInit(FnSymbol* fn);
+
+static DefExpr* toLocalField(AggregateType* at, CallExpr* expr);
 
 /************************************* | **************************************
 *                                                                             *
@@ -185,16 +198,30 @@ void errorOnFieldsInArgList(FnSymbol* fn) {
   for_formals(formal, fn) {
     std::vector<SymExpr*> symExprs;
 
-    collectSymExprs(formal, symExprs);
+    collectSymExprsFor(formal, fn->_this, symExprs);
 
     for_vector(SymExpr, se, symExprs) {
-      if (se->symbol() == fn->_this) {
-        USR_FATAL_CONT(se,
-                       "invalid access of class member in "
-                       "initializer argument list");
-
+        bool error = true;
+        if (fn->isCopyInit()) {
+          if (CallExpr* call = toCallExpr(se->parentExpr)) {
+            AggregateType* at = toAggregateType(fn->_this->getValType());
+            if (call->isPrimitive(PRIM_TYPEOF)) {
+              error = false;
+            } else if (DefExpr* def = toLocalField(at, call)) {
+              Symbol* sym = def->sym;
+              if (sym->hasFlag(FLAG_TYPE_VARIABLE) ||
+                  sym->hasFlag(FLAG_PARAM)) {
+                error = false;
+              }
+            }
+          }
+        }
+        if (error) {
+          USR_FATAL_CONT(se,
+                         "invalid access of class member in "
+                         "initializer argument list");
+        }
         break;
-      }
     }
   }
 }
@@ -216,8 +243,8 @@ static bool isReturnVoid(FnSymbol* fn) {
 
     collectMyCallExprs(fn->body, calls, fn);
 
-    for (size_t i = 0; i < calls.size() && retval == true; i++) {
-      if (calls[i]->isPrimitive(PRIM_RETURN) == true) {
+    for (size_t i = 0; i < calls.size() && retval; i++) {
+      if (calls[i]->isPrimitive(PRIM_RETURN)) {
         SymExpr* value = toSymExpr(calls[i]->get(1));
 
         if (value == NULL || value->symbol()->type != dtVoid) {
@@ -239,7 +266,7 @@ static bool isReturnVoid(FnSymbol* fn) {
 *                                                                             *
 ************************************** | *************************************/
 
-static void          preNormalizeInitRecord(FnSymbol* fn);
+static void          preNormalizeInitRecordUnion(FnSymbol* fn);
 
 static void          preNormalizeInitClass(FnSymbol* fn);
 
@@ -259,7 +286,7 @@ static void preNormalizeInit(FnSymbol* fn) {
     USR_FATAL(fn, "initializers are not yet allowed to throw errors");
 
   } else if (at->isRecord() == true || at->isUnion()) {
-    preNormalizeInitRecord(fn);
+    preNormalizeInitRecordUnion(fn);
 
   } else if (at->isClass()  == true) {
     preNormalizeInitClass(fn);
@@ -269,7 +296,7 @@ static void preNormalizeInit(FnSymbol* fn) {
   }
 }
 
-static void preNormalizeInitRecord(FnSymbol* fn) {
+static void preNormalizeInitRecordUnion(FnSymbol* fn) {
   InitNormalize  state(fn);
 
   AggregateType* at    = toAggregateType(fn->_this->type);
@@ -278,7 +305,9 @@ static void preNormalizeInitRecord(FnSymbol* fn) {
   // The body contains at least one instance of this.init() or super.init()
   if (state.isPhase0() == true || state.isPhase1() == true) {
     InitNormalize finalState = preNormalize(at, fn->body, state);
-    finalState.initializeFieldsAtTail(fn->body);
+
+    if (at->isUnion() == false)
+      finalState.initializeFieldsAtTail(fn->body);
 
   } else {
     INT_ASSERT(false);
@@ -527,8 +556,13 @@ static InitNormalize preNormalize(AggregateType* at,
             stmt = stmt->next;
           }
         } else if (state.isFieldInitialized(field) == false) {
-          checkLocalPhaseOneErrors(state, field, callExpr);
-          stmt = state.fieldInitFromInitStmt(field, callExpr);
+          if (at->isUnion()) {
+            // Don't try to initialize union fields if not initialized
+            stmt = stmt->next;
+          } else {
+            checkLocalPhaseOneErrors(state, field, callExpr);
+            stmt = state.fieldInitFromInitStmt(field, callExpr);
+          }
         } else if (state.isFieldImplicitlyInitialized(field) == true) {
           USR_FATAL_CONT(stmt,
                          "Field \"%s\" initialized out of order",
@@ -576,6 +610,9 @@ static InitNormalize preNormalize(AggregateType* at,
                       field->sym->name);
 
           } else {
+            if (state.isPhase1()) {
+              state.processThisUses(callExpr);
+            }
             stmt = stmt->next;
           }
         }
@@ -657,6 +694,7 @@ static InitNormalize preNormalize(AggregateType* at,
       stmt = stmt->next;
 
     } else if (ForallStmt* forall = toForallStmt(stmt)) {
+      preNormalize(at, block, state, forall->iteratedExpressions().head);
       preNormalize(at,
                    forall->loopBody(),
                    InitNormalize(forall, state));
@@ -863,8 +901,6 @@ static bool isUnacceptableTry(Expr* stmt) {
 *                                                                             *
 ************************************** | *************************************/
 
-static DefExpr* toLocalField(AggregateType* at, CallExpr* expr);
-
 static DefExpr* fieldByName(AggregateType* at, const char* name);
 
 static DefExpr* toSuperFieldInit(AggregateType* at, CallExpr* callExpr) {
@@ -951,7 +987,7 @@ static bool isAssignment(CallExpr* callExpr) {
 static bool isSimpleAssignment(CallExpr* callExpr) {
   bool retval = false;
 
-  if (callExpr->isNamedAstr(astrSequals) == true) {
+  if (callExpr->isNamedAstr(astrSassign) == true) {
     retval = true;
   }
 
@@ -981,20 +1017,22 @@ static bool isCompoundAssignment(CallExpr* callExpr) {
 }
 
 static void addSuperInit(FnSymbol* fn) {
-  BlockStmt* body     = fn->body;
+  if (fn->_this->getValType()->symbol->hasFlag(FLAG_NO_OBJECT) == false) {
+    BlockStmt* body     = fn->body;
 
-  VarSymbol* tmp      = newTemp("super_tmp");
+    VarSymbol* tmp      = newTemp("super_tmp");
 
-  Symbol*    _this    = fn->_this;
-  Symbol*    superSym = new_CStringSymbol("super");
-  CallExpr*  superGet = new CallExpr(PRIM_GET_MEMBER_VALUE, _this, superSym);
+    Symbol*    _this    = fn->_this;
+    Symbol*    superSym = new_CStringSymbol("super");
+    CallExpr*  superGet = new CallExpr(PRIM_GET_MEMBER_VALUE, _this, superSym);
 
-  tmp->addFlag(FLAG_SUPER_TEMP);
+    tmp->addFlag(FLAG_SUPER_TEMP);
 
-  // Adding at head therefore add in reverse order
-  body->insertAtHead(new CallExpr("init",    gMethodToken, tmp));
-  body->insertAtHead(new CallExpr(PRIM_MOVE, tmp,          superGet));
-  body->insertAtHead(new DefExpr(tmp));
+    // Adding at head therefore add in reverse order
+    body->insertAtHead(new CallExpr("init",    gMethodToken, tmp));
+    body->insertAtHead(new CallExpr(PRIM_MOVE, tmp,          superGet));
+    body->insertAtHead(new DefExpr(tmp));
+  }
 }
 
 /************************************* | **************************************
@@ -1097,6 +1135,30 @@ static bool isSymbolThis(Expr* expr) {
   return retval;
 }
 
+// returns true if there is a postinit defined on the type
+// and in that event adds FLAG_HAS_POSTINIT to the type symbol
+static bool findPostinitAndMark(AggregateType* at) {
+  bool retval = false;
+
+  // If there is postinit() it is defined on the defining type
+  if (at->instantiatedFrom == NULL) {
+    int size = at->methods.n;
+
+    for (int i = 0; i < size && retval == false; i++) {
+      if (at->methods.v[i] != NULL)
+        retval = at->methods.v[i]->isPostInitializer();
+    }
+
+  } else {
+    retval = findPostinitAndMark(at->instantiatedFrom);
+  }
+
+  if (retval)
+    at->symbol->addFlag(FLAG_HAS_POSTINIT);
+
+  return retval;
+}
+
 //
 // Builds the list of AggregateTypes in the hierarchy of `at` that have or
 // require a postinit.
@@ -1118,14 +1180,14 @@ static bool buildPostInitChain(AggregateType* at,
   if (at == dtObject) {
     ret = false;
   } else if (at->isRecord()) {
-    if (at->hasPostInitializer()) {
+    if (findPostinitAndMark(at)) {
       chain.push_back(at);
       ret = true;
     }
   } else if (parent != NULL && buildPostInitChain(parent, chain) == true) {
     ret = true;
     chain.push_back(at);
-  } else if (at->hasPostInitializer()) {
+  } else if (findPostinitAndMark(at)) {
     ret = true;
     chain.push_back(at);
   }
@@ -1154,40 +1216,144 @@ static bool isSuperPostInit(CallExpr* stmt) {
   return retval;
 }
 
-static bool hasSuperPostInit(BlockStmt* block) {
-  Expr* stmt   = block->body.head;
-  bool  retval = false;
+class PostinitVisitor : public AstVisitorTraverse {
+  public:
+    PostinitVisitor() : found(false) { }
+    virtual ~PostinitVisitor() { }
 
-  while (stmt != NULL && retval == false) {
-    if (CallExpr* callExpr = toCallExpr(stmt)) {
-      retval = isSuperPostInit(callExpr);
+    bool found;
 
-    } else if (CondStmt* cond = toCondStmt(stmt)) {
-      if (cond->elseStmt == NULL) {
-        retval = hasSuperPostInit(cond->thenStmt);
+    virtual bool enterCondStmt(CondStmt* node);
+    virtual bool enterCallExpr(CallExpr* node);
 
-      } else {
-        retval = hasSuperPostInit(cond->thenStmt) ||
-                 hasSuperPostInit(cond->elseStmt);
-      }
+    virtual bool enterForallStmt(ForallStmt* node);
+    virtual bool enterWhileDoStmt(WhileDoStmt* node);
+    virtual bool enterDoWhileStmt(DoWhileStmt* node);
+    virtual bool enterForLoop(ForLoop* node);
+    virtual bool enterParamForLoop(ParamForLoop* node);
+    virtual bool enterBlockStmt(BlockStmt* node);
 
-    } else if (BlockStmt* block = toBlockStmt(stmt)) {
-      retval = hasSuperPostInit(block);
+    void enterLoopStmt(BlockStmt* node);
+};
 
-    } else if (ForallStmt* block = toForallStmt(stmt)) {
-      retval = hasSuperPostInit(block->loopBody());
-    }
+bool PostinitVisitor::enterCondStmt(CondStmt* node) {
+  PostinitVisitor vis;
+  node->thenStmt->accept(&vis);
 
-    stmt = stmt->next;
+  bool thenPostinit = vis.found;
+  vis.found = false;
+
+  bool elsePostinit = false;
+  if (node->elseStmt != NULL) {
+    node->elseStmt->accept(&vis);
+    elsePostinit = vis.found;
+  } else if (thenPostinit) {
+    USR_FATAL_CONT(node, "\"super.postinit()\" may not be called in a if-statement without an else-branch");
+    return false;
   }
 
-  return retval;
+  if (thenPostinit != elsePostinit) {
+    USR_FATAL_CONT(node, "\"super.postinit()\" must be called in each branch of a conditional or not at all");
+    this->found = true;
+  } else if (thenPostinit) {
+    this->found = true;
+  }
+
+  return false;
+}
+
+bool PostinitVisitor::enterCallExpr(CallExpr* node) {
+  if (isSuperPostInit(node)) {
+    if (found == false) {
+      found = true;
+    } else {
+      USR_FATAL_CONT(node, "Multiple calls to \"super.postinit()\"");
+      return false;
+    }
+  }
+  return true;
+}
+
+bool PostinitVisitor::enterBlockStmt(BlockStmt* node) {
+  if (CallExpr* info = node->blockInfoGet()) {
+    const char* name = NULL;
+    bool isLoweredElseCoforall = false;
+    if (info->isPrimitive(PRIM_BLOCK_BEGIN) ||
+        info->isPrimitive(PRIM_BLOCK_BEGIN_ON)) {
+      name = "begin";
+    } else if (info->isPrimitive(PRIM_BLOCK_COBEGIN)) {
+      name = "cobegin";
+    } else if (info->isPrimitive(PRIM_BLOCK_COFORALL) ||
+               info->isPrimitive(PRIM_BLOCK_COFORALL_ON)) {
+      // coforalls are lowered really early into a CondStmt where each branch
+      // has a for-loop and a PRIM_BLOCK_COFORALL*. In order to avoid
+      // duplicate messages about coforall-statements, do not issue an error
+      // if the coforall is in the else branch.
+      if (ForLoop* loop = toForLoop(node->parentExpr)) {
+        if (BlockStmt* loopParent = toBlockStmt(loop->parentExpr)) {
+          if (CondStmt* cond = toCondStmt(loopParent->parentExpr)) {
+            isLoweredElseCoforall = cond->elseStmt == loopParent;
+          }
+        }
+      }
+
+      name = "coforall";
+    }
+    if (name != NULL) {
+      PostinitVisitor vis;
+      for_alist(next_ast, node->body)
+        next_ast->accept(&vis);
+      if (vis.found && isLoweredElseCoforall == false) {
+        USR_FATAL_CONT(node, "\"super.postinit()\" is not allowed in a %s statement", name);
+      }
+      return false;
+    }
+  }
+
+  return true;
+}
+
+void PostinitVisitor::enterLoopStmt(BlockStmt* node) {
+  PostinitVisitor vis;
+  for_alist(next_ast, node->body)
+    next_ast->accept(&vis);
+
+  if (vis.found) {
+    USR_FATAL_CONT(node, "\"super.postinit()\" is not allowed in loop statements");
+    found = true;
+  }
+}
+
+bool PostinitVisitor::enterForallStmt(ForallStmt* node) {
+  enterLoopStmt(node->loopBody());
+  return false;
+}
+bool PostinitVisitor::enterWhileDoStmt(WhileDoStmt* node) {
+  enterLoopStmt(node);
+  return false;
+}
+bool PostinitVisitor::enterDoWhileStmt(DoWhileStmt* node) {
+  enterLoopStmt(node);
+  return false;
+}
+bool PostinitVisitor::enterForLoop(ForLoop* node) {
+  enterLoopStmt(node);
+  return false;
+}
+bool PostinitVisitor::enterParamForLoop(ParamForLoop* node) {
+  enterLoopStmt(node);
+  return false;
+}
+
+static bool hasSuperPostInit(BlockStmt* block) {
+  PostinitVisitor vis;
+  block->accept(&vis);
+  return vis.found;
 }
 
 //
 // Inserts a call to super.postinit if none exists anywhere in 'fn'
 //
-// TODO: what should we do with super.postinits in conditionals?
 // TODO: merge with addSuperInit
 //
 static void insertSuperPostInit(FnSymbol* fn) {
@@ -1272,6 +1438,8 @@ static int insertPostInit(AggregateType* at, bool insertSuper) {
   if (found == false) {
     buildPostInit(at);
   }
+
+  at->symbol->addFlag(FLAG_HAS_POSTINIT);
 
   return ret;
 }

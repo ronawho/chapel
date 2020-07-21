@@ -10,7 +10,6 @@ blue
 indigo
 violet
 
-length = 7
 size = 7
 first = red
 last = violet
@@ -23,8 +22,8 @@ hasFirst = true
 hasLast = true
 isNaturallyAligned = true
 isAmbiguous = false
-member(blue) = true
-member(red) = true
+contains(blue) = true
+contains(red) = true
 ident(color.red..color.violet) = true
 ident(color.yellow..color.indigo) = false
 indexOrder(color.yellow) = 2
@@ -50,7 +49,6 @@ green
 blue
 indigo
 
-length = 4
 size = 4
 first = yellow
 last = indigo
@@ -63,8 +61,8 @@ hasFirst = true
 hasLast = true
 isNaturallyAligned = true
 isAmbiguous = false
-member(blue) = true
-member(red) = false
+contains(blue) = true
+contains(red) = false
 ident(color.red..color.violet) = false
 ident(color.yellow..color.indigo) = true
 indexOrder(color.yellow) = 0
@@ -89,7 +87,6 @@ range(color,bounded,false)
 
 green
 
-length = 1
 size = 1
 first = green
 last = green
@@ -102,8 +99,8 @@ hasFirst = true
 hasLast = true
 isNaturallyAligned = true
 isAmbiguous = false
-member(blue) = false
-member(red) = false
+contains(blue) = false
+contains(red) = false
 ident(color.red..color.violet) = false
 ident(color.yellow..color.indigo) = false
 indexOrder(color.yellow) = -1
@@ -117,7 +114,6 @@ blue..green
 range(color,bounded,false)
 
 
-length = 0
 size = 0
 first = blue
 last = green
@@ -130,8 +126,8 @@ hasFirst = false
 hasLast = false
 isNaturallyAligned = true
 isAmbiguous = false
-member(blue) = false
-member(red) = false
+contains(blue) = false
+contains(red) = false
 ident(color.red..color.violet) = false
 ident(color.yellow..color.indigo) = false
 indexOrder(color.yellow) = -1

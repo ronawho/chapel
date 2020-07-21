@@ -112,7 +112,7 @@ proc Gen_RMAT_graph ( a : real,
                      MAX_EDGE_WEIGHT :int,
                      G )
 
-  { use Random;
+{ use Random, IO;
     use analyze_RMAT_graph_associative_array;
 
     if PRINT_TIMING_STATISTICS then stopwatch.start ();
@@ -271,9 +271,9 @@ NPBRandomPrivate_iterate(real, edge_domain, seed, start=rndPos+4*delta)) {
     // Random Numbers return in the range [0.0, 1.0)
 
     var Rand_Gen = if REPRODUCIBLE_PROBLEMS then
-                     new owned NPBRandomStream (real, seed = 0556707007)
+                     new NPBRandomStream (real, seed = 0556707007)
                    else
-                     new owned NPBRandomStream (real);
+                     new NPBRandomStream (real);
 
     var   Noisy_a     : [edge_domain] real,
           Noisy_b     : [edge_domain] real,
@@ -410,7 +410,7 @@ NPBRandomPrivate_iterate(real, edge_domain, seed, start=rndPos+4*delta)) {
     // Kernel 1: assemble graph from list of triples.
     // Include only non-self incident edges.
     // In case of (start, end) duplicates, the first triple wins.
-    // Alternatively, could skip the member(v) check (so the last triple
+    // Alternatively, could skip the contains(v) check (so the last triple
     // wins) or also use += instead of = (to sum duplicates' weights).
     // ----------------------------------------------------------
 

@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -124,8 +125,7 @@ enum ForallIntentTag {
 const char* forallIntentTagDescription(ForallIntentTag tfiTag);
 
 // for task intents and forall intents
-ArgSymbol* tiMarkForIntent(IntentTag intent);
-ArgSymbol* tiMarkForForallIntent(ForallIntentTag intent);
+ArgSymbol* tiMarkForForallIntent(ShadowVarSymbol* svar);
 
 // parser support
 enum ShadowVarPrefix {
@@ -178,6 +178,7 @@ public:
   void               removeFlag(Flag flag);
   void               copyFlags(const Symbol* other);
 
+  bool               isKnownToBeGeneric();
   virtual bool       isVisible(BaseAST* scope)                 const;
   bool               noDocGen()                                const;
 
@@ -214,6 +215,8 @@ public:
   SymExpr*           getSingleUse()                            const;
   // Return the single def of this Symbol, or NULL if there are 0 or >= 2
   SymExpr*           getSingleDef()                            const;
+  // Same, considering only defs under 'parent'.
+  SymExpr*           getSingleDefUnder(Symbol* parent)         const;
 
   // The compiler really ought to view a call to `init` that
   // constructs a const record as the single "def". However it
@@ -221,6 +224,7 @@ public:
   // is useful for finding such cases.
   // This function finds the statement expression that is responsible
   // for initializing this symbol.
+  // It can return NULL if it's unable to make sense of the AST pattern.
   Expr*              getInitialization()                       const;
 
 protected:
@@ -258,13 +262,12 @@ private:
 
 
 bool isString(Symbol* symbol);
-bool isUserDefinedRecord(Symbol* symbol);
+bool isBytes(Symbol* symbol);
 
 /************************************* | **************************************
 *                                                                             *
-* This class has two roles:                                                   *
-*    1) A common abstract base class for VarSymbol and ArgSymbol.             *
-*    2) Maintain location state as an IPE "optimization".                     *
+* This class's role is to serve as a common abstract base class for           *
+* VarSymbol and ArgSymbol.                                                    *
 *                                                                             *
 ************************************** | *************************************/
 
@@ -384,11 +387,12 @@ public:
   virtual bool    isVisible(BaseAST* scope)                 const;
 
   bool            requiresCPtr();
-  const char*     intentDescrString();
+  const char*     intentDescrString() const;
 
   GenRet          codegenType();
 
   std::string     getPythonType(PythonFileType pxd);
+  std::string     getPythonDefaultValue();
   std::string     getPythonArgTranslation();
 
   IntentTag       intent;
@@ -521,10 +525,6 @@ class TypeSymbol : public Symbol {
   DECLARE_SYMBOL_COPY(TypeSymbol);
   void replaceChild(BaseAST* old_ast, BaseAST* new_ast);
 
-  void renameInstantiatedMulti(SymbolMap& subs, FnSymbol* fn);
-  void renameInstantiatedSingle(Symbol* sym);
-  void renameInstantiatedFromSuper(TypeSymbol* superSym);
-
   GenRet codegen();
   void codegenDef();
   void codegenPrototype();
@@ -539,11 +539,7 @@ class TypeSymbol : public Symbol {
   const char* doc;
 
   BlockStmt* instantiationPoint;
-
- private:
-  void renameInstantiatedStart();
-  void renameInstantiatedIndividual(Symbol* sym);
-  void renameInstantiatedEnd();
+  astlocT userInstantiationPointLoc;
 };
 
 /************************************* | **************************************
@@ -608,11 +604,20 @@ public:
 *                                                                             *
 ************************************** | *************************************/
 
+// Checks whether a string is valid in UTF8 encoding
+bool isValidString(std::string str, int64_t* numCodepoints);
+
 // Processes a char* to replace any escape sequences with the actual bytes
 std::string unescapeString(const char* const str, BaseAST* astForError);
 
 // Creates a new string literal with the given value.
 VarSymbol *new_StringSymbol(const char *s);
+//
+// Creates a new bytes literal with the given value.
+VarSymbol *new_BytesSymbol(const char *s);
+//
+// Creates a new string or bytes literal with the given value.
+VarSymbol *new_StringOrBytesSymbol(const char *s, AggregateType *at);
 
 // Creates a new C string literal with the given value.
 VarSymbol *new_CStringSymbol(const char *s);
@@ -674,25 +679,42 @@ VarSymbol* newTempConst(QualifiedType qt);
 const char* intentDescrString(IntentTag intent);
 
 // cache some popular strings
-extern const char* astrSdot;
-extern const char* astrSequals;
-extern const char* astrSgt;
-extern const char* astrSgte;
-extern const char* astrSlt;
-extern const char* astrSlte;
+extern const char* astrSassign; // =
+extern const char* astrSdot;    // .
+extern const char* astrSeq;     // ==
+extern const char* astrSne;     // !=
+extern const char* astrSgt;     // >
+extern const char* astrSgte;    // >=
+extern const char* astrSlt;     // <
+extern const char* astrSlte;    // <=
+extern const char* astrSswap;   // <=>
 extern const char* astr_cast;
 extern const char* astr_defaultOf;
 extern const char* astrInit;
+extern const char* astrInitEquals;
 extern const char* astrNew;
 extern const char* astrDeinit;
+extern const char* astrPostinit;
 extern const char* astrTag;
 extern const char* astrThis;
+extern const char* astrSuper;
 extern const char* astr_chpl_cname;
 extern const char* astr_chpl_forward_tgt;
 extern const char* astr_chpl_manager;
+extern const char* astr_chpl_statementLevelSymbol;
+extern const char* astr_chpl_waitDynamicEndCount;
 extern const char* astr_forallexpr;
 extern const char* astr_forexpr;
 extern const char* astr_loopexpr_iter;
+extern const char* astrPostfixBang;
+extern const char* astrBorrow;
+extern const char* astr_init_coerce_tmp;
+extern const char* astr_autoCopy;
+extern const char* astr_initCopy;
+extern const char* astr_coerceCopy;
+extern const char* astr_coerceCopy;
+extern const char* astr_coerceMove;
+
 void initAstrConsts();
 
 // Return true if the arg must use a C pointer whether or not
@@ -702,9 +724,10 @@ bool argMustUseCPtr(Type* t);
 // Is 'expr' a SymExpr for the outerVar of some ShadowVarSymbol?
 bool isOuterVarOfShadowVar(Expr* expr);
 
+// The source of the PRIM_MOVE whose destination is this temp.
+Expr* getDefOfTemp(SymExpr* origSE);
+
 // Parser support.
-class ForallIntents;
-void addForallIntent(ForallIntents* fi, Expr* var, IntentTag intent, Expr* ri);
 void addForallIntent(CallExpr* fi, ShadowVarSymbol* svar);
 void addTaskIntent(CallExpr* ti, ShadowVarSymbol* svar);
 
@@ -718,35 +741,41 @@ extern StringChainHash uniqueStringHash;
 extern Symbol *gNil;
 extern Symbol *gUnknown;
 extern Symbol *gMethodToken;
+// Pass this to a return-by-ref formal when the result is not needed.
+// Used when inlining iterators for ForallStmts.
+extern Symbol *gDummyRef;
 extern Symbol *gTypeDefaultToken;
 extern Symbol *gLeaderTag, *gFollowerTag, *gStandaloneTag;
 extern Symbol *gModuleToken;
 extern Symbol *gNoInit;
+extern Symbol *gSplitInit;
 extern Symbol *gVoid;
+extern Symbol *gNone;
 extern Symbol *gStringC;
-extern Symbol *gCVoidPtr;
-extern Symbol *gFile;
 extern Symbol *gOpaque;
 extern Symbol *gTimer;
 extern Symbol *gTaskID;
 extern VarSymbol *gTrue;
 extern VarSymbol *gFalse;
-extern VarSymbol *gTryToken; // try token for conditional function resolution
 extern VarSymbol *gBoundsChecking;
 extern VarSymbol *gCastChecking;
+extern VarSymbol *gNilChecking;
+extern VarSymbol *gOverloadSetsChecks;
 extern VarSymbol *gDivZeroChecking;
 extern VarSymbol *gPrivatization;
 extern VarSymbol *gLocal;
-extern VarSymbol* gWarnUnstable;
+extern VarSymbol *gWarnUnstable;
+extern VarSymbol *gIteratorBreakToken;
 extern VarSymbol *gNodeID;
 extern VarSymbol *gModuleInitIndentLevel;
+extern VarSymbol *gInfinity;
+extern VarSymbol *gNan;
+extern VarSymbol *gUninstantiated;
 
 extern Symbol *gSyncVarAuxFields;
 extern Symbol *gSingleVarAuxFields;
 
-#define FUNC_NAME_MAX 256
-extern char llvmPrintIrName[FUNC_NAME_MAX+1];
-extern char llvmPrintIrStage[FUNC_NAME_MAX+1];
+extern FnSymbol* chplUserMain;
 
 namespace llvmStageNum {
 typedef enum {
@@ -773,20 +802,26 @@ typedef enum {
 }
 using llvmStageNum::llvmStageNum_t;
 
-//Names representations in LLVM IR and C generated code are
-//different from their names in AST. 'llvmPrintIrCName'
-//is place to keep name in LLVM IR and C version of
-//'llvmPrintIrName' variable.
-extern const char *llvmPrintIrCName;
 extern llvmStageNum_t llvmPrintIrStageNum;
-
-extern const char *llvmStageName[llvmStageNum::LAST];
 
 const char *llvmStageNameFromLlvmStageNum(llvmStageNum_t stageNum);
 llvmStageNum_t llvmStageNumFromLlvmStageName(const char* stageName);
 
+void addNameToPrintLlvmIr(const char* name);
+void addCNameToPrintLlvmIr(const char* name);
+
+bool shouldLlvmPrintIrName(const char* name);
+bool shouldLlvmPrintIrCName(const char* name);
+bool shouldLlvmPrintIrFn(FnSymbol* fn);
+
 #ifdef HAVE_LLVM
-void printLlvmIr(llvm::Function *func, llvmStageNum_t numStage);
+void printLlvmIr(const char* name, llvm::Function *func, llvmStageNum_t numStage);
 #endif
+
+void preparePrintLlvmIrForCodegen();
+void completePrintLlvmIrStage(llvmStageNum_t numStage);
+
+const char* toString(ArgSymbol* arg);
+const char* toString(VarSymbol* var);
 
 #endif

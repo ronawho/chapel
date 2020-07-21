@@ -9,19 +9,19 @@ proc test(dom : domain) {
 
   param rank = dom.rank;
   var fluff : rank * int;
-  for i in 1..rank do fluff(i) = 2;
+  for i in 0..#rank do fluff(i) = 2;
 
   const max = dom.expand(fluff*dom.stride);
 
   var Space = dom dmapped Stencil(dom, fluff=fluff, periodic=true);
   var abstr : rank*int;
-  for i in 1..rank do abstr(i) = abs(dom.dim(i).stride);
+  for i in 0..#rank do abstr(i) = abs(dom.dim(i).stride);
 
   {
     // Create a tuple of ranges where the first dimension is halved
-    var rs : rank*Space.dim(1).type;
-    rs(1) = dom.dim(1)[dom.dim(1).low..dom.dim(1).high/2];
-    for param i in 2..rank do rs(i) = dom.dim(i);
+    var rs : rank*Space.dim(0).type;
+    rs(0) = dom.dim(0)[dom.dim(0).low..dom.dim(0).high/2];
+    for param i in 1..rank-1 do rs(i) = dom.dim(i);
 
     var HalfDom = Space[(...rs)];
 
@@ -53,8 +53,8 @@ proc test(dom : domain) {
       var idx = if isTuple(m) then m else (m,);
 
       // Translate our index if needed
-      if !Space.member(idx) {
-        for param i in 1..rank {
+      if !Space.contains(idx) {
+        for param i in 0..rank-1 {
           if idx(i) < Space.dim(i).low then idx(i) += Space.dim(i).size * abstr(i);
           else if idx(i) > Space.dim(i).high then idx(i) -= Space.dim(i).size * abstr(i);
         }
@@ -91,7 +91,7 @@ proc test(dom : domain) {
         var temp = if isTuple(idx) then idx else (idx,);
         // Look at indices that should be in the cache, but are not in the
         // periodic region.
-        if !sub.member(idx) && dom.member(idx) {
+        if !sub.contains(idx) && dom.contains(idx) {
           var m = 1;
           for i in temp do m *= i;
           assert(Actual[idx] == m);

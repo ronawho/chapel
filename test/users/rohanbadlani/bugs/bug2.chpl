@@ -1,4 +1,6 @@
-var mylist:list(int);
+use LinkedLists;
+
+var mylist:LinkedList(int);
 
 mylist.append(10);
 mylist.append(12);

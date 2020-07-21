@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -130,9 +131,6 @@ llvm::DIType* debug_data::construct_type(Type *type)
   const char* name = type->symbol->name;
   ModuleSymbol* defModule = type->symbol->getModule();
   const char* defFile = type->symbol->fname();
-  if (strstr(defFile, "/modules/")!=NULL || strcmp(defFile, "<internal>")==0) {
-    return NULL;
-  }
   int defLine = type->symbol->linenum();
 
   if(!ty) {
@@ -166,9 +164,7 @@ llvm::DIType* debug_data::construct_type(Type *type)
         get_type(type->getValType()),//it should return the pointee's DIType
         layout.getPointerSizeInBits(ty->getPointerAddressSpace()),
         0, /* alignment */
-#if HAVE_LLVM_VER >= 50
         llvm::None,
-#endif
         name);
 
       myTypeDescriptors[type] = N;
@@ -189,9 +185,7 @@ llvm::DIType* debug_data::construct_type(Type *type)
             pteIntDIType,
             layout.getPointerSizeInBits(ty->getPointerAddressSpace()),
             0,
-#if HAVE_LLVM_VER >= 50
             llvm::None,
-#endif
             name);
 
           myTypeDescriptors[type] = N;
@@ -220,9 +214,7 @@ llvm::DIType* debug_data::construct_type(Type *type)
             pteStrDIType,
             layout.getPointerSizeInBits(ty->getPointerAddressSpace()),
             0,
-#if HAVE_LLVM_VER >= 50
             llvm::None,
-#endif
             name);
 
           myTypeDescriptors[type] = N;
@@ -247,9 +239,7 @@ llvm::DIType* debug_data::construct_type(Type *type)
               get_type(vt),
               layout.getPointerSizeInBits(ty->getPointerAddressSpace()),
               0,
-#if HAVE_LLVM_VER >= 50
               llvm::None,
-#endif
               name);
 
             myTypeDescriptors[type] = N;
@@ -293,6 +283,7 @@ llvm::DIType* debug_data::construct_type(Type *type)
               // uses a nullptr type as a stub, but we should change it
                 fditype = this->dibuilder.createNullPtrType();
 
+              bool unused;
               //use the dummy type for 'BaseArr'
               mty = this->dibuilder.createMemberType(
                 get_module_scope(defModule),
@@ -301,7 +292,7 @@ llvm::DIType* debug_data::construct_type(Type *type)
                 fieldDefLine,
                 layout.getTypeSizeInBits(fty),
                 8*layout.getABITypeAlignment(fty),
-                slayout->getElementOffsetInBits(this_class->getMemberGEP(field->cname)),
+                slayout->getElementOffsetInBits(this_class->getMemberGEP(field->cname, unused)),
                 llvm::DINode::FlagZero,
                 fditype);
 
@@ -368,9 +359,12 @@ llvm::DIType* debug_data::construct_type(Type *type)
 
       if(!fty){
         fty = getTypeLLVM(fts->cname);
-        if(!fty)
-          printf("Error: %s has no llvm type\n",fts->name);
+        if(!fty) {
+          // FIXME: Types should have an LLVM type
+          return NULL;
+        }
       }
+      bool unused;
       llvm::DIType* mty = this->dibuilder.createMemberType(
         get_module_scope(defModule),
         field->name,
@@ -378,7 +372,7 @@ llvm::DIType* debug_data::construct_type(Type *type)
         fieldDefLine,
         layout.getTypeSizeInBits(fty),
         8*layout.getABITypeAlignment(fty),
-        slayout->getElementOffsetInBits(this_class->getMemberGEP(field->cname)),
+        slayout->getElementOffsetInBits(this_class->getMemberGEP(field->cname, unused)),
         llvm::DINode::FlagZero,
         fditype);
 
@@ -432,6 +426,7 @@ llvm::DIType* debug_data::construct_type(Type *type)
   }
 
   else if(ty->isArrayTy() && type->astTag == E_AggregateType) {
+    if (type->symbol->hasFlag(FLAG_C_ARRAY)) return NULL;
     AggregateType *this_class = (AggregateType *)type;
     // Subscripts are "ranges" for each dimension of the array
     llvm::SmallVector<llvm::Metadata *, 4> Subscripts;
@@ -440,6 +435,7 @@ llvm::DIType* debug_data::construct_type(Type *type)
     Subscripts.push_back(this->dibuilder.getOrCreateSubrange(0, Asize));
     Symbol *eleSym = toDefExpr(this_class->fields.head)->sym;
     Type *eleType = eleSym->type;
+    if (get_type(eleType) == NULL) return NULL;
     N = this->dibuilder.createArrayType(
       Asize,
       8*layout.getABITypeAlignment(ty),
@@ -511,16 +507,9 @@ llvm::DIFile* debug_data::get_file(const char *fpath)
 llvm::DINamespace* debug_data::construct_module_scope(ModuleSymbol* modSym)
 {
   const char* fname = modSym->fname();
-#if HAVE_LLVM_VER < 50
-  int line = modSym->linenum();
-#endif
   llvm::DIFile* file = get_file(fname);
   return this->dibuilder.createNameSpace(file, /* Scope */
                                          modSym->name, /* Name */
-#if HAVE_LLVM_VER < 50
-                                         file, /* File */
-                                         line, /* LineNo */
-#endif
                                          false /* ExportSymbols */
                                         );
 }
@@ -561,6 +550,23 @@ llvm::DISubprogram* debug_data::construct_function(FnSymbol *function)
 
   llvm::DISubroutineType* function_type = get_function_type(function);
 
+#if HAVE_LLVM_VER >= 80
+  llvm::DISubprogram::DISPFlags SPFlags = llvm::DISubprogram::SPFlagDefinition;
+  if (!function->hasFlag(FLAG_EXPORT))
+    SPFlags |= llvm::DISubprogram::SPFlagLocalToUnit;
+  if (optimized)
+    SPFlags |= llvm::DISubprogram::SPFlagOptimized;
+
+  llvm::DISubprogram* ret = this->dibuilder.createFunction(
+    module, /* scope */
+    name, /* name */
+    cname, /* linkage name */
+    file, line_number, function_type,
+    line_number, /* beginning of scope we start */
+    llvm::DINode::FlagZero, /* flags */
+    SPFlags /* subprogram flags */
+    );
+#else
   llvm::DISubprogram* ret = this->dibuilder.createFunction(
     module, /* scope */
     name, /* name */
@@ -574,6 +580,7 @@ llvm::DISubprogram* debug_data::construct_function(FnSymbol *function)
     // TODO - in 3.8, do we need to pass Decl?
     );
 
+#endif
   return ret;
 }
 
@@ -627,18 +634,14 @@ llvm::DIVariable* debug_data::construct_variable(VarSymbol *varSym)
   const char *name = varSym->name;
   const char *file_name = varSym->astloc.filename;
   int line_number = varSym->astloc.lineno;
-  FnSymbol *funcSym = NULL;
-  if(isFnSymbol(varSym->defPoint->parentSymbol))
-    funcSym = (FnSymbol*)varSym->defPoint->parentSymbol;//TODO:if parent is a block
-  else
-    printf("Couldn't find the function parent of variable: %s!\n",name);
+  FnSymbol *funcSym = varSym->defPoint->getFunction();
 
   llvm::DISubprogram* scope = get_function(funcSym);
   llvm::DIFile* file = get_file(file_name);
   llvm::DIType* varSym_type = get_type(varSym->type);
 
-  if(varSym_type){
-    return this->dibuilder.createAutoVariable(
+  if(varSym_type) {
+    llvm::DILocalVariable* localVariable = this->dibuilder.createAutoVariable(
       scope, /* Scope */
       name, /*Name*/
       file, /*File*/
@@ -646,6 +649,12 @@ llvm::DIVariable* debug_data::construct_variable(VarSymbol *varSym)
       varSym_type, /*Type*/
       true/*AlwaysPreserve, won't be removed when optimized*/
       ); //omit the  Flags and ArgNo
+
+    this->dibuilder.insertDeclare(varSym->codegen().val, localVariable,
+      this->dibuilder.createExpression(), llvm::DebugLoc::get(line_number, 0, scope),
+      gGenInfo->irBuilder->GetInsertBlock());
+
+    return localVariable;
   }
   else {
     //Empty dbg node if the symbol type is unresolved

@@ -3,11 +3,11 @@
 Setting up Your Environment for Chapel
 ======================================
 
-To get started with Chapel, there are four environment settings that are
-strongly recommended for effective use of the release, and a few other optional
-settings that are useful for cross-compiling or overriding the default
-settings.  To check the values of the Chapel environment variables that are set
-or can be inferred, run the script::
+To get started with Chapel, there are three environment settings that are
+strongly recommended for effective use of the release, and a number of
+other optional settings that are useful for cross-compiling or overriding
+the default settings.  To check the values of the Chapel environment
+variables that are set or can be inferred, run the script::
 
   $CHPL_HOME/util/printchplenv
 
@@ -20,6 +20,8 @@ can be convenient.
 
 .. contents::
 
+.. _readme-chplenv.recommended_settings:
+
 Recommended Settings
 --------------------
 
@@ -27,13 +29,15 @@ Recommended Settings
 
 CHPL_HOME
 ~~~~~~~~~
-   Set the ``CHPL_HOME`` environment variable to point to the location of the
+   Setting ``CHPL_HOME`` is important if you have not installed Chapel
+   and are instead working from a source directory. In that event,
+   set the ``CHPL_HOME`` environment variable to point to the location of the
    chapel/ directory that was created when you unpacked the release.
    For example:
 
     .. code-block:: sh
 
-        export CHPL_HOME=~/chapel-1.18.0
+        export CHPL_HOME=~/chapel-1.22.0
 
    .. note::
      This, and all other examples in the Chapel documentation, assumes you're
@@ -42,21 +46,48 @@ CHPL_HOME
      the appropriate adjustment.
 
 
+PATH
+~~~~
+   Updating ``PATH`` is important if you have not installed Chapel
+   and are instead working from a source directory. Otherwise it might
+   be necessary to use the full path to ``chpl`` when compiling programs.
+   In that event, you can set path using the following command:
+
+    .. code-block:: sh
+
+        CHPL_BIN_SUBDIR=`"$CHPL_HOME"/util/chplenv/chpl_bin_subdir.py`
+        export PATH="$PATH":"$CHPL_HOME/bin/$CHPL_BIN_SUBDIR"
+
+
+MANPATH
+~~~~~~~
+   Updating ``MANPATH`` is important if you have not installed Chapel
+   and are instead working from a source directory.
+   Set your man path to include the directory ``$CHPL_HOME/man``.
+   For example:
+
+    .. code-block:: sh
+
+        export MANPATH="$MANPATH":"$CHPL_HOME"/man
+
+Optional Settings
+-----------------
+
 .. _readme-chplenv.CHPL_HOST_PLATFORM:
 
 CHPL_HOST_PLATFORM
 ~~~~~~~~~~~~~~~~~~
-   Set the ``CHPL_HOST_PLATFORM`` environment variable to represent the platform on
-   which you're working.  For standard UNIX workstations, this can be done by
-   running the ``$CHPL_HOME/util/chplenv/chpl_platform.py`` script.  For
-   example:
+
+   You can set the ``CHPL_HOST_PLATFORM`` environment variable to
+   represent the platform on which you're working.  For standard UNIX
+   workstations, the default is sufficient, and is equivalent to
 
     .. code-block:: sh
 
         export CHPL_HOST_PLATFORM=`$CHPL_HOME/util/chplenv/chpl_platform.py`
 
    For other platforms that appear very similar to a UNIX workstation from the
-   shell prompt (e.g., a Cray XK\ |trade|), the value may need to be set
+   shell prompt (e.g., a Cray CS\ |trade|), the value may need to be set
    explicitly.  The strings for our currently-supported host platforms are as
    follows:
 
@@ -74,8 +105,6 @@ CHPL_HOST_PLATFORM
         sunos        SunOS platforms
         cray-cs      Cray CS\ |trade|
         cray-xc      Cray XC\ |trade|
-        cray-xe      Cray XE\ |trade|
-        cray-xk      Cray XK\ |trade|
         ===========  ==================================
 
    Platform-specific documentation is available for most of these platforms in
@@ -90,28 +119,6 @@ CHPL_HOST_PLATFORM
    Makefile for this platform and/or contact us at:
    :disguise:`chapel_info@cray.com`
 
-PATH
-~~~~
-   Set your ``PATH`` to include the directory
-   ``$CHPL_HOME/bin/$CHPL_HOST_PLATFORM`` which is created when you build the
-   compiler.  For example:
-
-    .. code-block:: sh
-
-        export PATH="$PATH":"$CHPL_HOME/bin/$CHPL_HOST_PLATFORM"
-
-
-MANPATH
-~~~~~~~
-   Set your man path to include the directory ``$CHPL_HOME/man``.
-   For example:
-
-    .. code-block:: sh
-
-        export MANPATH="$MANPATH":"$CHPL_HOME"/man
-
-Optional Settings
------------------
 
 .. _readme-chplenv.CHPL_TARGET_PLATFORM:
 
@@ -126,6 +133,38 @@ CHPL_TARGET_PLATFORM
    .. note::
      If ``CHPL_TARGET_PLATFORM`` is not set, the target platform defaults to the
      same value as ``$CHPL_HOST_PLATFORM``.
+
+.. _readme-chplenv.CHPL_HOST_ARCH:
+
+CHPL_HOST_ARCH
+~~~~~~~~~~~~~~~~~~~
+   Optionally, set the ``CHPL_HOST_ARCH`` environment variable to indicate
+   the architecture type of the current machine. Normally, the default
+   value is sufficient.
+
+        ========  =============================================================
+        Value     Description
+        ========  =============================================================
+        x86_64    64-bit AMD and Intel processors
+        aarch64   64-bit ARM processors
+        ========  =============================================================
+
+   If unset, the default will be computed. The command ``uname -m``
+   should produce the same value as the default.
+
+.. _readme-chplenv.CHPL_TARGET_ARCH:
+
+CHPL_TARGET_ARCH
+~~~~~~~~~~~~~~~~~~~
+   Optionally, set the ``CHPL_TARGET_ARCH`` environment variable to indicate
+   the architecture type of the target machine. See the table above for
+   ``CHPL_HOST_ARCH`` for values this might be set to.
+
+   If unset, ``CHPL_TARGET_ARCH`` will be inferred.
+   If ``CHPL_TARGET_CPU`` is ``native``, ``unknown``, or ``none`` then
+   ``CHPL_TARGET_ARCH`` will be set to ``CHPL_HOST_ARCH``.
+   Otherwise, ``CHPL_TARGET_ARCH`` will be set based on the
+   architecture type specified in ``CHPL_TARGET_CPU``.
 
 .. _readme-chplenv.CHPL_COMPILER:
 
@@ -179,11 +218,11 @@ CHPL_*_COMPILER
      once with clang-included. We do this in order to avoid issues in linking
      objects built by different compilers.
 
-.. _readme-chplenv.CHPL_TARGET_ARCH:
+.. _readme-chplenv.CHPL_TARGET_CPU:
 
-CHPL_TARGET_ARCH
+CHPL_TARGET_CPU
 ~~~~~~~~~~~~~~~~
-   Optionally, set the ``CHPL_TARGET_ARCH`` environment variable to indicate
+   Optionally, set the ``CHPL_TARGET_CPU`` environment variable to indicate
    that the target executable should be specialized to the given architecture
    when using ``--specialize`` (and ``--fast``). Valid options are:
 
@@ -219,11 +258,11 @@ CHPL_TARGET_ARCH
         https://gcc.gnu.org/onlinedocs/gcc-7.3.0/gcc/x86-Options.html
         https://gcc.gnu.org/onlinedocs/gcc-7.3.0/gcc/AArch64-Options.html
 
-   If you do not want ``CHPL_TARGET_ARCH`` to have any effect, you can set it
+   If you do not want ``CHPL_TARGET_CPU`` to have any effect, you can set it
    to either ``unknown`` or ``none``. Both will disable specialization, but the
    latter will not warn if ``--specialize`` is used.
 
-   Setting ``CHPL_TARGET_ARCH`` to an incorrect value for your processor may
+   Setting ``CHPL_TARGET_CPU`` to an incorrect value for your processor may
    result in an invalid binary that will not run on the intended machine.
    Special care should be taken to select the lowest common denominator when
    running on machines with heterogeneous processor architectures.
@@ -232,20 +271,20 @@ CHPL_TARGET_ARCH
    environment, in order of application these rules are:
 
         * If :ref:`CHPL_TARGET_COMPILER <readme-chplenv.chpl_compiler>` is ``cray-prgenv-*`` you do not need to
-          set anything in ``CHPL_TARGET_ARCH``. One of the ``craype-*`` modules
+          set anything in ``CHPL_TARGET_CPU``. One of the ``craype-*`` modules
           (e.g.  ``craype-sandybridge``) should be loaded to provide equivalent
           functionality. Once the proper module is loaded, ``CRAY_CPU_TARGET``
           will have the architecture being used in it.
 
         * If ``CHPL_TARGET_COMPILER`` is ``cray``, ``pgi``, or ``ibm``,
-          ``CHPL_TARGET_ARCH`` will be set to ``none`` and no specialization
+          ``CHPL_TARGET_CPU`` will be set to ``none`` and no specialization
           will occur.
 
         * If :ref:`readme-chplenv.CHPL_COMM` is set, no attempt to set a useful value will be
-          made, ``CHPL_TARGET_ARCH`` will be ``unknown``.
+          made and ``CHPL_TARGET_CPU`` will be ``unknown``.
 
         * If :ref:`readme-chplenv.CHPL_TARGET_PLATFORM` is ``darwin``, ``linux*``, or
-          ``cygwin*`` ``CHPL_TARGET_ARCH`` will be ``native``, passing the
+          ``cygwin*`` ``CHPL_TARGET_CPU`` will be ``native``, passing the
           responsibility off to the backend C compiler to detect the specifics
           of the hardware.
 
@@ -298,10 +337,6 @@ CHPL_LOCALE_MODEL
         flat     top-level locales are not further subdivided
         numa     top-level locales are further subdivided into
                  sublocales, each one a NUMA domain
-        knl      a processor-specific locale model for the
-                 self-hosted Xeon Phi (Knight's Landing) which
-                 includes NUMA support and access to the
-                 tightly-coupled high-bandwidth memory
         ======== =============================================
 
    If unset, ``CHPL_LOCALE_MODEL`` defaults to ``flat``.
@@ -324,7 +359,6 @@ CHPL_TASKS
         ============== ===================================================
         qthreads       use Sandia's Qthreads package
         fifo           use POSIX threads
-        massivethreads use U Tokyo's MassiveThreads package
         ============== ===================================================
 
    If ``CHPL_TASKS`` is not set it defaults to ``qthreads`` in all cases
@@ -357,14 +391,17 @@ CHPL_COMM
         ======= ============================================
         none    only supports single-locale execution
         gasnet  use the GASNet-based communication layer
+        ofi     use the (preliminary) libfabric-based communication layer
         ugni    Cray-specific native communication layer
         ======= ============================================
 
-   If unset, ``CHPL_COMM`` defaults to ``none`` in most cases.  On Cray XE
-   and XC systems it defaults to ``ugni``.  On Cray CS systems it defaults
+   If unset, ``CHPL_COMM`` defaults to ``none`` in most cases.  On Cray
+   XC systems it defaults to ``ugni``.  On Cray CS systems it defaults
    to ``gasnet``.  See :ref:`readme-multilocale` for more information on
-   executing Chapel programs using multiple locales.  See :ref:`readme-cray`
-   for more information about Cray-specific runtime layers.
+   executing Chapel programs using multiple locales.  See
+   :ref:`readme-libfabric` for more information about the ofi communication
+   layer.  See :ref:`readme-cray` for more information about Cray-specific
+   runtime layers.
 
 
 .. _readme-chplenv.CHPL_MEM:
@@ -385,11 +422,11 @@ CHPL_MEM
    If the target platform is ``cygwin*`` it defaults to ``cstdlib``
 
    .. note::
-     Certain ``CHPL_COMM`` settings (e.g. ugni and gasnet segment fast/large)
-     register the heap to improve communication performance.  Registering the
-     heap requires special allocator support that not all allocators provide.
-     Currently only ``jemalloc`` is capable of supporting configurations that
-     require a registered heap.
+     Certain ``CHPL_COMM`` settings (e.g. ugni, gasnet segment fast/large,
+     ofi with the gni provider) register the heap to improve communication
+     performance.  Registering the heap requires special allocator support
+     that not all allocators provide.  Currently only ``jemalloc`` is capable
+     of supporting configurations that require a registered heap.
 
 
 .. _readme-chplenv.CHPL_LAUNCHER:
@@ -412,31 +449,19 @@ CHPL_ATOMICS
         ===========  =====================================================
         Value        Description
         ===========  =====================================================
-        cstdlib      implement Chapel atomics as a wrapper around C
-                     standard atomics (from C11)
-        intrinsics   implement atomics using target compiler intrinsics
-                     (which typically map down to hardware capabilities)
-        locks        implement atomics by using mutexes to protect normal
-                     operations
+        cstdlib      implement atomics with C standard atomics (from C11)
+        intrinsics   implement atomics with target compiler intrinsics
+        locks        implement atomics with mutexes
         ===========  =====================================================
 
-   If unset, CHPL_ATOMICS defaults to ``intrinsics`` for most configurations.
-   On some 32 bit platforms, or if the target compiler is ``pgi`` or
-   ``cray-prgenv-pgi`` it defaults to ``locks``.  In a future release,
-   ``cstdlib`` will become the default whenever possible.  At this
-   time, though, most C compilers either do not support standard
-   atomics or have bugs in their implementation.
-
-   .. note::
-     gcc 4.8.1 added support for 64 bit atomics on 32 bit platforms.  We
-     default to ``intrinsics`` for 32 bit platforms when using the target
-     compiler ``gnu`` with a recent enough version of gcc.  For older versions
-     or other target compilers we default to ``locks``
+   If ``CHPL_ATOMICS`` is not set, it defaults to ``cstdlib`` when the target
+   compiler is ``gnu``, ``clang``, ``allinea``, ``clang-included``, or
+   ``cray``.  It defaults to ``intrinsics`` when the target compiler is
+   ``intel``.  It defaults to ``locks`` when the target compiler is ``pgi``.
 
    See the Chapel Language Specification for more information about atomic
    operations in Chapel or :ref:`readme-atomics` for more information about the
    runtime implementation.
-
 
 .. _readme-chplenv.CHPL_TIMERS:
 
@@ -546,6 +571,35 @@ CHPL_HWLOC
        all versions. For best results, we recommend using the bundled jemalloc
        if possible.
 
+..  (comment) CHPL_LIBFABRIC is not a user-facing feature
+
+   .. _readme-chplenv.CHPL_LIBFABRIC:
+
+   CHPL_LIBFABRIC
+   ~~~~~~~~~~~~~~
+      Optionally, the ``CHPL_LIBFABRIC`` environment variable can select
+      between no libfabric or using the libfabric distributed with Chapel in
+      third-party. This setting is intended to elaborate upon
+      ``CHPL_COMM=ofi``.
+
+          ========= ==============================================================
+          Value     Description
+          ========= ==============================================================
+          none      do not build or use libfabric
+          libfabric use the libfabric distribution bundled with Chapel in third-party
+          ========= ==============================================================
+
+      If unset, ``CHPL_LIBFABRIC`` defaults to ``libfabric`` if
+      :ref:`readme-chplenv.CHPL_COMM` is ``ofi``.  In all other cases it
+      defaults to ``none``.
+
+   .. (comment) CHPL_LIBFABRIC=system is also available but it is only
+       intended to support packaging.
+       Using CHPL_LIBFABRIC=system is not regularly tested and may not work
+       for you. Chapel depends on libfabric features that are not available in
+       all versions. For best results, we recommend using the bundled libfabric
+       if possible.
+
 .. _readme-chplenv.CHPL_REGEXP:
 
 CHPL_REGEXP
@@ -577,29 +631,21 @@ CHPL_REGEXP
      ``CHPL_REGEXP`` to ``'none`` while the ``util/setchplenv.*`` versions
      leave it unset, resulting in the behavior described just above.
 
-
 .. _readme-chplenv.CHPL_AUX_FILESYS:
 
 CHPL_AUX_FILESYS
 ~~~~~~~~~~~~~~~~
    Optionally, the ``CHPL_AUX_FILESYS`` environment variable can be used to
-   request that runtime support for filesystems beyond the usual Linux one be
-   present.  Current options are:
+   request runtime support for certain filesystems.
 
-       ====== =================================================
+       ====== ======================================================
        Value  Description
-       ====== =================================================
+       ====== ======================================================
        none   only support traditional Linux filesystems
-       hdfs   also support HDFS filesystems using Apache Hadoop libhdfs
-       hdfs3  support for HDFS filesystems using Pivotal libhdfs3
-       curl   also support CURL as a filesystem interface
-       ====== =================================================
+       lustre enable I/O improvements specific to Lustre filesystems
+       ====== ======================================================
 
    If unset, ``CHPL_AUX_FILESYS`` defaults to ``none``.
-
-   See :ref:`readme-auxIO`, :chpl:mod:`HDFS`, and :chpl:mod:`Curl` for more
-   information about HDFS and CURL support.
-
 
 .. _readme-chplenv.CHPL_LLVM:
 
@@ -626,22 +672,21 @@ CHPL_LLVM
    If unset, ``CHPL_LLVM`` defaults to ``llvm`` if you've already installed
    llvm in third-party and ``none`` otherwise.
 
-   Chapel currently supports LLVM 6.0.  Earlier versions of LLVM
-   required the use of internal Clang header files.  LLVM 5.0 has a
-   known optimization bug that affects Chapel.
+   Chapel currently supports LLVM 8.0.
 
    .. note::
 
-       We have had success with this procedure to install LLVM 6.0
+       We have had success with this procedure to install LLVM 8.0
        dependencies on Ubuntu.
 
-       First, place the appropriate lines from ``https://apt.llvm.org``
-       into ``/etc/apt/sources.list.d/llvm-toolchain.list``, then do
-       the following.
+       First, follow the instructions at ``https://apt.llvm.org`` that
+       explain how to place the appropriate lines into
+       ``/etc/apt/sources.list.d/llvm-toolchain.list`` and retrieve
+       the archive signature, then do the following.
 
         .. code-block:: sh
 
-            apt-get install llvm-6.0-dev llvm-6.0 llvm-6.0-tools clang-6.0 libclang-6.0-dev libedit-dev
+            apt-get install llvm-8-dev llvm-8 llvm-8-tools clang-8 libclang-8-dev libedit-dev
 
 .. _readme-chplenv.CHPL_UNWIND:
 
@@ -659,6 +704,42 @@ CHPL_UNWIND
        ========= =======================================================
 
    If unset, ``CHPL_UNWIND`` defaults to ``none``
+
+.. _readme-chplenv.CHPL_LIB_PIC:
+
+CHPL_LIB_PIC
+~~~~~~~~~~~~
+   Optionally, the ``CHPL_LIB_PIC`` environment variable can be used to build
+   position independent or position dependent code.  This is intended for use
+   when :ref:`readme-libraries`, especially when :ref:`readme-libraries.Python`
+   or when building with ``--dynamic``. Current options are:
+
+       ===== ================================
+       Value Description
+       ===== ================================
+       pic   build position independent code
+       none  build position dependent code
+       ===== ================================
+
+   If unset, ``CHPL_LIB_PIC`` defaults to ``none``
+
+.. _readme-chplenv.character_set:
+
+Character Set
+-------------
+   Chapel works with the Unicode character set with UTF-8 encoding and the
+   traditional C collating sequence. Users are responsible for making sure that
+   they are running Chapel in a suitable environment. For example, for `en_US`
+   locale, the following environment variables should be set:
+
+   .. code-block:: sh
+
+       LANG=en_US.UTF-8
+       LC_COLLATE=C
+       LC_ALL=""
+
+   .. note::
+       Other character sets may be supported in the future.
 
 Compiler Command Line Option Defaults
 -------------------------------------

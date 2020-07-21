@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -143,5 +144,14 @@ module HaltWrappers {
   pragma "always propagate line file info"
   proc divByZeroCheckHalt(s:string) {
     halt(s);
+  }
+
+  /* Halt wrapper for unimplemented features */
+  pragma "function terminates program"
+  pragma "always propagate line file info"
+  proc unimplementedFeatureHalt(subject:string, feature: string) {
+    halt(subject, " doesn't support ", feature, " yet\n"+
+         "  (please feel encouraged to file a GitHub issue requesting this:\n"+
+         "   https://github.com/chapel-lang/chapel/issues)");
   }
 }

@@ -15,7 +15,7 @@ var data1: [1..n] m*int;
 
 for ii in 1..n do
 {
-    for param jj in 1..m do
+    for param jj in 0..<m do
     {
         if (jj == 1 ) 
         { 
@@ -37,7 +37,7 @@ var old_error, t1: real;
 var hh:int = 1;
 for ii in 1..k
 {
-    for param jj in 1..m
+    for param jj in 0..<m
     {
         c[ii][jj] = data1[hh][jj];
     }
@@ -55,7 +55,16 @@ var error : real = 0;
 var counts: [1..k] int = 0;
 var c1:[1..k] m*int;
 
-proc accumulate (da: eltType)
+proc AccumState type
+    return (error, counts, c1).type;
+
+proc identity
+{
+    var result: AccumState;
+    return result;
+}
+
+proc accumulateOntoState (ref state, da: eltType)
 {
     //find nearest Cluster for this point
     
@@ -65,7 +74,7 @@ proc accumulate (da: eltType)
     for i in 1..k
     {
         var distance: real = 0;
-        for param j in 1..m
+        for param j in 0..<m
         {
             distance = distance + (da[j] - c[i][j])*(da[j] - c[i][j]);
         }
@@ -79,33 +88,48 @@ proc accumulate (da: eltType)
 
     //Add the result into reduction object
 
-    error = error + min_distance;
+    state(0) += min_distance;
 
-    counts[min_disposition] = counts[min_disposition] + 1;
+    state(1)[min_disposition] += 1;
     
-    for param j in 1..m
+    for param j in 0..<m
     {
-        c1[min_disposition][j] = c1[min_disposition][j] + da[j];
+        state(2)[min_disposition][j] += + da[j];
+    }
+}
+
+proc accumulate (da: eltType)
+{
+    accumulateOntoState((error, counts, c1), da);
+}
+
+proc accumulate(km: AccumState)
+{
+    counts += km(1);
+    error += km(0);
+    
+    for i in 1..k
+    {
+        for param j in 0..<m
+        {
+            c1[i][j] += km(2)[i][j];
+        }
     }
 }
 
 proc combine(km: borrowed kmeansReduction(eltType))
 {
-    counts = counts + km.counts;
-    error = error + km.error;
-    
-    for i in 1..k
-    {
-        for param j in 1..m
-        {
-            c1[i][j] = c1[i][j] + km.c1[i][j];
-        }
-    }
+    accumulate((km.error, km.counts, km.c1));
 }
 
 proc generate()
 {
-  return (error, counts, c1);
+    return (error, counts, c1);
+}
+
+proc clone()
+{
+    return new unmanaged kmeansReduction(eltType=eltType);
 }
 }
 
@@ -129,7 +153,7 @@ proc generate()
 
     for ii in 1..k
     {
-        for param jj in 1..m
+        for param jj in 0..<m
         {
             if(counts[ii] != 0)
             {

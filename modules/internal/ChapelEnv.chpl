@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -30,12 +31,13 @@
 
  */
 module ChapelEnv {
-  use ChapelStandard;
+  private use String;
+  private use ChapelStandard;
 
   /* See :ref:`readme-chplenv.CHPL_HOME` for more information. */
   param CHPL_HOME:string            = __primitive("get compiler variable", "CHPL_HOME");
 
-  /* See :ref:`readme-chplenv.CHPL_AUX_FILESYS` for more information. */
+  /* Deprecated */
   param CHPL_AUX_FILESYS:string     = __primitive("get compiler variable", "CHPL_AUX_FILESYS");
 
   /* See :ref:`readme-chplenv.CHPL_TARGET_PLATFORM` for more information. */
@@ -43,6 +45,9 @@ module ChapelEnv {
 
   /* See :ref:`readme-chplenv.CHPL_HOST_PLATFORM` for more information. */
   param CHPL_HOST_PLATFORM:string   = __primitive("get compiler variable", "CHPL_HOST_PLATFORM");
+
+  /* See :ref:`readme-chplenv.CHPL_HOST_ARCH` for more information. */
+  param CHPL_HOST_ARCH:string   = __primitive("get compiler variable", "CHPL_HOST_ARCH");
 
   /* See :ref:`readme-chplenv.CHPL_COMPILER` for more information. */
   param CHPL_HOST_COMPILER:string   = __primitive("get compiler variable", "CHPL_HOST_COMPILER");
@@ -52,6 +57,9 @@ module ChapelEnv {
 
   /* See :ref:`readme-chplenv.CHPL_TARGET_ARCH` for more information. */
   param CHPL_TARGET_ARCH:string     = __primitive("get compiler variable", "CHPL_TARGET_ARCH");
+
+  /* See :ref:`readme-chplenv.CHPL_TARGET_CPU` for more information. */
+  param CHPL_TARGET_CPU:string     = __primitive("get compiler variable", "CHPL_TARGET_CPU");
 
   /* See :ref:`readme-chplenv.CHPL_LOCALE_MODEL` for more information. */
   param CHPL_LOCALE_MODEL:string    = __primitive("get compiler variable", "CHPL_LOCALE_MODEL");
@@ -64,6 +72,10 @@ module ChapelEnv {
 
   /* See :ref:`readme-multilocale` for more information. */
   param CHPL_GASNET_SEGMENT:string  = __primitive("get compiler variable", "CHPL_GASNET_SEGMENT");
+
+  pragma "no doc"
+  /* See :ref:`readme-chplenv.CHPL_LIBFABRIC` for more information. */
+  param CHPL_LIBFABRIC:string       = __primitive("get compiler variable", "CHPL_LIBFABRIC");
 
   /* See :ref:`readme-chplenv.CHPL_TASKS` for more information. */
   param CHPL_TASKS:string           = __primitive("get compiler variable", "CHPL_TASKS");

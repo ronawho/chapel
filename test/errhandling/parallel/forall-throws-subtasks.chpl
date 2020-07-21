@@ -39,12 +39,14 @@ proc test() {
     writeln("before forall block");
     forall i in myiter(n,t) {
       if i == 1 then
-        throw new StringError("test error");
+        throw new owned StringError("test error");
     }
     writeln("after forall block");
   } catch errors: TaskErrors {
     for e in errors { 
-      writeln("Caught group error e ", e.message());
+      if e != nil {
+        writeln("Caught group error e ", e!.message());
+      }
     }
   } catch e {
     writeln("Caught other error ", e.message());

@@ -12,8 +12,6 @@ Warning and Language Control Options:
       --[no-]permit-unhandled-module-errors
                                       Permit unhandled errors in explicit
                                       modules; such errors halt at runtime
-      --[no-]warn-constructors        Enable [disable] deprecation warnings
-                                      for constructors
       --[no-]warn-unstable            Enable [disable] warnings for uses of
                                       language features that are in flux
       --[no-]warnings                 Enable [disable] output of warnings
@@ -26,7 +24,7 @@ Optimization Control Options:
       --[no-]cache-remote             [Don't] enable cache for remote data
       --[no-]copy-propagation         Enable [disable] copy propagation
       --[no-]dead-code-elimination    Enable [disable] dead code elimination
-      --fast                          Use fast default settings
+      --fast                          Disable checks; optimize/specialize code
       --[no-]fast-followers           Enable [disable] fast followers
       --[no-]ieee-float               Generate code that is strict [lax] with
                                       respect to IEEE compliance
@@ -40,6 +38,9 @@ Optimization Control Options:
       --[no-]loop-invariant-code-motion
                                       Enable [disable] loop invariant code
                                       motion
+      --[no-]optimize-forall-unordered-ops
+                                      Enable [disable] optimization of foralls
+                                      to unordered operations
       --[no-]optimize-range-iteration Enable [disable] optimization of
                                       iteration over anonymous ranges
       --[no-]optimize-loop-iterators  Enable [disable] optimization of
@@ -70,15 +71,21 @@ Optimization Control Options:
                                       (experimental)
       --[no-]vectorize                Enable [disable] generation of
                                       vectorization hints
+      --[no-]auto-local-access        Enable [disable] using local access
+                                      automatically
+      --[no-]auto-local-access-dynamic
+                                      Enable [disable] using local access
+                                      automatically (dynamic only)
 
 Run-time Semantic Check Options:
-      --no-checks                     Disable all following run-time checks
+      --[no-]checks                   Enable [disable] all following run-time
+                                      checks
       --[no-]bounds-checks            Enable [disable] bounds checking
       --[no-]cast-checks              Enable [disable] safeCast() value checks
       --[no-]div-by-zero-checks       Enable [disable] divide-by-zero checks
       --[no-]formal-domain-checks     Enable [disable] formal domain checking
       --[no-]local-checks             Enable [disable] local block checking
-      --[no-]nil-checks               Enable [disable] nil checking
+      --[no-]nil-checks               Enable [disable] runtime nil checking
       --[no-]stack-checks             Enable [disable] stack overflow checking
 
 C Code Generation Options:
@@ -103,7 +110,7 @@ C Code Compilation Options:
   -L, --lib-search-path <directory>   C library search path
   -O, --[no-]optimize                 [Don't] Optimize generated C code
       --[no-]specialize               [Don't] Specialize generated C code for
-                                      CHPL_TARGET_ARCH
+                                      CHPL_TARGET_CPU
   -o, --output <filename>             Name output executable
       --static                        Generate a statically linked binary
 
@@ -128,13 +135,15 @@ Miscellaneous Options:
       --[no-]explain-verbose          Enable [disable] tracing of
                                       disambiguation with 'explain' options
       --instantiate-max <max>         Limit number of instantiations
+      --[no-]print-all-candidates     [Don't] print all candidates for a
+                                      resolution failure
       --[no-]print-callgraph          [Don't] print a representation of the
                                       callgraph for the program
       --[no-]print-callstack-on-error [Don't] print the Chapel call stack
                                       leading to each error or warning
       --[no-]print-unused-functions   [Don't] print the name and location of
                                       unused functions
-  -s, --set <name>[=<value>]          Set config param value
+  -s, --set <name>[=<value>]          Set config value
       --[no-]task-tracking            Enable [disable] runtime task tracking
 
 Compiler Configuration Options:
@@ -152,8 +161,9 @@ Compiler Configuration Options:
       --make <make utility>           Make utility for generated code
       --mem <mem-impl>                Specify the memory manager
       --regexp <regexp>               Specify whether to use regexp support
-      --target-arch <architecture>    Target architecture to optimize for
+      --target-arch <architecture>    Target architecture / machine type
       --target-compiler <compiler>    Compiler for generated code
+      --target-cpu <cpu>              Target cpu model for specialization
       --target-platform <platform>    Platform for cross-compilation
       --tasks <task-impl>             Specify tasking implementation
       --timers <timer-impl>           Specify timer implementation

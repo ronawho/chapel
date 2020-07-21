@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -109,9 +110,6 @@ private:
 
   DefExpr*        firstField(FnSymbol* fn)                               const;
 
-  bool            isOuterField(DefExpr* field)                           const;
-  void            makeOuterArg();
-
   Expr*            genericFieldInitTypeWoutInit(Expr*    insertBefore,
                                                 DefExpr* field)           const;
 
@@ -133,10 +131,6 @@ private:
   Expr*            fieldInitTypeInference(Expr*    insertBefore,
                                           DefExpr* field,
                                           Expr*    initExpr)              const;
-
-  void            updateFieldsMember(Expr* expr)                         const;
-
-  bool            isFieldAccess(CallExpr* callExpr)                      const;
 
 
   DefExpr*        toLocalField(SymExpr*  expr)                           const;

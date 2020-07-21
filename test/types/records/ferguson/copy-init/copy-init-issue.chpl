@@ -3,7 +3,7 @@ record MyRecord {
   proc init(x:int) {
     y = x;
   }
-  proc init(from:MyRecord) {
+  proc init=(from:MyRecord) {
     y = from.y;
     writeln("copy init");
   }
@@ -20,6 +20,7 @@ proc test() {
   var x = foo(1);
   writeln(x);
   var y = foo(2);
+  ref refY = y;
   writeln(y);
   var z = foo(3);
   writeln(z);

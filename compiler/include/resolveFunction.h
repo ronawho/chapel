@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -21,18 +22,17 @@
 #define _RESOLVE_FUNCTION_H_
 
 class AggregateType;
+class CallExpr;
 class FnSymbol;
 class Type;
+class VarSymbol;
 
 void  resolveSignatureAndFunction(FnSymbol* fn);
-
-// Note: resolveSignature resolves declared return types
 void  resolveSignature(FnSymbol* fn);
+void  resolveFunction(FnSymbol* fn, CallExpr* forCall = 0);
 
-void  resolveFunction(FnSymbol* fn);
-
+bool  isParallelIterator(FnSymbol* fn);
 bool  isLeaderIterator(FnSymbol* fn);
-
 bool  isStandaloneIterator(FnSymbol* fn);
 
 // If yieldType is not NULL, the type yielded by an iterator will
@@ -43,5 +43,7 @@ void  resolveSpecifiedReturnType(FnSymbol* fn);
 
 Type* getReturnedTupleType(FnSymbol*      fn,
                            AggregateType* retType);
+
+void markTempDeadLastMention(VarSymbol* var);
 
 #endif

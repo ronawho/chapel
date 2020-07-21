@@ -11,10 +11,8 @@ Major Platforms
 
    macosx
    cray
-   knl
    cygwin
    aws
-   arm
 
 
 Networks
@@ -24,6 +22,7 @@ Networks
    :maxdepth: 1
 
    infiniband
+   libfabric
    omnipath
    udp
 

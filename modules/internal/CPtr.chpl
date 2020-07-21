@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -25,18 +26,21 @@
    See also :ref:`readme-extern`.
  */
 module CPtr {
-  use ChapelStandard;
+  private use ChapelStandard;
+  private use SysBasic, SysError, SysCTypes;
+  import HaltWrappers;
 
   /* A Chapel version of a C NULL pointer. */
-  extern const c_nil:c_void_ptr;
+  inline proc c_nil:c_void_ptr {
+    return __primitive("cast", c_void_ptr, nil);
+  }
 
-  // To generate legal C prototypes, we have to manually instantiate this
-  // prototype for each pointer type that might be associated with 'x'.
-
-  /* :returns: true if the passed value is a NULL pointer (ie 0) */
-  pragma "no prototype"
-  pragma "no doc"
-  extern proc is_c_nil(x):bool;
+  /*
+     :returns: true if the passed value is a NULL pointer (ie 0).
+   */
+  inline proc is_c_nil(x):bool {
+    return __primitive("cast", c_void_ptr, x) == c_nil;
+  }
 
   /*
 
@@ -64,14 +68,15 @@ module CPtr {
 
   */
 
-  //   Similar to _ddata from ChapelBase, but differs
-  //   from _ddata because it can never be wide.
   pragma "data class"
   pragma "no object"
   pragma "no default functions"
   pragma "no wide class"
   pragma "c_ptr class"
   class c_ptr {
+    //   Similar to _ddata from ChapelBase, but differs
+    //   from _ddata because it can never be wide.
+
     /* The type that this pointer points to */
     type eltType;
     /* Retrieve the i'th element (zero based) from a pointer to an array.
@@ -87,20 +92,156 @@ module CPtr {
       return __primitive("array_get", this, 0);
     }
     /* Print this pointer */
-    inline proc writeThis(ch) {
+    inline proc writeThis(ch) throws {
       (this:c_void_ptr).writeThis(ch);
     }
   }
 
-  pragma "no doc"
-  inline proc c_void_ptr.writeThis(ch) {
-    try {
-      ch.writef("0x%xu", this:c_uintptr);
-    } catch e: SystemError {
-      ch.setError(e.err);
-    } catch {
-      ch.setError(EINVAL:syserr);
+  private use IO;
+
+  /*
+  This class represents a C array with fixed size.  A variable of type c_array
+  can coerce to a c_ptr with the same element type.  In that event, the
+  pointer will be equivalent to `c_ptrTo(array[0])`.  A c_array behaves
+  similarly to a homogeneous tuple except that its indices start at 0 and it is
+  guaranteed to be stored in contiguous memory.  A c_array variable has value
+  semantics. Declaring one as a function local variable will create the array
+  elements in the function's stack. Assigning or copy initializing will result
+  in copying the elements (vs resulting in two pointers that refer to the same
+  elements).  A `nil` c_array is not representable in Chapel.
+  */
+  pragma "c_array record"
+  pragma "default intent is ref if modified"
+  record c_array {
+    /* The array element type */
+    type eltType;
+    /* The fixed number of elements */
+    param size;
+
+    proc init(type eltType, param size) {
+      this.eltType = eltType;
+      this.size = size;
+      this.complete();
+      var i = 0;
+      while i < size {
+        // create a default value we'll transfer into the element
+        pragma "no auto destroy"
+        var default: eltType;
+        // this use of primitive works around an order-of-resolution issue.
+        ref eltRef = __primitive("array_get", this, i);
+        // this is a move, transferring ownership
+        __primitive("=", eltRef, default);
+        i += 1;
+      }
     }
+
+    proc deinit() {
+      var i = 0;
+      while i < size {
+        // this use of primitive works around an order-of-resolution issue.
+        chpl__autoDestroy(__primitive("array_get", this, i));
+        i += 1;
+      }
+    }
+
+    /* Retrieve the i'th element (zero based) from the array.
+       Does the equivalent of arr[i] in C.
+       Includes bounds checking when such checks are enabled.
+    */
+    inline proc ref this(i: integral) ref : eltType {
+      if boundsChecking then
+        if i < 0 || i >= size then
+          HaltWrappers.boundsCheckHalt("c array index out of bounds " + i:string +
+                                       "(indices are 0.." + (size-1):string + ")");
+
+      return __primitive("array_get", this, i);
+    }
+    pragma "no doc"
+    inline proc const ref this(i: integral) const ref : eltType {
+      if boundsChecking then
+        if i < 0 || i >= size then
+          HaltWrappers.boundsCheckHalt("c array index out of bounds " + i:string +
+                                       "(indices are 0.." + (size-1):string + ")");
+
+      return __primitive("array_get", this, i);
+    }
+
+    /* As with the previous function, returns the i'th element (zero based)
+        from the array. This one emits a compilation error if i is out of bounds.
+    */
+    inline proc ref this(param i: integral) ref : eltType {
+      if i < 0 || i >= size then
+        compilerError("c array index out of bounds " + i:string +
+                      "(indices are 0.." + (size-1):string + ")");
+
+      return __primitive("array_get", this, i);
+    }
+    pragma "no doc"
+    inline proc const ref this(param i: integral) const ref : eltType {
+      if i < 0 || i >= size then
+        compilerError("c array index out of bounds " + i:string +
+                      "(indices are 0.." + (size-1):string + ")");
+
+      return __primitive("array_get", this, i);
+    }
+
+
+    /* Print the elements */
+    proc writeThis(ch) throws {
+      ch <~> new ioLiteral("[");
+      var first = true;
+      for i in 0..#size {
+
+        ch <~> this(i);
+
+        if i != size-1 then
+          ch <~> new ioLiteral(", ");
+      }
+      ch <~> new ioLiteral("]");
+    }
+
+    /*
+      Deprecated - please use :var:`c_array.size`.
+    */
+    inline proc length {
+      compilerWarning("'c_array.length' is deprecated - " +
+                      "please use 'c_array.size' instead");
+      return size;
+    }
+
+    proc init=(other: c_array) {
+      this.eltType = other.eltType;
+      this.size = other.size;
+      this.complete();
+      for i in 0..#size {
+        pragma "no auto destroy"
+        var value: eltType = other[i];
+        // this is a move, transferring ownership
+        __primitive("=", this(i), value);
+      }
+    }
+  }
+
+  /* Copy the elements from one c_array to another.
+     Raises an error at compile time if the array sizes or
+     element types do not match. */
+  proc =(ref lhs:c_array, rhs:c_array) {
+    if lhs.eltType != rhs.eltType then
+      compilerError("element type mismatch in c_array assignment");
+    if lhs.size != rhs.size then
+      compilerError("size mismatch in c_array assignment");
+
+    for i in 0..#lhs.size {
+      lhs[i] = rhs[i];
+    }
+  }
+  proc =(ref lhs:c_ptr, ref rhs:c_array) where lhs.eltType == rhs.eltType {
+    lhs = c_ptrTo(rhs[0]);
+  }
+
+  pragma "no doc"
+  inline proc c_void_ptr.writeThis(ch) throws {
+    ch.writef("0x%xu", this:c_uintptr);
   }
 
   pragma "no doc"
@@ -110,21 +251,23 @@ module CPtr {
   inline proc =(ref a: c_ptr, b: c_void_ptr) { __primitive("=", a, b); }
 
   pragma "no doc"
-  inline proc =(ref a:c_ptr, b:_nilType) { __primitive("=", a, c_nil); }
-
-  pragma "no doc"
-  inline proc _cast(type t:c_ptr, x:_nilType) {
-    return __primitive("cast", t, x);
-  }
-  pragma "no doc"
-  inline proc _cast(type t:c_void_ptr, x:_nilType) {
-    return c_nil;
+  inline proc _cast(type t:c_void_ptr, x:c_fn_ptr) {
+    return __primitive("cast", c_void_ptr, x);
   }
 
+  // Note: we rely from nil to pointer types for ptr = nil, nil:ptr cases
 
   pragma "no doc"
   inline proc _cast(type t:c_ptr, x:c_ptr) {
     return __primitive("cast", t, x);
+  }
+  pragma "no doc"
+  inline proc _cast(type t:c_ptr(?e), ref x:c_array) where x.eltType == e {
+    return c_ptrTo(x[0]);
+  }
+  pragma "no doc"
+  inline proc _cast(type t:c_void_ptr, ref x:c_array) {
+    return c_ptrTo(x[0]):c_void_ptr;
   }
   pragma "no doc"
   inline proc _cast(type t:c_void_ptr, x:c_ptr) {
@@ -136,20 +279,38 @@ module CPtr {
   }
   pragma "no doc"
   inline proc _cast(type t:string, x:c_void_ptr) {
-    return new string(__primitive("ref to string", x), needToCopy=false);
+    try! {
+      return createStringWithOwnedBuffer(__primitive("ref to string", x));
+    }
   }
   pragma "no doc"
   inline proc _cast(type t:string, x:c_ptr) {
-    return new string(__primitive("ref to string", x), needToCopy=false);
+    try! {
+      return createStringWithOwnedBuffer(__primitive("ref to string", x));
+    }
   }
+  pragma "last resort"
   pragma "no doc"
-  inline proc _cast(type t:borrowed, x:c_void_ptr) {
+  inline proc _cast(type t:_anyManagementAnyNilable, x:c_void_ptr) {
+    if isUnmanagedClass(t) || isBorrowedClass(t) {
+      compilerWarning("cast from c_void_ptr to "+ t:string +" is deprecated");
+      compilerWarning("cast to "+ _to_nilable(t):string +" instead");
+      return __primitive("cast", t, x);
+    } else {
+      compilerWarning("invalid cast from c_void_ptr to managed type " +
+                      t:string);
+    }
+  }
+
+  pragma "no doc"
+  inline proc _cast(type t:unmanaged class?, x:c_void_ptr) {
     return __primitive("cast", t, x);
   }
   pragma "no doc"
-  inline proc _cast(type t:unmanaged, x:c_void_ptr) {
+  inline proc _cast(type t:borrowed class?, x:c_void_ptr) {
     return __primitive("cast", t, x);
   }
+
   pragma "no doc"
   inline proc _cast(type t:c_void_ptr, x:borrowed) {
     return __primitive("cast", t, x);
@@ -165,6 +326,10 @@ module CPtr {
   }
   pragma "no doc"
   inline proc _cast(type t:_ddata, x:c_void_ptr) {
+    return __primitive("cast", t, x);
+  }
+  pragma "no doc"
+  inline proc _cast(type t:c_void_ptr, x:_ddata) {
     return __primitive("cast", t, x);
   }
 
@@ -194,31 +359,6 @@ module CPtr {
   inline proc _cast(type t:uint(64), x:c_ptr) where c_uintptr != int(64)
     return __primitive("cast", t, x);
 
-
-  pragma "compiler generated"
-  pragma "last resort"
-  pragma "no doc"
-  inline proc _defaultOf(type t:c_void_ptr) {
-      return __primitive("cast", t, nil);
-  }
-
-  pragma "compiler generated"
-  pragma "last resort"
-  pragma "no doc"
-  inline proc _defaultOf(type t:c_ptr) {
-      return __primitive("cast", t, nil);
-  }
-
-  pragma "compiler generated"
-  pragma "last resort"
-  pragma "no doc"
-  inline proc _defaultOf(type t:c_fn_ptr) {
-      return __primitive("cast", t, nil);
-  }
-
-  pragma "no doc"
-  inline proc =(ref a:c_fn_ptr, b:_nilType) { __primitive("=", a, c_nil); }
-
   pragma "no doc"
   inline proc =(ref a:c_fn_ptr, b:c_fn_ptr) { __primitive("=", a, b); }
 
@@ -228,6 +368,7 @@ module CPtr {
   inline proc ==(a: c_ptr, b: c_ptr) where a.eltType == b.eltType {
     return __primitive("ptr_eq", a, b);
   }
+
   pragma "no doc"
   inline proc ==(a: c_ptr, b: c_void_ptr) {
     return __primitive("ptr_eq", a, b);
@@ -236,22 +377,8 @@ module CPtr {
   inline proc ==(a: c_void_ptr, b: c_ptr) {
     return __primitive("ptr_eq", a, b);
   }
-  pragma "no doc"
-  inline proc ==(a: c_ptr, b: _nilType) {
-    return __primitive("ptr_eq", a, c_nil);
-  }
-  pragma "no doc"
-  inline proc ==(a: _nilType, b: c_ptr) {
-    return __primitive("ptr_eq", c_nil, b);
-  }
-  pragma "no doc"
-  inline proc ==(a: c_void_ptr, b: _nilType) {
-    return __primitive("ptr_eq", a, c_nil);
-  }
-  pragma "no doc"
-  inline proc ==(a: _nilType, b: c_void_ptr) {
-    return __primitive("ptr_eq", c_nil, b);
-  }
+  // Don't need _nilType versions -
+  // Rely on coercions from nil to c_ptr / c_void_ptr
 
   pragma "no doc"
   inline proc !=(a: c_ptr, b: c_ptr) where a.eltType == b.eltType {
@@ -264,22 +391,6 @@ module CPtr {
   pragma "no doc"
   inline proc !=(a: c_void_ptr, b: c_ptr) {
     return __primitive("ptr_neq", a, b);
-  }
-  pragma "no doc"
-  inline proc !=(a: c_ptr, b: _nilType) {
-    return __primitive("ptr_neq", a, c_nil);
-  }
-  pragma "no doc"
-  inline proc !=(a: _nilType, b: c_ptr) {
-    return __primitive("ptr_neq", c_nil, b);
-  }
-  pragma "no doc"
-  inline proc !=(a: c_void_ptr, b: _nilType) {
-    return __primitive("ptr_neq", a, c_nil);
-  }
-  pragma "no doc"
-  inline proc !=(a: _nilType, b: c_void_ptr) {
-    return __primitive("ptr_neq", c_nil, b);
   }
 
   pragma "no doc"
@@ -294,9 +405,19 @@ module CPtr {
   pragma "no doc"
   inline proc -(a: c_ptr, b: integral) return __primitive("-", a, b);
 
+  pragma "no doc"
+  inline proc -(a: c_ptr(?t), b: c_ptr(t)):c_ptrdiff {
+    return c_pointer_diff(a, b, c_sizeof(a.eltType):c_ptrdiff);
+  }
 
   pragma "no doc"
+  pragma "fn synchronization free"
   extern proc c_pointer_return(ref x:?t):c_ptr(t);
+  pragma "no doc"
+  pragma "fn synchronization free"
+  extern proc c_pointer_diff(a:c_void_ptr, b:c_void_ptr,
+                             eltSize:c_ptrdiff):c_ptrdiff;
+
 
 
   /*
@@ -349,12 +470,12 @@ module CPtr {
     compilerError("Can't call a C function pointer within Chapel");
   }
 
-
   // Offset the CHPL_RT_MD constant in order to preserve the value through
   // calls to chpl_here_alloc. See comments on offset_STR_* in String.chpl
   // for more.
   private proc offset_ARRAY_ELEMENTS {
     extern const CHPL_RT_MD_ARRAY_ELEMENTS:chpl_mem_descInt_t;
+    pragma "fn synchronization free"
     extern proc chpl_memhook_md_num(): chpl_mem_descInt_t;
     return CHPL_RT_MD_ARRAY_ELEMENTS - chpl_memhook_md_num();
   }
@@ -373,8 +494,36 @@ module CPtr {
          * Behavior given a Chapel class type is not well-defined
    */
   inline proc c_sizeof(type x): size_t {
+    pragma "fn synchronization free"
     extern proc sizeof(type x): size_t;
     return sizeof(x);
+  }
+
+  /*
+    Return the offset of a field in a record.
+
+    .. warning::
+
+      This method is intended for C interoperability.  To enhance flexibility,
+      it is possible to request the offset of elements within a Chapel record.
+      However, be aware:
+
+      * Chapel types are not necessary stored in contiguous memory
+      * Behavior of ``c_offsetof`` may change
+      * Behavior given a Chapel class type field is not well-defined
+   */
+  proc c_offsetof(type t, param fieldname : string): size_t where isRecordType(t) {
+    use Reflection;
+    pragma "no auto destroy"
+    pragma "no init"
+    var x: t;
+
+    return c_ptrTo(getFieldRef(x, fieldname)):size_t - c_ptrTo(x):size_t;
+  }
+
+  pragma "no doc"
+  proc c_offsetof(type t, param fieldname: string) where !isRecordType(t) {
+    compilerError("Cannot call c_offsetof on type that is not a record");
   }
 
   /*
@@ -405,6 +554,47 @@ module CPtr {
     return chpl_here_alloc(alloc_size, offset_ARRAY_ELEMENTS):c_ptr(eltType);
   }
 
+  /*
+    Allocate aligned memory that is not initialized. This memory
+    should be eventually freed with :proc:`c_free`.
+
+    This function is intended to behave similarly to the C17
+    function aligned_alloc.
+
+    :arg eltType: the type of the elements to allocate
+    :arg alignment: the memory alignment of the allocation
+                    which must be a power of two and a multiple
+                    of ``c_sizeof(c_void_ptr)``.
+    :arg size: the number of elements to allocate space for
+    :returns: a ``c_ptr(eltType)`` to allocated memory
+    */
+  inline proc c_aligned_alloc(type eltType,
+                              alignment : integral,
+                              size: integral) : c_ptr(eltType) {
+    // check alignment, size restriction
+    if boundsChecking {
+      var one:size_t = 1;
+      // Round the alignment up to the nearest power of 2
+      var aln = alignment.safeCast(size_t);
+      if aln == 0 then
+        halt("c_aligned_alloc called with alignment of 0");
+      var p = log2(aln); // power of 2 rounded down
+      // compute alignment rounded up
+      if (one << p) < aln then
+        p += 1;
+      assert(aln <= (one << p));
+      if aln != (one << p) then
+        halt("c_aligned_alloc called with non-power-of-2 alignment ", aln);
+      if alignment < c_sizeof(c_void_ptr) then
+        halt("c_aligned_alloc called with alignment smaller than pointer size");
+    }
+
+    const alloc_size = size.safeCast(size_t) * c_sizeof(eltType);
+    return chpl_here_aligned_alloc(alignment.safeCast(size_t),
+                                   alloc_size,
+                                   offset_ARRAY_ELEMENTS):c_ptr(eltType);
+  }
+
   /* Free memory that was allocated with :proc:`c_calloc` or :proc:`c_malloc`.
 
     :arg data: the c_ptr to memory that was allocated. Note that both
@@ -432,7 +622,9 @@ module CPtr {
     :arg src: the source memory area to copy from
     :arg n: the number of bytes from src to copy to dest
    */
+  pragma "fn synchronization free"
   inline proc c_memmove(dest:c_void_ptr, const src:c_void_ptr, n: integral) {
+    pragma "fn synchronization free"
     extern proc memmove(dest: c_void_ptr, const src: c_void_ptr, n: size_t);
     memmove(dest, src, n.safeCast(size_t));
   }
@@ -447,7 +639,9 @@ module CPtr {
     :arg src: the source memory area to copy from
     :arg n: the number of bytes from src to copy to dest
    */
+  pragma "fn synchronization free"
   inline proc c_memcpy(dest:c_void_ptr, const src:c_void_ptr, n: integral) {
+    pragma "fn synchronization free"
     extern proc memcpy (dest: c_void_ptr, const src: c_void_ptr, n: size_t);
     memcpy(dest, src, n.safeCast(size_t));
   }
@@ -461,7 +655,9 @@ module CPtr {
               the first n bytes of s1 are found, respectively, to be less than,
               to match, or be greater than the first n bytes of s2.
    */
+  pragma "fn synchronization free"
   inline proc c_memcmp(const s1:c_void_ptr, const s2:c_void_ptr, n: integral) {
+    pragma "fn synchronization free"
     extern proc memcmp(const s1: c_void_ptr, const s2: c_void_ptr, n: size_t) : c_int;
     return memcmp(s1, s2, n.safeCast(size_t)).safeCast(int);
   }
@@ -473,14 +669,15 @@ module CPtr {
 
     :arg s: the destination memory area to fill
     :arg c: the byte value to use
-    :arg n: the number of bytes of b to fill
+    :arg n: the number of bytes of s to fill
 
     :returns: s
    */
+  pragma "fn synchronization free"
   inline proc c_memset(s:c_void_ptr, c:integral, n: integral) {
+    pragma "fn synchronization free"
     extern proc memset(s: c_void_ptr, c: c_int, n: size_t) : c_void_ptr;
     memset(s, c.safeCast(c_int), n.safeCast(size_t));
     return s;
   }
-
 }

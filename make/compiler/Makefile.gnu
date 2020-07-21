@@ -1,4 +1,5 @@
-# Copyright 2004-2018 Cray Inc.
+# Copyright 2020 Hewlett Packard Enterprise Development LP
+# Copyright 2004-2019 Cray Inc.
 # Other additional copyright holders may be indicated within.
 #
 # The entirety of this work is licensed under the Apache License,
@@ -43,6 +44,13 @@ CFLAGS += -fprofile-arcs -ftest-coverage
 LDFLAGS += -fprofile-arcs
 endif
 
+include $(CHPL_MAKE_HOME)/make/compiler/Makefile.sanitizers
+CFLAGS += $(SANITIZER_CFLAGS)
+CXXFLAGS += $(SANITIZER_CFLAGS)
+LDFLAGS += $(SANITIZER_LDFLAGS)
+GEN_LFLAGS += $(SANITIZER_LDFLAGS)
+OPT_CFLAGS += $(SANITIZER_OPT_CFLAGS)
+
 #
 # Flags for compiler, runtime, and generated code
 #
@@ -72,10 +80,10 @@ LIB_DYNAMIC_FLAG = -shared
 SHARED_LIB_CFLAGS = -fPIC
 
 # Set the target architecture for optimization
-ifneq ($(CHPL_MAKE_TARGET_ARCH), none)
-ifneq ($(CHPL_MAKE_TARGET_ARCH), unknown)
-ifneq ($(CHPL_MAKE_TARGET_ARCH_FLAG), none)
-SPECIALIZE_CFLAGS = -m$(CHPL_MAKE_TARGET_ARCH_FLAG)=$(CHPL_MAKE_TARGET_BACKEND_ARCH)
+ifneq ($(CHPL_MAKE_TARGET_CPU), none)
+ifneq ($(CHPL_MAKE_TARGET_CPU), unknown)
+ifneq ($(CHPL_MAKE_TARGET_CPU_FLAG), none)
+SPECIALIZE_CFLAGS = -m$(CHPL_MAKE_TARGET_CPU_FLAG)=$(CHPL_MAKE_TARGET_BACKEND_CPU)
 endif
 endif
 endif
@@ -145,8 +153,11 @@ GEN_CFLAGS += $(C_STD)
 #
 # Flags for turning on warnings for C++/C code
 #
+# On Ubuntu, gcc complains about multiline comments in some versions
+# of Clang header files.
+#
 WARN_COMMONFLAGS = -Wall -Werror -Wpointer-arith -Wwrite-strings -Wno-strict-aliasing
-WARN_CXXFLAGS = $(WARN_COMMONFLAGS)
+WARN_CXXFLAGS = $(WARN_COMMONFLAGS) -Wno-comment
 WARN_CFLAGS = $(WARN_COMMONFLAGS) -Wmissing-prototypes -Wstrict-prototypes -Wmissing-format-attribute
 WARN_GEN_CFLAGS = $(WARN_CFLAGS)
 SQUASH_WARN_GEN_CFLAGS = -Wno-unused -Wno-uninitialized
@@ -156,6 +167,14 @@ SQUASH_WARN_GEN_CFLAGS = -Wno-unused -Wno-uninitialized
 #
 ifeq ($(shell test $(GNU_GCC_MAJOR_VERSION) -lt 4; echo "$$?"),1)
 SQUASH_WARN_GEN_CFLAGS += -Wno-pointer-sign
+endif
+
+#
+# Don't warn/error for incompatible pointer types (see
+# https://github.com/chapel-lang/chapel/issues/7983)
+#
+ifeq ($(shell test $(GNU_GCC_MAJOR_VERSION) -lt 5; echo "$$?"),1)
+SQUASH_WARN_GEN_CFLAGS += -Wno-incompatible-pointer-types
 endif
 
 #
@@ -174,12 +193,34 @@ SQUASH_WARN_GEN_CFLAGS += -Wno-stringop-overflow
 endif
 
 #
+# Avoid false positives for allocation size and memcpy. Note that we use
+# -Walloc-size-larger-than=SIZE_MAX instead of `-Wno-alloc-size-larger-than`
+# since that did not exist in gcc 8.
+#
+ifeq ($(shell test $(GNU_GPP_MAJOR_VERSION) -gt 7; echo "$$?"),0)
+WARN_CXXFLAGS += -Walloc-size-larger-than=18446744073709551615
+SQUASH_WARN_GEN_CFLAGS += -Walloc-size-larger-than=18446744073709551615 -Wno-restrict
+endif
+
+#
 # Avoid false positive warnings about class member access and string overflows.
 # The string overflow false positives occur in runtime code unlike gcc 7.
+# Also avoid false positives for array bounds and comments.
 #
 ifeq ($(shell test $(GNU_GPP_MAJOR_VERSION) -eq 8; echo "$$?"),0)
 WARN_CXXFLAGS += -Wno-class-memaccess
 RUNTIME_CFLAGS += -Wno-stringop-overflow
+SQUASH_WARN_GEN_CFLAGS += -Wno-array-bounds
+endif
+
+#
+# Avoid errors about insufficient initializer lifetimes because they
+# occur in LLVM headers.  We would like to know when this occurs,
+# though, so don't turn off the warning; just don't let it abort the
+# build.
+#
+ifeq ($(shell test $(GNU_GPP_MAJOR_VERSION) -eq 9; echo "$$?"),0)
+WARN_CXXFLAGS += -Wno-error=init-list-lifetime
 endif
 
 #

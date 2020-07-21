@@ -5,7 +5,6 @@ CHPL = chpl
 
 TARGETS = \
 	arrays \
-	arrayVectorOps \
 	associative \
 	atomics \
 	chpldoc.doc \
@@ -16,23 +15,27 @@ TARGETS = \
 	fileIO \
 	genericClasses \
 	iterators \
+	learnChapelInYMinutes \
+	listOps \
 	locales \
 	modules \
-	opaque-domains \
+	nothingVariables \
 	parIters \
 	procedures \
 	randomNumbers \
 	ranges \
+	records \
 	reductions \
 	replicated \
 	slices \
 	sparse \
+	specialMethods \
 	syncsingle \
 	taskParallel \
 	timers \
+	tuples \
 	varargs \
 	variables \
-	voidVariables \
 
 #
 # Only make FFTW if FFTW_DIR is set or we can find the fftw library

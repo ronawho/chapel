@@ -3,7 +3,7 @@ use dsiMethods;
 
 proc partialReduce(arr, param onlyDim) {
 
-  if onlyDim < 1 || onlyDim > arr.dsiGetBaseDom().rank then
+  if onlyDim < 0 || onlyDim >= arr.dsiGetBaseDom().rank then
     compilerError("Invalid partial reduction dimension: ", onlyDim);
 
   if arr.dsiGetBaseDom().rank == 1 then
@@ -22,7 +22,7 @@ proc partialReduce(arr, param onlyDim) {
 
 proc partialReduceToTarget(arr, param onlyDim, target) {
 
-  if onlyDim < 1 || onlyDim > arr.dsiGetBaseDom().rank then
+  if onlyDim < 0 || onlyDim >= arr.dsiGetBaseDom().rank then
     compilerError("Invalid partial reduction dimension: ", onlyDim);
 
   if arr.dsiGetBaseDom().rank == 1 then
@@ -45,8 +45,8 @@ proc bulkPartialReduce(arr, param onlyDim) {
   const PartialDom = dom.dsiPartialDomain(exceptDim=onlyDim);
   var ResultArr: [PartialDom] arr.eltType;
 
-  var locResDom = dist.targetLocDom dmapped new dmap(dist);
-  var locRes: [locResDom] ResultArr._value.myLocArr.myElems.type;
+  var locResDom = dist.targetLocDom dmapped _getDistribution(dist);
+  var locRes: [locResDom] ResultArr._value.myLocArr!.myElems.type;
 
   coforall l2 in
       dist.targetLocDom._value.dsiPartialDomain(exceptDim=onlyDim) {
@@ -60,8 +60,9 @@ proc bulkPartialReduce(arr, param onlyDim) {
         const l = chpl__tuplify(l2).withIdx(onlyDim, l1);
         on dom.locDoms[l] {
           var __target = ResultArr._value.locArr[l2].clone();
-          partialReduceToTarget(arr.locArr[l], onlyDim, __target);
+          partialReduceToTarget(arr.locArr[l]!, onlyDim, __target);
           partialResult += __target.myElems;
+          delete __target;
         }
       }
     }

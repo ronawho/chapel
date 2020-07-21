@@ -1,5 +1,8 @@
 //------------------  Sudoku Solver -----------------------------------
 //------------------ Step 1, read in the puzzle from a file ------------
+// the module defining file operations
+use IO;
+
 // the name of a file holding a 9x9 soduku puzzle
 config var infilename = "sudoku.txt";
 
@@ -48,7 +51,7 @@ proc setUnion(X, Y) {
 proc setIntersect(X, Y) {
    var Res: X.type;
    for i in X {
-     if (Y.member(i)) {
+     if (Y.contains(i)) {
        Res += i;
      }
    }
@@ -158,7 +161,7 @@ while (numZeroes > 0) {
     	// Then do an intersection for all three possible constraints
     	currSet =  setIntersect(rowRemainders[i], colRemainders[j]);
     	currSet = setIntersect(currSet, boxRemainders[boxIndex]);
-    	if (currSet.numIndices == 1) {
+    	if (currSet.size == 1) {
 	   // TODO: we know there is only 1 element, 
  	   //       is there another way to get v?
 

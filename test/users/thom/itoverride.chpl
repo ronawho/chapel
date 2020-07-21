@@ -1,11 +1,13 @@
+use IO;
+
 class C
 {
-  proc writeThis(w) { w.write("C"); }
+  proc writeThis(w) throws { w.write("C"); }
 }
 
 class SubC : C
 {
-  override proc writeThis(w) { w.write("SubC"); }
+  override proc writeThis(w) throws { w.write("SubC"); }
 }
 
 class OverrideMe
@@ -15,10 +17,10 @@ class OverrideMe
     return new unmanaged C();
   }
 
-  iter manyC()
+  iter manyC(): owned C
   {
-    yield new unmanaged C();
-    yield new unmanaged C();
+    yield new owned C();
+    yield new owned C();
   }
 }
 
@@ -29,18 +31,16 @@ class OverridesIt : OverrideMe
     return new unmanaged SubC();
   }
 
-  override iter manyC()
+  override iter manyC(): owned C
   {
-    yield new unmanaged SubC();
-    yield new unmanaged SubC();
+    yield new owned SubC();
+    yield new owned SubC();
   }
 }
 
 proc main()
 {
-  var o : unmanaged OverrideMe;
-
-  o = new unmanaged OverridesIt();
+  var o : unmanaged OverrideMe = new unmanaged OverridesIt();
 
   var t1 = o.getC();
 

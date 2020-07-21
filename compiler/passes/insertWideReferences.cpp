@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -183,6 +184,7 @@
 #include "passes.h"
 
 #include "astutil.h"
+#include "build.h"
 #include "driver.h"
 #include "expr.h"
 #include "optimizations.h"
@@ -349,7 +351,7 @@ static Symbol* getTupleField(CallExpr* call) {
 
   // Probably a star tuple
   if (field == NULL) {
-    field = call->get(1)->getValType()->getField("x1");
+    field = call->get(1)->getValType()->getField("x0");
   }
 
   return field;
@@ -411,7 +413,8 @@ static QualifiedType getNarrowType(BaseAST* bs) {
 
 static Type* getElementType(BaseAST* bs) {
   Type* arrType = getNarrowType(bs->getValType()).type();
-  INT_ASSERT(arrType->symbol->hasFlag(FLAG_DATA_CLASS));
+  INT_ASSERT(arrType->symbol->hasFlag(FLAG_DATA_CLASS)||
+             arrType->symbol->hasFlag(FLAG_C_ARRAY));
 
   return getDataClassType(arrType->symbol)->type;
 }
@@ -951,7 +954,7 @@ static void addKnownWides() {
       Symbol* lhs = toSymExpr(call->get(1))->symbol();
 
       if (CallExpr* rhs = toCallExpr(call->get(2))) {
-        if (rhs->isPrimitive(PRIM_ARRAY_GET) || rhs->isPrimitive(PRIM_ARRAY_GET_VALUE)) {
+        if (rhs->isPrimitive(PRIM_ARRAY_GET)) {
           SymExpr* cause = toSymExpr(rhs->get(1));
           if (getElementType(cause)->symbol->hasFlag(FLAG_WIDE_CLASS)) {
             if (lhs->isRefOrWideRef()) {
@@ -977,7 +980,7 @@ static void addKnownWides() {
         ++i;
       }
     }
-    else if (call->isPrimitive(PRIM_HEAP_REGISTER_GLOBAL_VAR) ||
+    else if (call->isPrimitive(PRIM_REGISTER_GLOBAL_VAR) ||
              call->isPrimitive(PRIM_CHPL_COMM_ARRAY_GET) ||
              call->isPrimitive(PRIM_CHPL_COMM_GET)) { // TODO: Is this necessary?
       for_actuals(actual, call) {
@@ -1043,7 +1046,6 @@ static void propagateVar(Symbol* sym) {
               case PRIM_ARRAY_GET:
               case PRIM_GET_MEMBER: // ??
               case PRIM_GET_MEMBER_VALUE:
-              case PRIM_ARRAY_GET_VALUE:
               case PRIM_STRING_COPY:
               case PRIM_CAST:
               case PRIM_DYNAMIC_CAST:
@@ -1421,7 +1423,7 @@ static void insertStringLiteralTemps()
               }
               if (call->isPrimitive(PRIM_SET_SVEC_MEMBER)) {
                 Type* valueType = call->get(1)->getValType();
-                Type* componentType = valueType->getField("x1")->type;
+                Type* componentType = valueType->getField("x0")->type;
                 if (componentType->symbol->hasFlag(FLAG_WIDE_CLASS)) {
                   VarSymbol* tmp = newTemp(componentType);
                   call->getStmtExpr()->insertBefore(new DefExpr(tmp));
@@ -1449,9 +1451,10 @@ static void narrowWideClassesThroughCalls()
   // TODO: Can we use this for local functions?
   //
   forv_Vec(CallExpr, call, gCallExprs) {
+    FnSymbol* fn = call->resolvedFunction();
 
     // Find calls to functions expecting local arguments.
-    if (call->isResolved() && call->resolvedFunction()->hasFlag(FLAG_LOCAL_ARGS)) {
+    if (fn && fn->hasFlag(FLAG_LOCAL_ARGS)) {
       SET_LINENO(call);
       Expr* stmt = call->getStmtExpr();
 
@@ -1479,16 +1482,28 @@ static void narrowWideClassesThroughCalls()
           if (narrowType.isRefOrWideRef() == false &&
               narrowType.type()->symbol->hasFlag(FLAG_EXTERN)) {
 
+            INT_FATAL("dead code"); // extern classes no longer supported
+
             // Insert a local check because we cannot reflect any changes
             // made to the class back to another locale
             if (!fNoLocalChecks)
-              stmt->insertBefore(new CallExpr(PRIM_LOCAL_CHECK, sym->copy()));
+              stmt->insertBefore(new CallExpr(PRIM_LOCAL_CHECK, sym->copy(), buildCStringLiteral("cannot access remote data in local block")));
 
             // If we pass an extern class to an extern/export function,
             // we must treat it like a reference (this is by definition)
             stmt->insertBefore(new CallExpr(PRIM_MOVE, var, sym->copy()));
           }
           else if (narrowType.isRef() || narrowType.type()->symbol->hasFlag(FLAG_DATA_CLASS)) {
+
+            // Insert a local check because we cannot pass narrow references to
+            // remote data to external routines
+            if (!fNoLocalChecks) {
+              if (fn->hasFlag(FLAG_EXTERN))
+                stmt->insertBefore(new CallExpr(PRIM_LOCAL_CHECK, sym->copy(), buildCStringLiteral(astr("references to remote data cannot be passed to external routines like '", fn->name, "'"))));
+              else if (fn->hasFlag(FLAG_EXPORT))
+                stmt->insertBefore(new CallExpr(PRIM_LOCAL_CHECK, sym->copy(), buildCStringLiteral(astr("references to remote data cannot currently be passed to exported routines like '", fn->name, "'"))));
+            }
+
             // Also if the narrow type is a ref or data class type,
             // we must treat it like a (narrow) reference.
             stmt->insertBefore(new CallExpr(PRIM_MOVE, var, sym->copy()));
@@ -1547,7 +1562,7 @@ static void insertWideClassTempsForNil()
         }
       } else if (call->isPrimitive(PRIM_SET_SVEC_MEMBER)) {
         Type* valueType = call->get(1)->getValType();
-        Type* componentType = valueType->getField("x1")->type;
+        Type* componentType = valueType->getField("x0")->type;
         if (isFullyWide(componentType)) {
           VarSymbol* tmp = newTemp(componentType);
           call->insertBefore(new DefExpr(tmp));
@@ -1631,7 +1646,7 @@ static void insertLocalTemp(Expr* expr) {
   SET_LINENO(se);
   VarSymbol* var = newTemp(astr("local_", se->symbol()->name), getNarrowType(se));
   if (!fNoLocalChecks) {
-    stmt->insertBefore(new CallExpr(PRIM_LOCAL_CHECK, se->copy()));
+    stmt->insertBefore(new CallExpr(PRIM_LOCAL_CHECK, se->copy(), buildCStringLiteral("cannot access remote data in local block")));
   }
   stmt->insertBefore(new DefExpr(var));
   stmt->insertBefore(new CallExpr(PRIM_MOVE, var, se->copy()));
@@ -1677,8 +1692,7 @@ static void localizeCall(CallExpr* call) {
           }
           // TODO: insert a local temp for the lhs of this move
           break;
-        } else if (rhs->isPrimitive(PRIM_ARRAY_GET) ||
-                   rhs->isPrimitive(PRIM_ARRAY_GET_VALUE)) {
+        } else if (rhs->isPrimitive(PRIM_ARRAY_GET)) {
           if (rhs->get(1)->typeInfo()->symbol->hasFlag(FLAG_WIDE_CLASS)) {
             SymExpr* lhs = toSymExpr(call->get(1));
             Expr* stmt = call->getStmtExpr();
@@ -1899,9 +1913,9 @@ static void heapAllocateGlobalsTail(FnSymbol* heapAllocateGlobals,
   heapAllocateGlobals->insertAtTail(new CondStmt(new SymExpr(tmpBool), block));
   int i = 0;
   for_vector(Symbol, sym, heapVars) {
-    heapAllocateGlobals->insertAtTail(new CallExpr(PRIM_HEAP_REGISTER_GLOBAL_VAR, new_IntSymbol(i++), sym));
+    heapAllocateGlobals->insertAtTail(new CallExpr(PRIM_REGISTER_GLOBAL_VAR, new_IntSymbol(i++), sym));
   }
-  heapAllocateGlobals->insertAtTail(new CallExpr(PRIM_HEAP_BROADCAST_GLOBAL_VARS, new_IntSymbol(i)));
+  heapAllocateGlobals->insertAtTail(new CallExpr(PRIM_BROADCAST_GLOBAL_VARS, new_IntSymbol(i)));
   heapAllocateGlobals->insertAtTail(new CallExpr(PRIM_RETURN, gVoid));
   numGlobalsOnHeap = i;
 }
@@ -2115,7 +2129,7 @@ static void fixAST() {
           if (isFullyWide(base)) {
             insertNodeComparison(stmt, new SymExpr(base), rhs->copy());
           } else {
-            stmt->insertBefore(new CallExpr(PRIM_LOCAL_CHECK, rhs->copy()));
+            stmt->insertBefore(new CallExpr(PRIM_LOCAL_CHECK, rhs->copy(), buildCStringLiteral("cannot access remote data in local block")));
           }
         }
       }
@@ -2166,7 +2180,7 @@ static void fixAST() {
               call->insertAfter(new CallExpr(PRIM_MOVE, lhs->copy(), tmp));
 
               if (field->symbol()->hasFlag(FLAG_LOCAL_FIELD) && !fNoLocalChecks) {
-                call->insertAfter(new CallExpr(PRIM_LOCAL_CHECK, tmp));
+                call->insertAfter(new CallExpr(PRIM_LOCAL_CHECK, tmp, buildCStringLiteral("cannot access remote data in local block")));
               }
 
               lhs->replace(new SymExpr(tmp));
@@ -2403,12 +2417,33 @@ insertWideReferences(void) {
   buildWideRefMap();
 
   //
-  // change arrays of classes into arrays of wide classes
+  // 1) change arrays of classes into arrays of wide classes
+  // 2) apply 'local field' pragmas to arrays in classes
   //
   forv_Vec(TypeSymbol, ts, gTypeSymbols) {
     if (ts->hasFlag(FLAG_DATA_CLASS)) {
       if (Type* nt = wideClassMap.get(getDataClassType(ts)->type)) {
         setDataClassType(ts, nt->symbol);
+      }
+
+    // Do not apply to records, for now, because IWR cannot identify RVF'd
+    // records. If the 'local field' flag was applied to an array inside an
+    // RVF'd record, then IWR could incorrectly localize the array field when
+    // accessed because it thinks the record is local.
+    } else if (isClass(ts->type)) {
+      AggregateType* at = toAggregateType(ts->type);
+
+      const char* prefix = "_class_locals";
+      bool isArgBundle = strncmp(at->symbol->name, prefix, strlen(prefix)) == 0;
+      if (isArgBundle == false &&
+          at->symbol->hasFlag(FLAG_ITERATOR_CLASS) == false &&
+          at->symbol->hasFlag(FLAG_REF) == false) {
+        for_fields(field, at) {
+          if (field->typeInfo()->symbol->hasFlag(FLAG_ARRAY) &&
+              field->isRef() == false) {
+            field->addFlag(FLAG_LOCAL_FIELD);
+          }
+        }
       }
     }
   }

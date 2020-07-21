@@ -7,13 +7,13 @@ proc setupDoms(ref D1, ref D2) {
   use Random;
   D1.clear();
   D2.clear();
-  var rs = makeRandomStream(real);
+  var rs = createRandomStream(real);
   for i in 1..1000 {
     var rnd1 = (rs.getNext()*10000):int;
     var rnd2 = (rs.getNext()*10000):int;
-    if !D1.member(rnd1) then
+    if !D1.contains(rnd1) then
       D1 += rnd1;
-    if !D2.member(rnd2) then
+    if !D2.contains(rnd2) then
       D2 += rnd2;
   }
 }

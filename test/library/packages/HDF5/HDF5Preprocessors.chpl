@@ -4,7 +4,7 @@ module HDF5Preprocessors {
   class AddNPreprocessor: HDF5Preprocessor {
     const n: int;
 
-    proc preprocess(A: []) {
+    override proc preprocess(A: []) {
       forall a in A {
         a += n;
       }
@@ -14,7 +14,7 @@ module HDF5Preprocessors {
   class ScriptPreprocessor: HDF5Preprocessor {
     const script: string;
 
-    proc preprocess(A: []) {
+    override proc preprocess(A: []) {
       use FileSystem, Path, Spawn;
 
       try! {
@@ -22,7 +22,7 @@ module HDF5Preprocessors {
         //var f = opentmp();
         //const scriptName = f.realPath();
 
-        const scriptName = "hdf5TempScript.bash";
+        const scriptName = "./hdf5TempScript.bash";
         var f = open(scriptName, iomode.cw);
 
         // write the script to a file
@@ -32,6 +32,7 @@ module HDF5Preprocessors {
           writer.flush();
           f.fsync();
         }
+        f.close();
 
         // give the file executable permission
         chmod(scriptName, 0o755);
@@ -54,7 +55,6 @@ module HDF5Preprocessors {
           }
         }
 
-        f.close();
         remove(scriptName);
       }
     }

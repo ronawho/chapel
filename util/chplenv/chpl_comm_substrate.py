@@ -1,11 +1,7 @@
 #!/usr/bin/env python
-import os
 import sys
 
-chplenv_dir = os.path.dirname(__file__)
-sys.path.insert(0, os.path.abspath(chplenv_dir))
-
-import chpl_arch, chpl_comm, chpl_platform, overrides
+import chpl_comm, chpl_platform, overrides
 from utils import memoize
 
 
@@ -17,11 +13,7 @@ def get():
         platform_val = chpl_platform.get('target')
 
         if comm_val == 'gasnet':
-            if platform_val == 'cray-xe':
-                substrate_val = 'gemini'
-            elif platform_val == 'cray-xk':
-                substrate_val = 'gemini'
-            elif platform_val == 'cray-xc':
+            if platform_val == 'cray-xc':
                 substrate_val = 'aries'
             elif platform_val == 'cray-cs':
                 substrate_val = 'ibv'

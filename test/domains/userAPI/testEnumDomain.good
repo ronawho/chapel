@@ -5,7 +5,6 @@ rank             = 2
 idxType          = color
 stridable        = false
 size             = 9
-numIndices       = 9
 isEmpty()        = false
 low              = (orange, yellow)
 high             = (green, blue)
@@ -16,11 +15,11 @@ last             = (green, blue)
 alignedLow       = (orange, yellow)
 alignedHigh      = (green, blue)
 dims()           = (orange..green, yellow..blue)
-dim(1)           = orange..green
-dim(2)           = yellow..blue
-member((yellow, green))   = true
-member((red, green))   = false
-member((yellow, violet))   = false
+dim(0)           = orange..green
+dim(1)           = yellow..blue
+contains((yellow, green))   = true
+contains((red, green))   = false
+contains((yellow, violet))   = false
 indexOrder((yellow, green)) = 4
 shape            = (3, 3)
 position((yellow, green)) = (1, 1)
@@ -54,7 +53,6 @@ Copying...
 Clearing...
 {orange..red, orange..red}
 size             = 0
-numIndices       = 0
 isEmpty()        = true
 low              = (orange, orange)
 high             = (red, red)
@@ -68,7 +66,6 @@ rank             = 2
 idxType          = color
 stridable        = true
 size             = 4
-numIndices       = 4
 isEmpty()        = false
 low              = (orange, yellow)
 high             = (green, blue)
@@ -79,11 +76,11 @@ last             = (green, blue)
 alignedLow       = (orange, yellow)
 alignedHigh      = (green, blue)
 dims()           = (orange..green by 2, yellow..blue by 2)
-dim(1)           = orange..green by 2
-dim(2)           = yellow..blue by 2
-member((green, yellow))   = true
-member((orange, green))   = false
-member((orange, violet))   = false
+dim(0)           = orange..green by 2
+dim(1)           = yellow..blue by 2
+contains((green, yellow))   = true
+contains((orange, green))   = false
+contains((orange, violet))   = false
 indexOrder((green, yellow)) = 2
 shape            = (2, 2)
 position((green, yellow)) = (1, 0)
@@ -117,7 +114,6 @@ Copying...
 Clearing...
 {orange..red, orange..red}
 size             = 0
-numIndices       = 0
 isEmpty()        = true
 low              = (orange, orange)
 high             = (red, red)

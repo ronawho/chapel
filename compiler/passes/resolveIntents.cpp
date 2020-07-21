@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -33,8 +34,7 @@ static IntentTag constIntentForType(Type* t) {
       is_complex_type(t) ||
       is_enum_type(t) ||
       isClass(t) ||
-      isUnmanagedClassType(t) ||
-      isUnion(t) ||
+      isDecoratedClassType(t) ||
       t == dtOpaque ||
       t == dtTaskID ||
       t == dtFile ||
@@ -42,9 +42,10 @@ static IntentTag constIntentForType(Type* t) {
       t == dtStringC ||
       t == dtCVoidPtr ||
       t == dtCFnPtr ||
+      t == dtNothing ||
       t == dtVoid ||
+      t == dtUninstantiated ||
       t->symbol->hasFlag(FLAG_RANGE) ||
-      isManagedPtrType(t) ||
       // MPF: This rule seems odd to me
       (t->symbol->hasFlag(FLAG_EXTERN) && !isRecord(t))) {
     return INTENT_CONST_IN;
@@ -52,7 +53,9 @@ static IntentTag constIntentForType(Type* t) {
   } else if (isSyncType(t)          ||
              isSingleType(t)        ||
              isRecordWrappedType(t) ||  // domain, array, or distribution
+             isManagedPtrType(t) ||
              isAtomicType(t) ||
+             isUnion(t) ||
              isRecord(t)) { // may eventually want to decide based on size
     return INTENT_CONST_REF;
 
@@ -95,8 +98,9 @@ IntentTag blankIntentForType(Type* t) {
     retval = INTENT_REF_MAYBE_CONST;
 
   } else if (isManagedPtrType(t)) {
+    // TODO: INTENT_REF_MAYBE_CONST could
     // allow blank intent owned to be transferred out of
-    retval = INTENT_IN;
+    retval = INTENT_CONST_REF;
 
   } else if (is_bool_type(t)                         ||
              is_int_type(t)                          ||
@@ -109,15 +113,17 @@ IntentTag blankIntentForType(Type* t) {
              t == dtCVoidPtr                         ||
              t == dtCFnPtr                           ||
              isClass(t)                              ||
-             isUnmanagedClassType(t)                 ||
+             isDecoratedClassType(t)                 ||
              isRecord(t)                             ||
              // Note: isRecord(t) includes range (FLAG_RANGE)
              isUnion(t)                              ||
              t == dtTaskID                           ||
              t == dtFile                             ||
              t == dtNil                              ||
-             t == dtOpaque                           ||
              t == dtVoid                             ||
+             t == dtOpaque                           ||
+             t == dtNothing                          ||
+             t == dtUninstantiated                   ||
              t->symbol->hasFlag(FLAG_DOMAIN)         ||
              t->symbol->hasFlag(FLAG_DISTRIBUTION)   ||
              t->symbol->hasFlag(FLAG_EXTERN)) {
@@ -182,6 +188,7 @@ static IntentTag blankIntentForThisArg(Type* t) {
   // Range default this intent is const-in
   if (valType->symbol->hasFlag(FLAG_RANGE))
     return INTENT_CONST_IN;
+
   // For user records or types with FLAG_DEFAULT_INTENT_IS_REF_MAYBE_CONST,
   // the intent for this is INTENT_REF_MAYBE_CONST
   //
@@ -190,17 +197,26 @@ static IntentTag blankIntentForThisArg(Type* t) {
       valType->symbol->hasFlag(FLAG_DEFAULT_INTENT_IS_REF_MAYBE_CONST))
     return INTENT_REF_MAYBE_CONST;
 
-  if (isRecordWrappedType(t))  // domain / distribution
-    // array, domain, distribution wrapper records are immutable
+  if (isRecordWrappedType(t))
+    // domain / distribution
     return INTENT_CONST_REF;
-  else if (isRecord(t) || isUnion(t) || t->symbol->hasFlag(FLAG_REF))
-    // TODO - see issue #5266; also note workaround in resolveFormals
-    // makes all blank-intent _this arguments for records use INTENT_REF.
+  else if (t->symbol->hasFlag(FLAG_REF))
+    // reference
     return INTENT_REF;
   else
     return INTENT_CONST_IN;
 }
 
+static
+IntentTag blankIntentForExternFnArg(Type* type) {
+  if (llvmCodegen && type->getValType()->symbol->hasFlag(FLAG_C_ARRAY))
+    // Pass c_array by ref by default for --llvm
+    // (for C, an argument like int arg[2] is actually just int* arg).
+    // This needs to be here because otherwise the following rule overrides it.
+    return INTENT_REF_MAYBE_CONST;
+  else
+    return INTENT_CONST_IN;
+}
 
 IntentTag concreteIntentForArg(ArgSymbol* arg) {
 
@@ -211,7 +227,7 @@ IntentTag concreteIntentForArg(ArgSymbol* arg) {
   else if (arg->hasFlag(FLAG_ARG_THIS) && arg->intent == INTENT_CONST)
     return constIntentForThisArg(arg->type);
   else if (fn->hasFlag(FLAG_EXTERN) && arg->intent == INTENT_BLANK)
-    return INTENT_CONST_IN;
+    return blankIntentForExternFnArg(arg->type);
   else if (fn->hasFlag(FLAG_ALLOW_REF) && arg->type->symbol->hasFlag(FLAG_REF))
 
     // This is a workaround for an issue with RVF erroneously forwarding a
@@ -220,12 +236,6 @@ IntentTag concreteIntentForArg(ArgSymbol* arg) {
     // the type. It would be better to rely on task/forall intents
     // to correctly mark const / not const / maybe const.
     return INTENT_REF;
-
-  else if (isManagedPtrType(arg->type) &&
-           (arg->intent == INTENT_BLANK || arg->intent == INTENT_CONST) &&
-           arg->hasFlag(FLAG_INSTANTIATED_FROM_ANY))
-
-    return INTENT_CONST_REF;
 
   else
     return concreteIntent(arg->intent, arg->type);
@@ -236,7 +246,7 @@ void resolveArgIntent(ArgSymbol* arg) {
   if (!resolved) {
     if (arg->type == dtMethodToken ||
         arg->type == dtTypeDefaultToken ||
-        arg->type == dtVoid ||
+        arg->type == dtNothing ||
         arg->type == dtUnknown ||
         arg->hasFlag(FLAG_TYPE_VARIABLE) ||
         arg->hasFlag(FLAG_PARAM)) {
@@ -266,23 +276,20 @@ void resolveArgIntent(ArgSymbol* arg) {
       // records/unions.
       bool addedTmp = (isRecord(arg->type) || isUnion(arg->type));
       FnSymbol* fn = toFnSymbol(arg->defPoint->parentSymbol);
-      if (fn->hasFlag(FLAG_EXTERN))
+      if (fn->hasFlag(FLAG_EXTERN)) 
         // Q - should this check arg->type->symbol->hasFlag(FLAG_EXTERN)?
         addedTmp = false;
-
+      // Pass wrappers used in libraries/interop by value.
+      if (arg->type->symbol->hasFlag(FLAG_EXPORT_WRAPPER))
+        addedTmp = false;
       if (addedTmp) {
         if (arg->type->symbol->hasFlag(FLAG_COPY_MUTATES) ||
             (formalRequiresTemp(arg, fn) &&
-             shouldAddFormalTempAtCallSite(arg, fn)))
+             shouldAddInFormalTempAtCallSite(arg, fn)))
           intent = INTENT_REF;
-        else
-          intent = constIntentForType(arg->type);
-      } else {
-        // In this case, C can copy for 'in' e.g. for ints
-        // There, we leave the intent alone rather than making it 'const in',
-        // since an 'in' formal can still be modified in the body of the
-        // function.
       }
+      // Otherwise, leave the intent INTENT_IN so that the formal can
+      // be modified in the body of the function.
     }
   }
 

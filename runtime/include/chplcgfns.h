@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
  * The entirety of this work is licensed under the Apache License,
@@ -47,11 +48,12 @@ extern const char* CHPL_HOST_PLATFORM;
 extern const char* CHPL_HOST_COMPILER;
 extern const char* CHPL_TARGET_PLATFORM;
 extern const char* CHPL_TARGET_COMPILER;
-extern const char* CHPL_TARGET_ARCH;
+extern const char* CHPL_TARGET_CPU;
 extern const char* CHPL_LOCALE_MODEL;
 extern const char* CHPL_COMM;
 extern const char* CHPL_COMM_SUBSTRATE;
 extern const char* CHPL_GASNET_SEGMENT;
+extern const char* CHPL_LIBFABRIC;
 extern const char* CHPL_TASKS;
 extern const char* CHPL_LAUNCHER;
 extern const char* CHPL_TIMERS;
@@ -100,13 +102,5 @@ extern int64_t chpl_gen_main(chpl_main_argument* const _arg);
 
 /* used for config vars: */
 extern void CreateConfigVarTable(void);
-
-/* These are defined in _type_structure.c if
-   --gen-communicated-structures is true and are used by a
-   communication layer to query types of communicated buffers */
-extern chplType chpl_getFieldType(int typeNum, int fieldNum);
-extern size_t chpl_getFieldOffset(int typeNum, int fieldNum);
-extern size_t chpl_getFieldSize(int typeNum);
-extern const int chpl_max_fields_per_type;
 
 #endif

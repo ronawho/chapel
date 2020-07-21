@@ -1,11 +1,12 @@
 # suite: <empty>
 # suite: Performance Tracking
 npb/ep/mcahir/ep.ml-perf.graph
+npb/ft/npadmana/ft_transposed.ml-perf.graph
 release/examples/benchmarks/hpcc/fft.ml-perf.graph
 release/examples/benchmarks/hpcc/hpl.ml-perf.graph
 release/examples/benchmarks/hpcc/ptrans.ml-perf.graph
 release/examples/benchmarks/hpcc/ra-atomics.ml-perf.graph
-release/examples/benchmarks/hpcc/variants/ra-buff-atomics.ml-perf.graph
+release/examples/benchmarks/hpcc/variants/ra-atomics-variations.ml-perf.graph
 release/examples/benchmarks/hpcc/ra.ml-perf.graph
 release/examples/benchmarks/hpcc/stream-ep.ml-perf.graph
 release/examples/benchmarks/hpcc/stream.ml-perf.graph
@@ -19,11 +20,12 @@ studies/isx/isx.ml-time.graph
 # suite: <empty>
 # suite: All (perf)
 npb/ep/mcahir/ep.ml-perf.graph
+npb/ft/npadmana/ft_transposed.ml-perf.graph
 release/examples/benchmarks/hpcc/fft.ml-perf.graph
 release/examples/benchmarks/hpcc/hpl.ml-perf.graph
 release/examples/benchmarks/hpcc/ptrans.ml-perf.graph
 release/examples/benchmarks/hpcc/ra-atomics.ml-perf.graph
-release/examples/benchmarks/hpcc/variants/ra-buff-atomics.ml-perf.graph
+release/examples/benchmarks/hpcc/variants/ra-atomics-variations.ml-perf.graph
 release/examples/benchmarks/hpcc/ra.ml-perf.graph
 release/examples/benchmarks/hpcc/stream-ep.ml-perf.graph
 release/examples/benchmarks/hpcc/stream.ml-perf.graph
@@ -32,15 +34,17 @@ release/examples/benchmarks/ssca2/SSCA2_main.ml-perf.graph
 studies/prk/Stencil/prk-stencil.ml-perf.graph
 studies/bale/histogram/histo-atomics.ml-perf.graph
 studies/bale/indexgather/ig.ml-perf.graph
+studies/bale/indexgather/ig-variants.ml-perf.graph
 
 # suite: - NAS Parallel Benchmarks (perf)
 npb/ep/mcahir/ep.ml-perf.graph
+npb/ft/npadmana/ft_transposed.ml-perf.graph
 # suite: - HPCC (perf)
 release/examples/benchmarks/hpcc/fft.ml-perf.graph
 release/examples/benchmarks/hpcc/hpl.ml-perf.graph
 release/examples/benchmarks/hpcc/ptrans.ml-perf.graph
 release/examples/benchmarks/hpcc/ra-atomics.ml-perf.graph
-release/examples/benchmarks/hpcc/variants/ra-buff-atomics.ml-perf.graph
+release/examples/benchmarks/hpcc/variants/ra-atomics-variations.ml-perf.graph
 release/examples/benchmarks/hpcc/ra.ml-perf.graph
 release/examples/benchmarks/hpcc/stream-ep.ml-perf.graph
 release/examples/benchmarks/hpcc/stream.ml-perf.graph
@@ -52,6 +56,7 @@ studies/prk/Stencil/prk-stencil.ml-perf.graph
 # suite: - Bale (perf)
 studies/bale/histogram/histo-atomics.ml-perf.graph
 studies/bale/indexgather/ig.ml-perf.graph
+studies/bale/indexgather/ig-variants.ml-perf.graph
 
 # suite: <empty>
 # suite: All (time)
@@ -68,6 +73,7 @@ release/examples/benchmarks/hpcc/variants/stream-promoted.ml-time.graph
 release/examples/benchmarks/ssca2/SSCA2_main.ml-time.graph
 studies/lulesh/bradc/lulesh-dense.ml-time.graph
 release/examples/benchmarks/miniMD/miniMD.ml-time.graph
+scan/scanPerf.ml-time.graph
 studies/comd/llnl/CoMD.ml-time.graph
 studies/comd/elegant/arrayOfStructs/CoMD-elegant-aos.ml-time.graph
 studies/isx/isx.ml-time.graph
@@ -110,19 +116,36 @@ studies/bale/histogram/histo-atomics.ml-time.graph
 studies/bale/indexgather/ig.ml-time.graph
 
 # suite: <empty>
-# suite: Studies (time)
+# suite: Studies
 studies/nbody/md.ml-time.graph
 reductions/vass/reductions-perf.ml-time.graph
 parallel/taskCompare/elliot/taskSpawn.ml-time.graph
+parallel/taskCompare/elliot/taskSpawnArg.ml-time.graph
 performance/comm/barrier/empty-chpl-barrier.ml-time.graph
 performance/elliot/no-op.ml-time.graph
 performance/comm/low-level/remote-gets.ml-perf.graph
+performance/comm/low-level/remote-unordered-gets.ml-perf.graph
 performance/comm/low-level/remote-puts.ml-perf.graph
 performance/comm/low-level/remote-fetchAmos.ml-perf.graph
 performance/comm/low-level/remote-amos.ml-perf.graph
-performance/comm/low-level/remote-buffAmos.ml-perf.graph
+performance/comm/low-level/remote-unordered-amos.ml-perf.graph
 performance/comm/low-level/remote-ons.ml-perf.graph
 performance/comm/low-level/remote-fastOns.ml-perf.graph
+performance/comm/low-level/remote-warmup.ml-perf.graph
 performance/comm/low-level/array-gets.ml-perf.graph
 performance/comm/low-level/array-puts.ml-perf.graph
+runtime/configMatters/comm/unordered/many-to-many-gets.ml-perf.graph
+runtime/configMatters/comm/unordered/many-to-many-puts.ml-perf.graph
+runtime/configMatters/comm/unordered/many-to-many-getputs.ml-perf.graph
+runtime/configMatters/comm/unordered/one-locale-serial-amos.ml-perf.graph
+runtime/configMatters/comm/unordered/one-locale-parallel-amos.ml-perf.graph
 optimizations/bulkcomm/block/exchange.ml-time.graph
+performance/array/distCreate-domains-init.ml-perf.graph
+performance/array/distCreate-domains-deinit.ml-perf.graph
+performance/array/distCreate-tiny-init.ml-perf.graph
+performance/array/distCreate-tiny-deinit.ml-perf.graph
+performance/array/distCreate-small-init.ml-perf.graph
+performance/array/distCreate-small-deinit.ml-perf.graph
+performance/array/distCreate-large-init.ml-perf.graph
+performance/array/distCreate-large-deinit.ml-perf.graph
+library/packages/Sort/performance/dist-performance.ml-perf.graph

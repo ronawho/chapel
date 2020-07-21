@@ -1,13 +1,13 @@
 all: 
 	@echo This Makefile is not intended to be called directly.
 	@echo It is used for running unit tests within the automated testing harness provided with the Berkeley UPC runtime.
-	@echo For information on downloading and using Berkeley UPC, see: http://upc.lbl.gov
+	@echo For information on downloading and using Berkeley UPC, see: https://upc.lbl.gov
 	@exit 1
 
 PERL ?= perl
 CONDUIT_DIR=$(TOP_BUILDDIR)/gasnet/$(NETWORK)-conduit
 
-testcxx%: force
+testcxx% testlegacycxx%: force
 	@if test -n "`$(UPCC) --network=udp --echo-var UPCR_LD 2>/dev/null`"; then \
 	  makename=`echo $@ | $(PERL) -pe 's/_.*-(seq|par|parsync)$$/-$$1/'`; \
 	   cmdname=`echo $@ | $(PERL) -pe 's/(_.*)?-(seq|par|parsync)$$//'`; \

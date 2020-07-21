@@ -1,5 +1,6 @@
 /*
- * Copyright 2004-2018 Cray Inc.
+ * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -128,6 +129,9 @@ other task is consuming it.
 
  */
 module Spawn {
+  public use IO;
+  public use SysError;
+  private use SysCTypes;
 
   private extern proc qio_openproc(argv:c_ptr(c_string),
                                    env:c_ptr(c_string),
@@ -178,7 +182,7 @@ module Spawn {
     param locking:bool;
 
     pragma "no doc"
-    var home:locale;
+    var home:locale = here;
 
     /* The Process ID number of the spawned process */
     var pid:int(64);
@@ -261,8 +265,7 @@ module Spawn {
        can write to the subprocess through this pipe if the subprocess
        was created with stdin=PIPE.
 
-       Causes a fatal error if the subprocess does not have a
-       stdin pipe open.
+       :throws SystemError: If the subprocess does not have a stdin pipe open.
      */
     proc stdin throws {
       try _throw_on_launch_error();
@@ -278,8 +281,7 @@ module Spawn {
        can read from the subprocess through this pipe if the subprocess
        was created with stdout=PIPE.
 
-       Causes a fatal error if the subprocess does not have a
-       stdout pipe open.
+       :throws SystemError: If the subprocess does not have a stdout pipe open.
      */
     proc stdout throws {
       try _throw_on_launch_error();
@@ -295,8 +297,7 @@ module Spawn {
        can read from the subprocess through this pipe if the subprocess
        was created with stderr=PIPE.
 
-       Causes a fatal error if the subprocess does not have a
-       stderr pipe open.
+       :throws SystemError: If the subprocess does not have a stderr pipe open.
      */
     proc stderr throws {
       try _throw_on_launch_error();
@@ -429,6 +430,7 @@ module Spawn {
      :returns: a :record:`subprocess` with kind and locking set according
                to the arguments.
 
+     :throws IllegalArgumentError: Thrown when ``args`` is an empty array.
      */
   proc spawn(args:[] string, env:[] string=Spawn.empty_env, executable="",
              stdin:?t = FORWARD, stdout:?u = FORWARD, stderr:?v = FORWARD,
@@ -449,6 +451,9 @@ module Spawn {
     else compilerError("only FORWARD/CLOSE/PIPE/STDOUT supported");
     if isIntegralType(stderr.type) then stderr_fd = stderr;
     else compilerError("only FORWARD/CLOSE/PIPE/STDOUT supported");
+
+    if args.size == 0 then
+      throw new owned IllegalArgumentError('args cannot be an empty array');
 
     // When memory is registered with the NIC under ugni, a fork will currently
     // segfault. Here we halt before such a call is made to provide an
@@ -644,15 +649,19 @@ module Spawn {
      :returns: a :record:`subprocess` with kind and locking set according
                to the arguments.
 
+     :throws IllegalArgumentError: Thrown when ``command`` is an empty string.
   */
   proc spawnshell(command:string, env:[] string=Spawn.empty_env,
                   stdin:?t = FORWARD, stdout:?u = FORWARD, stderr:?v = FORWARD,
                   executable="/bin/sh", shellarg="-c",
                   param kind=iokind.dynamic, param locking=true) throws
   {
-    var args = [command];
-    if shellarg != "" then args.push_front(shellarg);
-    args.push_front(executable);
+    if command.isEmpty() then
+      throw new owned IllegalArgumentError('command cannot be an empty string');
+    
+    var args = if shellarg == "" then [executable, command]
+        else [executable, shellarg, command];
+
     return spawn(args, env, executable,
                  stdin=stdin, stdout=stdout, stderr=stderr,
                  kind=kind, locking=locking);
@@ -730,6 +739,9 @@ module Spawn {
     if !running {
       if this.spawn_error then
         try ioerror(this.spawn_error, "in subprocess.wait");
+
+      // Otherwise, do nothing, since the child process already ended.
+      return;
     }
 
     var stdin_err:syserr  = ENOERR;
@@ -823,6 +835,14 @@ module Spawn {
    */
   proc subprocess.communicate() throws {
     try _throw_on_launch_error();
+
+    if !running {
+      if this.spawn_error then
+        try ioerror(this.spawn_error, "in subprocess.communicate");
+
+      // Otherwise, do nothing, since the child process already ended.
+      return;
+    }
 
     var err:syserr = ENOERR;
     on home {
@@ -1014,7 +1034,7 @@ module Spawn {
     on home {
       err = qio_send_signal(pid, signal:c_int);
     }
-    if err then try ioerror(err, "in subprocess.send_signal, with signal " + signal);
+    if err then try ioerror(err, "in subprocess.send_signal, with signal " + signal:string);
   }
 
   // documented in the throws version
