@@ -208,7 +208,7 @@ void chpl_mem_array_free(void* p,
     return;
   }
 
-  chpl_free(p);
+  chpl_sized_free(p, size);
 #ifdef HAS_GPU_LOCALE
   }
 #endif

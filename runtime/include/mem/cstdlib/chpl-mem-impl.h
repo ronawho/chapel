@@ -53,6 +53,10 @@ static inline void chpl_free(void* ptr) {
   sys_free(ptr);
 }
 
+static inline void chpl_sized_free(void* ptr, size_t size) {
+  sys_free(ptr);
+}
+
 // malloc_good_size is OSX specific unfortunately. On other platforms just
 // return minSize.
 static inline size_t chpl_good_alloc_size(size_t minSize) {

@@ -47,6 +47,7 @@ static inline void* chpl_malloc(size_t size);
 static inline void* chpl_memalign(size_t boundary, size_t size);
 static inline void* chpl_realloc(void* ptr, size_t size);
 static inline void chpl_free(void* ptr);
+static inline void chpl_sized_free(void* ptr, size_t size);
 int chpl_posix_memalign(void** ptr, size_t alignment, size_t size);
 void* chpl_valloc(size_t size);
 void* chpl_pvalloc(size_t size);
@@ -154,6 +155,12 @@ void chpl_mem_free(void* memAlloc, int32_t lineno, int32_t filename) {
   size_t approximateSize = CHPL_MEMHOOKS_ACTIVE ? chpl_real_alloc_size(memAlloc) : 0;
   chpl_memhook_free_pre(memAlloc, approximateSize, lineno, filename);
   chpl_free(memAlloc);
+}
+
+static inline
+void chpl_mem_sized_free(void* memAlloc, size_t size, int32_t lineno, int32_t filename) {
+  chpl_memhook_free_pre(memAlloc, lineno, filename); // TODO sized free pre
+  chpl_sized_free(memAlloc, size);
 }
 
 // Provide handles to instrument Chapel calls to memcpy and memmove

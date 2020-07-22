@@ -101,6 +101,13 @@ static inline void chpl_free(void* ptr) {
   }
 }
 
+static inline void chpl_sized_free(void* ptr, size_t size) {
+  if (ptr != NULL) {
+    assert(size != 0);
+    CHPL_JE_SDALLOCX(ptr, size, MALLOCX_NO_FLAGS);
+  }
+}
+
 static inline size_t chpl_good_alloc_size(size_t minSize) {
   if (minSize == 0) {
     return 0;

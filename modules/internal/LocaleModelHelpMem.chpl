@@ -116,4 +116,12 @@ module LocaleModelHelpMem {
       extern proc chpl_mem_free(ptr:c_void_ptr) : void;
     chpl_mem_free(ptr);
   }
+
+  pragma "always propagate line file info"
+  proc chpl_here_sized_free(ptr:c_void_ptr, size:integral): void {
+    pragma "fn synchronization free"
+    pragma "insert line file info"
+      extern proc chpl_mem_sized_free(ptr:c_void_ptr, size:size_t) : void;
+    chpl_mem_free(ptr, size.safeCast(size_t));
+  }
 }
