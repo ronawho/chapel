@@ -3377,15 +3377,15 @@ module ChapelArray {
     _do_destroy_arr(array._unowned, array._instance, deinitElts);
   }
 
-  proc _deinitElementsIsParallel(type eltType) {
+  proc _deinitElementsIsParallel(type eltType, size: integral) {
     // TODO check size?
-    return rootLocaleInitialized;
+    return rootLocaleInitialized && size > 1000;
   }
 
   proc _deinitElements(array: _array) {
     param needsDestroy = __primitive("needs auto destroy", array.eltType);
     if needsDestroy {
-      if _deinitElementsIsParallel(array.eltType) {
+      if _deinitElementsIsParallel(array.eltType, array.size) {
         forall elt in array {
           chpl__autoDestroy(elt);
         }
