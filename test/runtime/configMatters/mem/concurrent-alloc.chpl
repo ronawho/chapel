@@ -12,6 +12,11 @@ coforall i in 1..here.maxTaskPar {
     assert(m[0] == taskid && m[size-1] == taskid);
     c_free(m);
 
+    var r: c_ptr(int(8)); r = c_realloc(int(8), r, size);
+    c_memset(r, taskid, size);
+    assert(r[0] == taskid && r[size-1] == taskid);
+    c_free(r);
+
     var a = c_aligned_alloc(int(8), 8, size);
     c_memset(a, taskid, size);
     assert(a[0] == taskid && a[size-1] == taskid);
