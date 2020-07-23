@@ -156,13 +156,13 @@ void* chpl_memmove(void* dest, const void* src, size_t num)
 }
 
 // Query the allocator to ask for a good size to allocate that is at least
-// minSize. One example where this is useful is to grow a vector while
+// size. One example where this is useful is to grow a vector while
 // minimizing memory wasted by overallocation.
 //
-// If an allocator does not have the ability to get this information, minSize
+// If an allocator does not have the ability to get this information, size
 // will be returned.
-static inline size_t chpl_mem_good_alloc_size(size_t minSize, int32_t lineno, int32_t filename) {
-  return chpl_good_alloc_size(minSize);
+static inline size_t chpl_mem_good_alloc_size(size_t size, int32_t lineno, int32_t filename) {
+  return chpl_good_alloc_size(size);
 }
 
 // free a c_string, no error checking.

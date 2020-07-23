@@ -50,12 +50,12 @@ static inline void chpl_free(void* ptr) {
 }
 
 // malloc_good_size is OSX specific unfortunately. On other platforms just
-// return minSize.
-static inline size_t chpl_good_alloc_size(size_t minSize) {
+// return size.
+static inline size_t chpl_good_alloc_size(size_t size) {
 #if defined(__APPLE__)
-  return malloc_good_size(minSize);
+  return malloc_good_size(size);
 #else
-  return minSize;
+  return size;
 #endif
 }
 

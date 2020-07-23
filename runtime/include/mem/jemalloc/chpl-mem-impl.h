@@ -97,11 +97,9 @@ static inline void chpl_free(void* ptr) {
   }
 }
 
-static inline size_t chpl_good_alloc_size(size_t minSize) {
-  if (minSize == 0) {
-    return 0;
-  }
-  return CHPL_JE_NALLOCX(minSize, MALLOCX_NO_FLAGS);
+static inline size_t chpl_good_alloc_size(size_t size) {
+  size = minSize(size);
+  return CHPL_JE_NALLOCX(size, MALLOCX_NO_FLAGS);
 }
 
 #endif
