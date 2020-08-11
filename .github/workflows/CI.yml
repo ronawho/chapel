@@ -32,3 +32,35 @@ jobs:
       with:
         name: documentation
         path: doc/html
+
+  make_mason:
+    runs-on: ubuntu-latest
+    env:
+      CHPL_SMOKE_SKIP_MAKE_CHECK: true
+      CHPL_SMOKE_SKIP_DOC: true
+    steps:
+    - uses: actions/checkout@v2
+    - name: make mason
+      run: |
+        ./util/buildRelease/smokeTest
+
+  check_annotations:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 100000
+    - name: check annotations
+      run: |
+        make test-venv
+        CHPL_HOME=$PWD ./util/run-in-venv.bash ./util/test/check_annotations.py
+
+  bad_rt_calls:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: install deps
+      run: sudo apt-get install cscope
+    - name: find bad runtime calls
+      run: |
+        ./util/devel/lookForBadRTCalls
