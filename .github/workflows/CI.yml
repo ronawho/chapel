@@ -1,0 +1,16 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  make_check:
+    runs-on: ubuntu-latest
+    env:
+      NIGHTLY_TEST_SETTINGS: true 
+      CHPL_SMOKE_SKIP_MAKE_MASON: true
+      CHPL_SMOKE_SKIP_DOC: true
+    steps:
+    - uses: actions/checkout@v2
+    - name: make check
+      run: |
+        ./util/buildRelease/smokeTest
