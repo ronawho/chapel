@@ -24,6 +24,11 @@ jobs:
       CHPL_SMOKE_SKIP_MAKE_MASON: true
     steps:
     - uses: actions/checkout@v2
-    - name: make check
+    - name: make check-chpldoc && make docs
       run: |
         ./util/buildRelease/smokeTest
+    - name: upload docs
+      uses: actions/upload-artifact@v2
+      with:
+        name: documentation
+        path: doc/html
