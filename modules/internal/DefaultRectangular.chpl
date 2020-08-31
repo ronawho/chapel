@@ -1880,6 +1880,12 @@ module DefaultRectangular {
     return true;
   }
 
+  // Rank 1 arrays are inherently contiguous, so avoid runtime check
+  private proc _canDoSimpleTransfer(A, aView, B, bView) param
+    where A.rank == 1 && B.rank == 1 {
+    return true;
+  }
+
   private proc _canDoSimpleTransfer(A, aView, B, bView) {
     if !A.isDataContiguous(aView._value) || !B.isDataContiguous(bView._value) {
       if debugDefaultDistBulkTransfer then
@@ -1889,7 +1895,7 @@ module DefaultRectangular {
     return true;
   }
 
-  private proc _canDoComplexTransfer(A, aView, B, bView) {
+  private proc _canDoComplexTransfer(A, aView, B, bView) param {
     return useBulkTransferStride;
   }
 
