@@ -6809,53 +6809,52 @@ proc bytes.format(args ...?k): bytes throws {
   return b"";
 }
 
+record ASDF {
+  var f: file;
+  var w: channel(writing=true, kind=iokind.dynamic, locking=false);
+  var r: channel(writing=false, kind=iokind.dynamic, locking=false);
+   
+  proc open() throws {
+    try {
+      f = openmem();
+      w = f.writer(locking=false);
+      r = f.reader(locking=false);
+    }
+  }
+
+  proc format(fmt:?t, args ...?k) throws {
+    try w.writef(fmt, (...args));
+  }
+
+  proc getFormattedObject(type t): t throws {
+    const offset = w.offset();
+    var buf = c_malloc(uint(8), offset+1);
+    try r.readBytes(buf, offset:ssize_t);
+    buf[offset] = 0;
+    if isStringType(t) then
+      return createStringWithOwnedBuffer(buf, offset, offset+1);
+    else
+      return createBytesWithOwnedBuffer(buf, offset, offset+1);
+  }
+
+  proc deinit() {
+    try {
+      r.close();
+      w.close();
+      f.close();
+    } catch { 
+    }
+  }
+
+}
+
 private inline proc chpl_do_format(fmt:?t, args ...?k): t throws
     where isStringType(t) || isBytesType(t) {
 
-  // Open a memory buffer to store the result
-  var f = try openmem();
-  defer {
-    try {
-      f.close();
-    } catch { /* ignore deferred close error */ }
-  }
-
-  var offset:int = 0;
-  {
-    var w = try f.writer(locking=false);
-    defer {
-      try {
-        w.close();
-      } catch { /* ignore deferred close error */ }
-    }
-    try w.writef(fmt, (...args));
-    offset = w.offset();
-
-    // close error is thrown instead of ignored
-    try w.close();
-  }
-
-  var buf = c_malloc(uint(8), offset+1);
-  var r = try f.reader(locking=false);
-  defer {
-    try {
-      r.close();
-    } catch { /* ignore deferred close error */ }
-  }
-
-  try r.readBytes(buf, offset:ssize_t);
-
-  // close errors are thrown instead of ignored
-  try r.close();
-  try f.close();
-
-  // Add the terminating NULL byte to make C string conversion easy.
-  buf[offset] = 0;
-
-  if isStringType(t) then
-    return createStringWithOwnedBuffer(buf, offset, offset+1);
-  else
-    return createBytesWithOwnedBuffer(buf, offset, offset+1);
+  var asdf = new ASDF();
+  try asdf.open();
+  try asdf.format(fmt, (...args));
+  return asdf.getFormattedObject(t);
 }
 
 
