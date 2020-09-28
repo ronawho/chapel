@@ -65,7 +65,12 @@
 typedef Atomic(_real64) atomic__real64;
 typedef Atomic(_real32) atomic__real32;
 
-typedef atomic_bool atomic_spinlock_t;
+#define CACHE_LINE_SIZE 64
+#define CACHE_LINE_ALIGN __attribute__((aligned(CACHE_LINE_SIZE)))
+
+typedef struct {
+  atomic_bool b CACHE_LINE_ALIGN;
+} CACHE_LINE_ALIGN atomic_spinlock_t;
 
 static inline memory_order _defaultOfMemoryOrder(void) {
   return memory_order_seq_cst;
@@ -255,13 +260,13 @@ DECLARE_REAL_ATOMICS(_real64);
 #undef DECLARE_REAL_ATOMICS
 
 static inline void atomic_init_spinlock_t(atomic_spinlock_t* lock) {
-  atomic_init(lock, false);
+  atomic_init(&(lock->b), false);
 }
 
 static inline void atomic_destroy_spinlock_t(atomic_spinlock_t* lock) { }
 
 static inline chpl_bool atomic_try_lock_spinlock_t(atomic_spinlock_t* lock) {
-  return !atomic_load(lock) && !atomic_exchange_explicit(lock, true, memory_order_acquire);
+  return !atomic_load(&(lock->b)) && !atomic_exchange_explicit(&(lock->b), true, memory_order_acquire);
 }
 
 static inline void atomic_lock_spinlock_t(atomic_spinlock_t* lock) {
@@ -271,7 +276,7 @@ static inline void atomic_lock_spinlock_t(atomic_spinlock_t* lock) {
 }
 
 static inline void atomic_unlock_spinlock_t(atomic_spinlock_t* lock) {
-  atomic_store_explicit(lock, false, memory_order_release);
+  atomic_store_explicit(&(lock->b), false, memory_order_release);
 }
 
 #endif // _chpl_atomics_h_
