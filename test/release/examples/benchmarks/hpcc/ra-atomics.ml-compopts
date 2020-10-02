@@ -10,8 +10,7 @@ comm = os.getenv('CHPL_COMM')
 ugni = comm == 'ugni'
 
 nu = 10000000
-if ugni:
-  nu = 1000000000
+nu = 1000000000
 
 common = '-sn=33:indexType -sN_U={0}:indexType -sverify=false'.format(nu)
 
