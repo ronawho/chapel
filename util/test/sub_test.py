@@ -267,11 +267,14 @@ def get_chplenv():
     chpl_env = dict(map(lambda l: l.split('=', 1), chpl_env.splitlines()))
     return chpl_env
 
+def environ_with_chplenv():
+    new_env = os.environ.copy()
+    new_env.update(get_chplenv())
+    return new_env
+
 # Similar to os.path.expandvars but stuff chplenv into it too
 def expandvars_chpl(path):
-    expand_env = os.environ.copy()
-    expand_env.update(get_chplenv())
-    return string.Template(path).safe_substitute(expand_env)
+    return string.Template(path).safe_substitute(environ_with_chplenv())
 
 # Read a file or if the file is executable read its output. If the file is
 # executable, the current chplenv is copied into the env before executing.
@@ -283,13 +286,8 @@ def ReadFileWithComments(f, ignoreLeadingSpace=True):
     # OSError while trying to run, report it and try to keep going
     if os.access(f, os.X_OK):
         try:
-            # grab the chplenv so it can be stuffed into the subprocess env
-            chpl_env = get_chplenv()
-            file_env = os.environ.copy()
-            file_env.update(chpl_env)
-
             # execute the file and grab its output
-            cmd = py3_compat.Popen([os.path.abspath(f)], stdout=subprocess.PIPE, env=file_env)
+            cmd = py3_compat.Popen([os.path.abspath(f)], stdout=subprocess.PIPE, env=environ_with_chplenv())
             mylines = cmd.communicate()[0].splitlines()
 
         except OSError as e:
@@ -1511,7 +1509,8 @@ for testname in testsrc:
             sys.stdout.write('[Executing ./PRECOMP]\n')
             sys.stdout.flush()
             p = py3_compat.Popen(['./PRECOMP', execname, complog, compiler],
-                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                 env=environ_with_chplenv())
             sys.stdout.write(p.communicate()[0])
             sys.stdout.flush()
 
@@ -1520,7 +1519,8 @@ for testname in testsrc:
             sys.stdout.flush()
             test_precomp = './{0}.precomp'.format(test_filename)
             p = py3_compat.Popen([test_precomp, execname, complog, compiler],
-                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                 env=environ_with_chplenv())
             sys.stdout.write(p.communicate()[0])
             sys.stdout.flush()
 
@@ -1685,7 +1685,8 @@ for testname in testsrc:
                     sys.stdout.flush()
                     p = py3_compat.Popen([sprediff, execname, complog, compiler,
                                           ' '.join(envCompopts)+' '+compopts, ' '.join(args)],
-                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                         env=environ_with_chplenv())
                     sys.stdout.write(p.communicate()[0])
                     sys.stdout.flush()
 
@@ -1694,7 +1695,8 @@ for testname in testsrc:
                 sys.stdout.flush()
                 p = py3_compat.Popen(['./PREDIFF', execname, complog, compiler,
                                      ' '.join(envCompopts)+' '+compopts, ' '.join(args)],
-                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                     env=environ_with_chplenv())
                 sys.stdout.write(p.communicate()[0])
                 sys.stdout.flush()
 
@@ -1704,7 +1706,8 @@ for testname in testsrc:
                 test_prediff = './{0}.prediff'.format(test_filename)
                 p = py3_compat.Popen([test_prediff, execname, complog, compiler,
                                      ' '.join(envCompopts)+' '+compopts, ' '.join(args)],
-                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                     env=environ_with_chplenv())
                 sys.stdout.write(p.communicate()[0])
                 sys.stdout.flush()
 
@@ -1921,7 +1924,8 @@ for testname in testsrc:
                     sys.stdout.write('[Executing system-wide preexec %s]\n'%(spreexec))
                     sys.stdout.flush()
                     p = py3_compat.Popen([spreexec, execname, execlog, compiler],
-                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+                                         env=environ_with_chplenv())
                     sys.stdout.write(p.communicate()[0])
                     sys.stdout.flush()
 
@@ -1929,7 +1933,8 @@ for testname in testsrc:
                 sys.stdout.write('[Executing ./PREEXEC]\n')
                 sys.stdout.flush()
                 p = py3_compat.Popen(['./PREEXEC', execname, execlog, compiler],
-                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                     env=environ_with_chplenv())
                 sys.stdout.write(p.communicate()[0])
                 sys.stdout.flush()
 
@@ -1938,7 +1943,8 @@ for testname in testsrc:
                 sys.stdout.flush()
                 test_preexec = './{0}.preexec'.format(test_filename)
                 p = py3_compat.Popen([test_preexec, execname, execlog, compiler],
-                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                     env=environ_with_chplenv())
                 sys.stdout.write(p.communicate()[0])
                 sys.stdout.flush()
 
@@ -2203,7 +2209,8 @@ for testname in testsrc:
                             sys.stdout.flush()
                             p = py3_compat.Popen([sprediff, execname, execlog, compiler,
                                                   ' '.join(envCompopts)+' '+compopts, ' '.join(args)],
-                                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, 
+                                                 env=environ_with_chplenv())
                             sys.stdout.write(p.communicate()[0])
 
                     if globalPrediff:
@@ -2211,7 +2218,8 @@ for testname in testsrc:
                         sys.stdout.flush()
                         p = py3_compat.Popen(['./PREDIFF', execname, execlog, compiler,
                                              ' '.join(envCompopts)+ ' '+compopts, ' '.join(args)],
-                                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                             env=environ_with_chplenv())
                         sys.stdout.write(p.communicate()[0])
 
                     if prediff:
@@ -2219,7 +2227,8 @@ for testname in testsrc:
                         sys.stdout.flush()
                         p = py3_compat.Popen(['./'+prediff, execname, execlog, compiler,
                                              ' '.join(envCompopts)+' '+compopts, ' '.join(args)],
-                                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                             env=environ_with_chplenv())
                         sys.stdout.write(p.communicate()[0])
 
                     if not perftest:

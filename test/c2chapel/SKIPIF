@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-BINDIR="$CHPL_HOME"/bin/`$CHPL_HOME/util/chplenv/chpl_bin_subdir.py --host`
+BINDIR="$CHPL_HOME/bin/$CHPL_HOST_BIN_SUBDIR"
 C2CHAPEL="$BINDIR/c2chapel"
 if [[ -f "$C2CHAPEL"  && -x "$C2CHAPEL" ]]
 then
