@@ -4,8 +4,8 @@
 #include <errno.h>                     /* for ENOMEM */
 
 #include <limits.h>                    /* for UINT_MAX (C89) */
-#include <qthread/qthread-int.h>       /* for uint32_t and uint64_t */
-#include <qthread/common.h>            /* important configuration options */
+#include "qthread-int.h"               /* for uint32_t and uint64_t */
+#include "common.h"                    /* important configuration options */
 
 #include <string.h>                    /* for memcpy() */
 
@@ -53,7 +53,7 @@
 
 #define QTHREAD_VERSION 1010001
 
-#include <qthread/macros.h>
+#include "macros.h"
 
 #ifdef QTHREAD_ALIGNEDDATA_ALLOWED
 # define Q_ALIGNED(x) __attribute__((aligned(x)))
@@ -287,8 +287,6 @@ enum _qthread_features {
 #define QTHREAD_SPAWN_AGGREGABLE    (1 << SPAWN_AGGREGABLE)
 #define QTHREAD_SPAWN_LOCAL_PRIORITY (1 << SPAWN_LOCAL_PRIORITY)
 #define QTHREAD_SPAWN_NETWORK (1 << SPAWN_NETWORK)
-
-void qthread_chpl_reset_spawn_order(void);
 
 int qthread_spawn(qthread_f             f,
                   const void           *arg,
@@ -1641,7 +1639,7 @@ Q_ENDCXX /* */
 
 #else  /* ifdef __cplusplus */
 extern "C++" {
-# include <qthread/qthread.hpp>
+# include "qthread.hpp"
 }
 #endif  /* __cplusplus */
 
