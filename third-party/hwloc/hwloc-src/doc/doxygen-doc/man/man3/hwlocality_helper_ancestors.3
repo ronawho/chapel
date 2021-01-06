@@ -1,8 +1,8 @@
-.TH "hwlocality_helper_ancestors" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_helper_ancestors" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_helper_ancestors
+hwlocality_helper_ancestors \- Looking at Ancestor and Child Objects
 .SH SYNOPSIS
 .br
 .PP
@@ -35,7 +35,7 @@ Be sure to see the figure in \fBTerms and Definitions\fP that shows a complete t
 .PP
 Returns the ancestor object of \fCobj\fP at depth \fCdepth\fP\&. 
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 \fCdepth\fP should not be the depth of PU or NUMA objects since they are ancestors of no objects (except Misc or I/O)\&. This function rather expects an intermediate level depth, such as the depth of Packages, Cores, or Caches\&. 
 .RE
@@ -46,7 +46,7 @@ Returns the ancestor object of \fCobj\fP at depth \fCdepth\fP\&.
 .PP
 Returns the ancestor object of \fCobj\fP with type \fCtype\fP\&. 
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 \fCtype\fP should not be \fBHWLOC_OBJ_PU\fP or \fBHWLOC_OBJ_NUMANODE\fP since these objects are ancestors of no objects (except Misc or I/O)\&. This function rather expects an intermediate object type, such as \fBHWLOC_OBJ_PACKAGE\fP, \fBHWLOC_OBJ_CORE\fP, etc\&. 
 .RE
@@ -69,7 +69,7 @@ Return \fCNULL\fP when there is no next child\&.
 .PP
 Returns true if \fCobj\fP is inside the subtree beginning with ancestor object \fCsubtree_root\fP\&. 
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 This function cannot work if \fCobj\fP and \fCsubtree_root\fP objects do not have CPU sets (I/O or Misc objects)\&. 
 .RE

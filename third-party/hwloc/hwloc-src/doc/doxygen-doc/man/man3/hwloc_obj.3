@@ -1,4 +1,4 @@
-.TH "hwloc_obj" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwloc_obj" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
@@ -165,9 +165,9 @@ Normal children, \fCchildren\fP[0 \&.\&. arity -1]\&.
 .SS "\fBhwloc_cpuset_t\fP hwloc_obj::complete_cpuset"
 
 .PP
-The complete CPU set of logical processors of this object,\&. This may include not only the same as the cpuset field, but also some CPUs for which topology information is unknown or incomplete, some offlines CPUs, and the CPUs that are ignored when the \fBHWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED\fP flag is not set\&. Thus no corresponding PU object may be found in the topology, because the precise position is undefined\&. It is however known that it would be somewhere under this object\&.
+The complete CPU set of processors of this object,\&. This may include not only the same as the cpuset field, but also some CPUs for which topology information is unknown or incomplete, some offlines CPUs, and the CPUs that are ignored when the \fBHWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED\fP flag is not set\&. Thus no corresponding PU object may be found in the topology, because the precise position is undefined\&. It is however known that it would be somewhere under this object\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 Its value must not be changed, \fBhwloc_bitmap_dup()\fP must be used instead\&. 
 .RE
@@ -180,7 +180,7 @@ The complete NUMA node set of this object,\&. This may include not only the same
 .PP
 If there are no NUMA nodes in the machine, all the memory is close to this object, so only the first bit is set in \fCcomplete_nodeset\fP\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 Its value must not be changed, \fBhwloc_bitmap_dup()\fP must be used instead\&. 
 .RE
@@ -193,7 +193,7 @@ CPUs covered by this object\&. This is the set of CPUs for which there are PU ob
 .PP
 If the \fBHWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED\fP configuration flag is set, some of these CPUs may not be allowed for binding, see \fBhwloc_topology_get_allowed_cpuset()\fP\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 All objects have non-NULL CPU and node sets except Misc and I/O objects\&.
 .PP
@@ -272,13 +272,13 @@ Next object below the same parent (inside the same list of children)\&.
 .PP
 NUMA nodes covered by this object or containing this object\&. This is the set of NUMA nodes for which there are NUMA node objects in the topology under or above this object, i\&.e\&. which are known to be physically contained in this object or containing it and known how (the children path between this object and the NUMA node objects)\&.
 .PP
-In the end, these nodes are those that are close to the current object\&.
+In the end, these nodes are those that are close to the current object\&. Function \fBhwloc_get_local_numanode_objs()\fP may be used to list those NUMA nodes more precisely\&.
 .PP
 If the \fBHWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED\fP configuration flag is set, some of these nodes may not be allowed for allocation, see \fBhwloc_topology_get_allowed_nodeset()\fP\&.
 .PP
 If there are no NUMA nodes in the machine, all the memory is close to this object, so only the first bit may be set in \fCnodeset\fP\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 All objects have non-NULL CPU and node sets except Misc and I/O objects\&.
 .PP

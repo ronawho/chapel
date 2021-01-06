@@ -1,8 +1,8 @@
-.TH "hwlocality_xmlexport" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_xmlexport" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_xmlexport
+hwlocality_xmlexport \- Exporting Topologies to XML
 .SH SYNOPSIS
 .br
 .PP
@@ -88,12 +88,12 @@ By default, the latest export format is used, which means older hwloc releases (
 .PP
 \fCflags\fP is a OR'ed set of \fBhwloc_topology_export_xml_flags_e\fP\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 -1 if a failure occured\&.
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 See also \fBhwloc_topology_set_userdata_export_callback()\fP for exporting application-specific object userdata\&.
 .PP
@@ -118,12 +118,12 @@ The returned buffer ends with a \\0 that is included in the returned length\&.
 .PP
 \fCflags\fP is a OR'ed set of \fBhwloc_topology_export_xml_flags_e\fP\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 -1 if a failure occured\&.
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 See also \fBhwloc_topology_set_userdata_export_callback()\fP for exporting application-specific object userdata\&.
 .PP
@@ -144,7 +144,7 @@ This function lets applications set \fCexport_cb\fP to a callback function that 
 .PP
 \fCexport_cb\fP may be set to \fCNULL\fP if userdata should not be exported to XML\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 The topology-specific userdata pointer is ignored when exporting to XML\&. 
 .RE
@@ -161,7 +161,7 @@ This function lets applications set \fCimport_cb\fP to a callback function that 
 .PP
 \fCimport_cb\fP may be \fCNULL\fP if userdata should be ignored during import\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 \fCbuffer\fP contains \fClength\fP characters followed by a null byte ('\\0')\&.
 .PP

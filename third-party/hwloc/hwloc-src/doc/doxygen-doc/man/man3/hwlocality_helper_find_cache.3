@@ -1,8 +1,8 @@
-.TH "hwlocality_helper_find_cache" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_helper_find_cache" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_helper_find_cache
+hwlocality_helper_find_cache \- Looking at Cache Objects
 .SH SYNOPSIS
 .br
 .PP
@@ -29,7 +29,7 @@ hwlocality_helper_find_cache
 .PP
 Get the first data (or unified) cache covering a cpuset \fCset\fP\&. 
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 \fCNULL\fP if no cache matches\&. 
 .RE
@@ -54,7 +54,7 @@ If \fCcachetype\fP is \fC-1\fP, it is ignored and multiple levels may match\&. T
 .PP
 Get the first data (or unified) cache shared between an object and somebody else\&. 
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 \fCNULL\fP if no cache matches or if an invalid object is given\&. 
 .RE

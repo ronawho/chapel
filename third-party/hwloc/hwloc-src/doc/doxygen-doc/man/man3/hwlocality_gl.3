@@ -1,8 +1,8 @@
-.TH "hwlocality_gl" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_gl" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_gl
+hwlocality_gl \- Interoperability with OpenGL displays
 .SH SYNOPSIS
 .br
 .PP
@@ -39,7 +39,7 @@ Get the hwloc OS device object corresponding to the OpenGL display given by name
 .PP
 The topology \fCtopology\fP does not necessarily have to match the current machine\&. For instance the topology may be an XML import of a remote host\&. I/O devices detection and the GL component must be enabled in the topology\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 The corresponding PCI device object can be obtained by looking at the OS device parent object (unless PCI devices are filtered out)\&. 
 .RE
@@ -52,7 +52,7 @@ Get the hwloc OS device object corresponding to the OpenGL display given by port
 .PP
 The topology \fCtopology\fP does not necessarily have to match the current machine\&. For instance the topology may be an XML import of a remote host\&. I/O devices detection and the GL component must be enabled in the topology\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 The corresponding PCI device object can be obtained by looking at the OS device parent object (unless PCI devices are filtered out)\&. 
 .RE

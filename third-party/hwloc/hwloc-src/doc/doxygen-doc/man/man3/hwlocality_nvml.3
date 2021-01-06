@@ -1,8 +1,8 @@
-.TH "hwlocality_nvml" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_nvml" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_nvml
+hwlocality_nvml \- Interoperability with the NVIDIA Management Library
 .SH SYNOPSIS
 .br
 .PP
@@ -27,7 +27,7 @@ This interface offers ways to retrieve topology information about devices manage
 .SS "static int hwloc_nvml_get_device_cpuset (\fBhwloc_topology_t\fP topology, nvmlDevice_t device, \fBhwloc_cpuset_t\fP set)\fC [inline]\fP, \fC [static]\fP"
 
 .PP
-Get the CPU set of logical processors that are physically close to NVML device \fCdevice\fP\&. Return the CPU set describing the locality of the NVML device \fCdevice\fP\&.
+Get the CPU set of processors that are physically close to NVML device \fCdevice\fP\&. Return the CPU set describing the locality of the NVML device \fCdevice\fP\&.
 .PP
 Topology \fCtopology\fP and device \fCdevice\fP must match the local machine\&. I/O devices detection and the NVML component are not needed in the topology\&.
 .PP
@@ -41,7 +41,7 @@ Get the hwloc OS device object corresponding to NVML device \fCdevice\fP\&. Retu
 .PP
 Topology \fCtopology\fP and device \fCdevice\fP must match the local machine\&. I/O devices detection and the NVML component must be enabled in the topology\&. If not, the locality of the object may still be found using \fBhwloc_nvml_get_device_cpuset()\fP\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 The corresponding hwloc PCI device may be found by looking at the result parent pointer (unless PCI devices are filtered out)\&. 
 .RE
@@ -54,7 +54,7 @@ Get the hwloc OS device object corresponding to the NVML device whose index is \
 .PP
 The topology \fCtopology\fP does not necessarily have to match the current machine\&. For instance the topology may be an XML import of a remote host\&. I/O devices detection and the NVML component must be enabled in the topology\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 The corresponding PCI device object can be obtained by looking at the OS device parent object (unless PCI devices are filtered out)\&. 
 .RE

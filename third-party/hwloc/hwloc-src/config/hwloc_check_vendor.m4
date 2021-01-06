@@ -11,7 +11,8 @@ dnl                         University of Stuttgart.  All rights reserved.
 dnl Copyright © 2004-2005 The Regents of the University of California.
 dnl                         All rights reserved.
 dnl Copyright © 2011      Cisco Systems, Inc.  All rights reserved.
-dnl Copyright © 2015 Inria.  All rights reserved.
+dnl Copyright © 2015-2020 Inria.  All rights reserved.
+dnl Copyright © 2020      IBM Corporation.  All rights reserved.
 dnl $COPYRIGHT$
 dnl
 dnl Additional copyrights may follow
@@ -99,6 +100,11 @@ AC_DEFUN([_HWLOC_CHECK_COMPILER_VENDOR], [
     AS_IF([test "$hwloc_check_compiler_vendor_result" = "unknown"],
           [HWLOC_IF_IFELSE([defined(__INTEL_COMPILER) || defined(__ICC)],
                [hwloc_check_compiler_vendor_result="intel"])])
+
+    # Portland Group
+    AS_IF([test "$hwloc_check_compiler_vendor_result" = "unknown"],
+          [HWLOC_IFDEF_IFELSE([__PGI],
+               [hwloc_check_compiler_vendor_result="portland group"])])
 
     # GNU
     AS_IF([test "$hwloc_check_compiler_vendor_result" = "unknown"],
@@ -206,11 +212,6 @@ AC_DEFUN([_HWLOC_CHECK_COMPILER_VENDOR], [
           [HWLOC_IFDEF_IFELSE([__POCC__],
                [hwloc_check_compiler_vendor_result="pelles"])])
 
-    # Portland Group
-    AS_IF([test "$hwloc_check_compiler_vendor_result" = "unknown"],
-          [HWLOC_IFDEF_IFELSE([__PGI],
-               [hwloc_check_compiler_vendor_result="portland group"])])
-
     # SAS/C
     AS_IF([test "$hwloc_check_compiler_vendor_result" = "unknown"],
           [HWLOC_IF_IFELSE([defined(SASC) || defined(__SASC) || defined(__SASC__)],
@@ -243,4 +244,19 @@ AC_DEFUN([_HWLOC_CHECK_COMPILER_VENDOR], [
 
     $1="$hwloc_check_compiler_vendor_result"
     unset hwloc_check_compiler_vendor_result
+])
+
+# _HWLOC_CHECK_GCC_OPTION([option], [variable to append the option to], [action if supported])
+# ----------------------------------------------
+# Run gcc to determine if option is supported.
+AC_DEFUN([_HWLOC_CHECK_GCC_OPTION], [
+    tmp_save_CFLAGS="$CFLAGS"
+    CFLAGS="$1"
+    AC_MSG_CHECKING([if gcc supports $1])
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[int i;]])],
+		      [AC_MSG_RESULT(yes)
+		       $2="$$2 $1"
+		       $3],
+		      [AC_MSG_RESULT(no)])
+    CFLAGS="$tmp_save_CFLAGS"
 ])

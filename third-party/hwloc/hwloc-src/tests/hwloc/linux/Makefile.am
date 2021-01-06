@@ -1,4 +1,4 @@
-# Copyright © 2009-2019 Inria.  All rights reserved.
+# Copyright © 2009-2020 Inria.  All rights reserved.
 # Copyright © 2009-2011 Université Bordeaux
 # Copyright © 2009-2010 Cisco Systems, Inc.  All rights reserved.
 # See COPYING in top-level directory.
@@ -18,9 +18,8 @@ sysfs_outputs = \
 		4ia64-4s.output \
 		4fake-4gr1nu1pu.output \
 		256ppc-8n8s4t.output \
-		256ppc-8n8s4t-nocache.output \
-		32amd64-4s2n4c-cgroup.output \
-		32amd64-4s2n4c-cgroup.xml.output \
+		32amd64-4s2n4c-cgroup2.output \
+		32amd64-4s2n4c-cgroup2.xml.output \
 		8amd64-4n2c.output  \
 		8em64t-4c2t.output \
 		8em64t-2s2ca2c.output \
@@ -61,9 +60,17 @@ sysfs_outputs = \
 		2arm-2c.output \
 		nvidiagpunumanodes.output \
 		nvidiagpunumanodes.kept.output \
-		fakememinitiators-1npc+1npc.output \
+		fakememinitiators-1np2c+1npp+gi.output \
 		fakecpuid1f-64intel64-2p4d2n2c2t.output \
-		fakeheteronuma.output
+		fakeheterocpunuma.output
+
+if HWLOC_HAVE_32BITS_PCI_DOMAIN
+sysfs_outputs += 2pa-pcidomain32bits.output
+EXTRA_DIST = 2pa-pcidomain32bits-disabled.output
+else
+sysfs_outputs += 2pa-pcidomain32bits-disabled.output
+EXTRA_DIST = 2pa-pcidomain32bits.output
+endif
 
 # Each output `xyz.output' must have a corresponding tarball `xyz.tar.bz2'
 # or a corresponding `xyz.source' specifying which tarball to use
@@ -78,9 +85,8 @@ sysfs_tarballs = \
 		4ia64-4s.tar.bz2 \
 		4fake-4gr1nu1pu.tar.bz2 \
 		256ppc-8n8s4t.tar.bz2 \
-		256ppc-8n8s4t-nocache.source \
-		32amd64-4s2n4c-cgroup.tar.bz2 \
-		32amd64-4s2n4c-cgroup.xml.source \
+		32amd64-4s2n4c-cgroup2.tar.bz2 \
+		32amd64-4s2n4c-cgroup2.xml.source \
 		8amd64-4n2c.tar.bz2  \
 		8em64t-4c2t.tar.bz2 \
 		8em64t-2s2ca2c.tar.bz2 \
@@ -119,15 +125,16 @@ sysfs_tarballs = \
 		20s390-2g6s4c.tar.bz2 \
 		1alpha.tar.bz2 \
 		2arm-2c.tar.bz2 \
+		2pa-pcidomain32bits.tar.bz2 \
+		2pa-pcidomain32bits-disabled.source \
 		nvidiagpunumanodes.tar.bz2 \
 		nvidiagpunumanodes.kept.source \
-		fakememinitiators-1npc+1npc.tar.bz2 \
+		fakememinitiators-1np2c+1npp+gi.tar.bz2 \
 		fakecpuid1f-64intel64-2p4d2n2c2t.tar.bz2 \
-		fakeheteronuma.tar.bz2
+		fakeheterocpunuma.tar.bz2
 
 # Each output `xyz.output' may have a corresponding exclude `xyz.exclude'
-sysfs_excludes = \
-		256ppc-8n8s4t-nocache.exclude
+sysfs_excludes = 
 
 # Each output `xyz.output' may have a corresponding `xyz.options'
 # file modifying the behavior of lstopo
@@ -143,20 +150,19 @@ sysfs_options = \
 		16em64t-4s2c2t_ncaches.options \
 		16em64t-4s2c2t_merge.options \
 		16em64t-4s2c2t.xml.options \
-		32amd64-4s2n4c-cgroup.xml.options \
+		32amd64-4s2n4c-cgroup2.xml.options \
 		32em64t-2n8c+1mic.options \
 		40intel64-2g2n4c+pci.options \
-		fakeheteronuma.options
+		fakeheterocpunuma.options
 
 # Each output `xyz.output' may have a corresponding `xyz.env'
 # modifying the environment of lstopo
 sysfs_envs = \
-		256ppc-8n8s4t-nocache.env \
 		40intel64-2g2n4c+pci.env \
 		40intel64-4n10c+pci-conflicts.env \
 		64intel64-fakeKNL-SNC4-hybrid-msc.env \
 		nvidiagpunumanodes.kept.env \
-		fakeheteronuma.env
+		fakeheterocpunuma.env
 
 if HWLOC_HAVE_OPENAT
 if HWLOC_HAVE_BUNZIPP
@@ -164,7 +170,7 @@ TESTS = $(sysfs_outputs)
 endif HWLOC_HAVE_BUNZIPP
 endif HWLOC_HAVE_OPENAT
 
-EXTRA_DIST = $(sysfs_outputs) $(sysfs_tarballs) $(sysfs_excludes) $(sysfs_options) $(sysfs_envs)
+EXTRA_DIST += $(sysfs_outputs) $(sysfs_tarballs) $(sysfs_excludes) $(sysfs_options) $(sysfs_envs)
 
 LOG_COMPILER = $(builddir)/test-topology.sh
 

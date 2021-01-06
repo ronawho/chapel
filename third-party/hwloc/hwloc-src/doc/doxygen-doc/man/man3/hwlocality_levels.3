@@ -1,8 +1,8 @@
-.TH "hwlocality_levels" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_levels" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_levels
+hwlocality_levels \- Object levels, depths and types
 .SH SYNOPSIS
 .br
 .PP
@@ -95,9 +95,9 @@ Virtual depth for MemCache object\&.
 .SS "\fBhwloc_obj_type_t\fP hwloc_get_depth_type (\fBhwloc_topology_t\fP topology, int depth)"
 
 .PP
-Returns the type of objects at depth \fCdepth\fP\&. \fCdepth\fP should between 0 and \fBhwloc_topology_get_depth()\fP-1\&.
+Returns the type of objects at depth \fCdepth\fP\&. \fCdepth\fP should between 0 and \fBhwloc_topology_get_depth()\fP-1, or a virtual depth such as \fBHWLOC_TYPE_DEPTH_NUMANODE\fP\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 (hwloc_obj_type_t)-1 if depth \fCdepth\fP does not exist\&. 
 .RE
@@ -110,7 +110,7 @@ Return the depth of parents where memory objects are attached\&. Memory objects 
 .PP
 If all Memory objects are attached to Normal parents at the same depth, this parent depth may be compared to other as usual, for instance for knowing whether NUMA nodes is attached above or below Packages\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 The depth of Normal parents of all memory children if all these parents have the same depth\&. For instance the depth of the Package level if all NUMA nodes are attached to Package objects\&.
 .PP
@@ -157,7 +157,7 @@ If \fBHWLOC_OBJ_GROUP\fP is given, the function may return \fBHWLOC_TYPE_DEPTH_M
 .PP
 If a NUMA node, I/O or Misc object type is given, the function returns a virtual value because these objects are stored in special levels that are not CPU-related\&. This virtual depth may be passed to other hwloc functions such as \fBhwloc_get_obj_by_depth()\fP but it should not be considered as an actual depth by the application\&. In particular, it should not be compared with any other object depth or with the entire topology depth\&. 
 .PP
-\fBSee also:\fP
+\fBSee also\fP
 .RS 4
 \fBhwloc_get_memory_parents_depth()\fP\&.
 .PP
@@ -186,7 +186,7 @@ May return \fBHWLOC_TYPE_DEPTH_MULTIPLE\fP for \fBHWLOC_OBJ_GROUP\fP just like \
 .PP
 Get the depth of the hierarchical tree of objects\&. This is the depth of \fBHWLOC_OBJ_PU\fP objects plus one\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 NUMA nodes, I/O and Misc objects are ignored when computing the depth of the tree (they are placed on special levels)\&. 
 .RE

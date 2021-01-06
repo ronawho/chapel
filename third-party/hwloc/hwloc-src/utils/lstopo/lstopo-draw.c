@@ -1,6 +1,6 @@
 /*
  * Copyright © 2009 CNRS
- * Copyright © 2009-2019 Inria.  All rights reserved.
+ * Copyright © 2009-2020 Inria.  All rights reserved.
  * Copyright © 2009-2013, 2015 Université Bordeaux
  * Copyright © 2009-2011 Cisco Systems, Inc.  All rights reserved.
  * See COPYING in top-level directory.
@@ -29,6 +29,9 @@
 #define DARKER_EPOXY_G_COLOR ((DARK_EPOXY_G_COLOR * 100) / 110)
 #define DARKER_EPOXY_B_COLOR ((DARK_EPOXY_B_COLOR * 100) / 110)
 
+#ifdef HWLOC_HAVE_GCC_W_MISSING_FIELD_INITIALIZERS
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
+#endif
 /* each of these colors must be declared in declare_colors() */
 struct lstopo_color BLACK_COLOR = { 0, 0, 0, 0 };
 struct lstopo_color WHITE_COLOR = { 0xff, 0xff, 0xff, 0 };
@@ -47,6 +50,9 @@ struct lstopo_color MISC_COLOR = { 0xff, 0xff, 0xff, 0 };
 struct lstopo_color PCI_DEVICE_COLOR = { DARKER_EPOXY_R_COLOR, DARKER_EPOXY_G_COLOR, DARKER_EPOXY_B_COLOR, 0 };
 struct lstopo_color OS_DEVICE_COLOR = { 0xde, 0xde, 0xde, 0 };
 struct lstopo_color BRIDGE_COLOR = { 0xff, 0xff, 0xff, 0 };
+#ifdef HWLOC_HAVE_GCC_W_MISSING_FIELD_INITIALIZERS
+#pragma GCC diagnostic warning "-Wmissing-field-initializers"
+#endif
 
 static struct lstopo_color *colors = NULL;
 
@@ -95,17 +101,21 @@ declare_colors(struct lstopo_output *output)
 }
 
 void
-destroy_colors(void)
+destroy_colors(struct lstopo_output *loutput)
 {
   struct lstopo_color *tmp = colors;
 
   while (tmp) {
     struct lstopo_color *next = tmp->next;
 
+    if (loutput->methods->destroy_color)
+      loutput->methods->destroy_color(loutput, tmp);
     if (tmp->free)
       free(tmp);
     tmp = next;
   }
+
+  colors = NULL; /* so that it works after refresh */
 }
 
 static struct lstopo_color *
@@ -540,6 +550,12 @@ place_children(struct lstopo_output *loutput, hwloc_obj_t parent,
     orient = LSTOPO_ORIENT_HORIZ;
   }
 
+  /* if there are memory children and using plain children layout, use horizontal by default */
+  if (orient == LSTOPO_ORIENT_NONE
+      && parent->memory_arity
+      && loutput->plain_children_order)
+    orient = LSTOPO_ORIENT_HORIZ;
+
   /* recurse into children to prepare their sizes,
    * and check whether all normal children are PUs. */
   normal_children_are_PUs = (parent->arity > 0);
@@ -708,9 +724,19 @@ lstopo_obj_snprintf(struct lstopo_output *loutput, char *text, size_t textlen, h
   char totmemstr[64] = "";
   int attrlen;
 
-  /* For OSDev, Misc and Group, name replaces type+index+attrs */
-  if (obj->name && (obj->type == HWLOC_OBJ_OS_DEVICE || obj->type == HWLOC_OBJ_MISC || obj->type == HWLOC_OBJ_GROUP)) {
+  /* For Misc and Group, name replaces type+index+attrs */
+  if (obj->name && (obj->type == HWLOC_OBJ_MISC || obj->type == HWLOC_OBJ_GROUP)) {
     return snprintf(text, textlen, "%s", obj->name);
+  }
+  /* For OSDev, OSDev-type+name replaces type+index+attrs */
+  if (obj->type == HWLOC_OBJ_OS_DEVICE) {
+    /* consider the name as an index and remove it if LSTOPO_INDEX_TYPE_NONE */
+    if (index_type != LSTOPO_INDEX_TYPE_NONE) {
+      hwloc_obj_type_snprintf(typestr, sizeof(typestr), obj, 0);
+      return snprintf(text, textlen, "%s %s", typestr, obj->name);
+    } else {
+      return hwloc_obj_type_snprintf(text, textlen, obj, 0);
+    }
   }
 
   /* subtype replaces the basic type name */
@@ -1007,22 +1033,6 @@ prepare_text(struct lstopo_output *loutput, hwloc_obj_t obj)
 		     "%s MP x (%s cores + %s kB)", value, value2, value3);
 	  }
 
-	} else if (!strcmp(obj->subtype, "MIC")) {
-	  /* MIC */
-	  const char *value;
-	  value = hwloc_obj_get_info_by_name(obj, "MICActiveCores");
-	  if (value) {
-	    snprintf(lud->text[lud->ntext++].text, sizeof(lud->text[0].text),
-		     "%s cores", value);
-	  }
-	  value = hwloc_obj_get_info_by_name(obj, "MICMemorySize");
-	  if (value) {
-	    unsigned long long mb = strtoull(value, NULL, 10) / 1024;
-	    snprintf(lud->text[lud->ntext++].text, sizeof(lud->text[0].text),
-		     mb >= 10240 ? "%llu GB" : "%llu MB",
-		     mb >= 10240 ? mb/1024 : mb);
-	  }
-
 	} else if (!strcmp(obj->subtype, "OpenCL")) {
 	  /* OpenCL */
 	  const char *value;
@@ -1225,7 +1235,7 @@ factorized_draw(struct lstopo_output *loutput, hwloc_obj_t level, unsigned depth
     lud->width = gridsize*5; /* space, box, space, box, space */
     lud->height = gridsize*2 + linespacing + fontsize + gridsize; /* space, box, linespace, text, gridsize */
     sprintf(lud->text[0].text, "%ux total", level->parent->arity);
-    n = strlen(lud->text[0].text);
+    n = (unsigned)strlen(lud->text[0].text);
     textwidth = get_textwidth(loutput, lud->text[0].text, n, fontsize);
     lud->text[0].width = textwidth;
     if (textwidth > lud->width) {
@@ -1391,78 +1401,121 @@ output_draw(struct lstopo_output *loutput)
 {
   hwloc_topology_t topology = loutput->topology;
   struct draw_methods *methods = loutput->methods;
-  int legend = loutput->legend;
   unsigned gridsize = loutput->gridsize;
   unsigned fontsize = loutput->fontsize;
   unsigned linespacing = loutput->linespacing;
   hwloc_obj_t root = hwloc_get_root_obj(topology);
   struct lstopo_obj_userdata *rlud = root->userdata;
   unsigned depth = 100;
-  unsigned totwidth, totheight, offset, i;
-  time_t t;
-  char text[3][128];
-  unsigned ntext = 0;
-  char hostname[122] = "";
-  const char *forcedhostname = NULL;
-  unsigned long hostname_size = sizeof(hostname);
-  unsigned maxtextwidth = 0, textwidth;
-
-  if (legend) {
-    forcedhostname = hwloc_obj_get_info_by_name(hwloc_get_root_obj(topology), "HostName");
-    if (!forcedhostname && hwloc_topology_is_thissystem(topology)) {
-#if defined(HWLOC_WIN_SYS) && !defined(__CYGWIN__)
-      GetComputerName(hostname, &hostname_size);
-#else
-      gethostname(hostname, hostname_size);
-#endif
-    }
-    if (forcedhostname || *hostname) {
-      if (forcedhostname)
-	snprintf(text[ntext], sizeof(text[ntext]), "Host: %s", forcedhostname);
-      else
-	snprintf(text[ntext], sizeof(text[ntext]), "Host: %s", hostname);
-      textwidth = get_textwidth(loutput, text[ntext], (unsigned) strlen(text[ntext]), fontsize);
-      if (textwidth > maxtextwidth)
-	maxtextwidth = textwidth;
-      ntext++;
-    }
-
-    /* Display whether we're showing physical or logical IDs */
-    if (loutput->index_type != LSTOPO_INDEX_TYPE_DEFAULT) {
-      snprintf(text[ntext], sizeof(text[ntext]), "Indexes: %s", (loutput->index_type == LSTOPO_INDEX_TYPE_LOGICAL ? "logical" : "physical"));
-      textwidth = get_textwidth(loutput, text[ntext], (unsigned) strlen(text[ntext]), fontsize);
-      if (textwidth > maxtextwidth)
-	maxtextwidth = textwidth;
-      ntext++;
-    }
-
-    /* Display timestamp */
-    t = time(NULL);
-#ifdef HAVE_STRFTIME
-    {
-      struct tm *tmp;
-      tmp = localtime(&t);
-      strftime(text[ntext], sizeof(text[ntext]), "Date: %c", tmp);
-    }
-#else /* HAVE_STRFTIME */
-    {
-      char *date;
-      int n;
-      date = ctime(&t);
-      n = strlen(date);
-      if (n && date[n-1] == '\n') {
-        date[n-1] = 0;
-      }
-      snprintf(text[ntext], sizeof(text[ntext]), "Date: %s", date);
-    }
-#endif /* HAVE_STRFTIME */
-    textwidth = get_textwidth(loutput, text[ntext], (unsigned) strlen(text[ntext]), fontsize);
-    if (textwidth > maxtextwidth)
-      maxtextwidth = textwidth;
-    ntext++;
-  }
+  unsigned totwidth, totheight, offset, i, j;
 
   if (loutput->drawing == LSTOPO_DRAWING_PREPARE) {
+    unsigned maxtextwidth = 0, textwidth;
+    unsigned ndl = 0;
+    char hostname[122] = "";
+    unsigned long hostname_size = sizeof(hostname);
+    unsigned infocount = 0;
+
+    /* prepare legend lines and compute the width */
+    if (loutput->show_legend == LSTOPO_SHOW_LEGEND_ALL) {
+      time_t t;
+      const char *forcedhostname = NULL;
+
+      /* build the default legend lines */
+      forcedhostname = hwloc_obj_get_info_by_name(hwloc_get_root_obj(topology), "HostName");
+      if (!forcedhostname && hwloc_topology_is_thissystem(topology)) {
+#if defined(HWLOC_WIN_SYS) && !defined(__CYGWIN__)
+        GetComputerName(hostname, &hostname_size);
+#else
+        gethostname(hostname, hostname_size);
+#endif
+      }
+      if (forcedhostname || *hostname) {
+        snprintf(loutput->legend_default_lines[ndl],
+                 sizeof(loutput->legend_default_lines[ndl]),
+                 "Host: %s",
+                 forcedhostname ? forcedhostname : hostname);
+        textwidth = get_textwidth(loutput,
+                                  loutput->legend_default_lines[ndl],
+                                  (unsigned) strlen(loutput->legend_default_lines[ndl]),
+                                  fontsize);
+        if (textwidth > maxtextwidth)
+          maxtextwidth = textwidth;
+        ndl++;
+      }
+
+      /* Display whether we're showing physical or logical IDs */
+      if (loutput->index_type != LSTOPO_INDEX_TYPE_DEFAULT) {
+        snprintf(loutput->legend_default_lines[ndl],
+                 sizeof(loutput->legend_default_lines[ndl]),
+                 "Indexes: %s",
+                 (loutput->index_type == LSTOPO_INDEX_TYPE_LOGICAL ? "logical" : "physical"));
+        textwidth = get_textwidth(loutput,
+                                  loutput->legend_default_lines[ndl],
+                                  (unsigned) strlen(loutput->legend_default_lines[ndl]),
+                                  fontsize);
+        if (textwidth > maxtextwidth)
+          maxtextwidth = textwidth;
+        ndl++;
+      }
+
+      /* Display timestamp */
+      t = time(NULL);
+#ifdef HAVE_STRFTIME
+      {
+        struct tm *tmp;
+        tmp = localtime(&t);
+        strftime(loutput->legend_default_lines[ndl],
+                 sizeof(loutput->legend_default_lines[ndl]),
+                 "Date: %c",
+                 tmp);
+      }
+#else /* HAVE_STRFTIME */
+      {
+        char *date;
+        unsigned n;
+        date = ctime(&t);
+        n = (unsigned) strlen(date);
+        if (n && date[n-1] == '\n') {
+          date[n-1] = 0;
+        }
+        snprintf(loutput->legend_default_lines[ndl],
+                 sizeof(loutput->legend_default_lines[ndl]),
+                 "Date: %s",
+                 date);
+      }
+#endif /* HAVE_STRFTIME */
+      textwidth = get_textwidth(loutput,
+                                loutput->legend_default_lines[ndl],
+                                (unsigned) strlen(loutput->legend_default_lines[ndl]),
+                                fontsize);
+      if (textwidth > maxtextwidth)
+        maxtextwidth = textwidth;
+      ndl++;
+    }
+
+    if (loutput->show_legend != LSTOPO_SHOW_LEGEND_NONE) {
+      /* look at custom legend lines in root info attr and --append-legend */
+      for(i=0; i<root->infos_count; i++) {
+        if (!strcmp(root->infos[i].name, "lstopoLegend")) {
+          infocount++;
+          textwidth = get_textwidth(loutput, root->infos[i].value, (unsigned) strlen(root->infos[i].value), fontsize);
+          if (textwidth > maxtextwidth)
+            maxtextwidth = textwidth;
+        }
+      }
+      for(i=0; i<loutput->legend_append_nr; i++) {
+        textwidth = get_textwidth(loutput, loutput->legend_append[i], (unsigned) strlen(loutput->legend_append[i]), fontsize);
+        if (textwidth > maxtextwidth)
+          maxtextwidth = textwidth;
+      }
+    }
+
+    /* save legend info for later */
+    loutput->legend_maxtextwidth = maxtextwidth;
+    loutput->legend_default_lines_nr = ndl;
+    loutput->legend_info_lines_nr = infocount;
+
     /* compute root size, our size, and save it */
 
     output_align_PU_textwidth(loutput);
@@ -1471,14 +1524,17 @@ output_draw(struct lstopo_output *loutput)
 
     /* loutput width is max(root, legend) */
     totwidth = rlud->width;
-    if (maxtextwidth + 2*gridsize > totwidth)
-      totwidth = maxtextwidth + 2*gridsize;
+    if (loutput->legend_maxtextwidth + 2*gridsize > totwidth)
+      totwidth = loutput->legend_maxtextwidth + 2*gridsize;
     loutput->width = totwidth;
 
     /* loutput height is sum(root, legend) */
     totheight = rlud->height;
-    if (legend)
-      totheight += gridsize + (ntext+loutput->legend_append_nr - 1) * (linespacing+fontsize) + fontsize + gridsize;
+    if (loutput->show_legend != LSTOPO_SHOW_LEGEND_NONE
+        && (ndl + infocount + loutput->legend_append_nr))
+      totheight += gridsize
+        + (ndl + infocount + loutput->legend_append_nr - 1) * (linespacing + fontsize)
+        + fontsize + gridsize;
     loutput->height = totheight;
 
   } else { /* LSTOPO_DRAWING_DRAW */
@@ -1490,13 +1546,28 @@ output_draw(struct lstopo_output *loutput)
     get_type_fun(root->type)(loutput, root, depth, 0, 0);
 
     /* Draw legend */
-    if (legend) {
+    if (loutput->show_legend != LSTOPO_SHOW_LEGEND_NONE
+        && (loutput->legend_default_lines_nr + loutput->legend_info_lines_nr + loutput->legend_append_nr)) {
       offset = rlud->height + gridsize;
-      methods->box(loutput, &WHITE_COLOR, depth, 0, loutput->width, totheight, gridsize + (ntext+loutput->legend_append_nr-1) * (linespacing + fontsize) + fontsize + gridsize, NULL, 0);
-      for(i=0; i<ntext; i++, offset += linespacing + fontsize)
-	methods->text(loutput, &BLACK_COLOR, fontsize, depth, gridsize, offset, text[i], NULL, i);
+      methods->box(loutput, &WHITE_COLOR, depth,
+                   0,
+                   loutput->width,
+                   totheight,
+                   gridsize
+                   + (loutput->legend_default_lines_nr + loutput->legend_info_lines_nr + loutput->legend_append_nr - 1) * (linespacing + fontsize)
+                   + fontsize + gridsize,
+                   NULL, 0);
+      for(i=0; i<loutput->legend_default_lines_nr; i++, offset += linespacing + fontsize)
+	methods->text(loutput, &BLACK_COLOR, fontsize, depth, gridsize, offset, loutput->legend_default_lines[i], NULL, i);
+      for(i=0, j=0; i<root->infos_count; i++) {
+        if (!strcmp(root->infos[i].name, "lstopoLegend")) {
+          methods->text(loutput, &BLACK_COLOR, fontsize, depth, gridsize, offset, root->infos[i].value, NULL, j+loutput->legend_default_lines_nr);
+          j++;
+          offset += linespacing + fontsize;
+        }
+      }
       for(i=0; i<loutput->legend_append_nr; i++, offset += linespacing + fontsize)
-	methods->text(loutput, &BLACK_COLOR, fontsize, depth, gridsize, offset, loutput->legend_append[i], NULL, i+ntext);
+	methods->text(loutput, &BLACK_COLOR, fontsize, depth, gridsize, offset, loutput->legend_append[i], NULL, i+loutput->legend_default_lines_nr+loutput->legend_info_lines_nr);
     }
   }
 }

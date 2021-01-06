@@ -1,8 +1,8 @@
-.TH "hwlocality_diff" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_diff" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_diff
+hwlocality_diff \- Topology differences
 .SH SYNOPSIS
 .br
 .PP
@@ -78,15 +78,15 @@ This interface targets very similar nodes\&. Only very simple differences betwee
 It means that there is no need to apply the difference when looking at the tree organization (how many levels, how many objects per level, what kind of objects, CPU and node sets, etc) and when binding to objects\&. However the difference must be applied when looking at object attributes such as the name, the memory size or info attributes\&. 
 .SH "Typedef Documentation"
 .PP 
-.SS "typedef enum \fBhwloc_topology_diff_obj_attr_type_e\fP  \fBhwloc_topology_diff_obj_attr_type_t\fP"
+.SS "typedef enum \fBhwloc_topology_diff_obj_attr_type_e\fP \fBhwloc_topology_diff_obj_attr_type_t\fP"
 
 .PP
 Type of one object attribute difference\&. 
-.SS "typedef union \fBhwloc_topology_diff_u\fP *  \fBhwloc_topology_diff_t\fP"
+.SS "typedef union \fBhwloc_topology_diff_u\fP * \fBhwloc_topology_diff_t\fP"
 
 .PP
 One element of a difference list between two topologies\&. 
-.SS "typedef enum \fBhwloc_topology_diff_type_e\fP  \fBhwloc_topology_diff_type_t\fP"
+.SS "typedef enum \fBhwloc_topology_diff_type_e\fP \fBhwloc_topology_diff_type_t\fP"
 
 .PP
 Type of one element of a difference list\&. 
@@ -127,10 +127,10 @@ Type of one element of a difference list\&.
 .in +1c
 .TP
 \fB\fIHWLOC_TOPOLOGY_DIFF_OBJ_ATTR \fP\fP
-An object attribute was changed\&. The union is a hwloc_topology_diff_obj_attr_u::hwloc_topology_diff_obj_attr_s\&. 
+An object attribute was changed\&. The union is a \fBhwloc_topology_diff_u::hwloc_topology_diff_obj_attr_s\fP\&. 
 .TP
 \fB\fIHWLOC_TOPOLOGY_DIFF_TOO_COMPLEX \fP\fP
-The difference is too complex, it cannot be represented\&. The difference below this object has not been checked\&. \fBhwloc_topology_diff_build()\fP will return 1\&. The union is a hwloc_topology_diff_obj_attr_u::hwloc_topology_diff_too_complex_s\&. 
+The difference is too complex, it cannot be represented\&. The difference below this object has not been checked\&. \fBhwloc_topology_diff_build()\fP will return 1\&. The union is a \fBhwloc_topology_diff_u::hwloc_topology_diff_too_complex_s\fP\&. 
 .SH "Function Documentation"
 .PP 
 .SS "int hwloc_topology_diff_apply (\fBhwloc_topology_t\fP topology, \fBhwloc_topology_diff_t\fP diff, unsigned long flags)"
@@ -142,7 +142,7 @@ The new topology is modified in place\&. \fBhwloc_topology_dup()\fP may be used 
 .PP
 If the difference cannot be applied entirely, all previous applied elements are unapplied before returning\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 0 on success\&.
 .PP
@@ -157,7 +157,7 @@ Compute the difference between 2 topologies\&. The difference is stored as a lis
 .PP
 If the difference between 2 objects is too complex to be represented (for instance if some objects have different types, or different numbers of children), a special diff entry of type \fBHWLOC_TOPOLOGY_DIFF_TOO_COMPLEX\fP is queued\&. The computation of the diff does not continue below these objects\&. So each such diff entry means that the difference between two subtrees could not be computed\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 0 if the difference can be represented properly\&.
 .PP
@@ -168,7 +168,7 @@ If the difference between 2 objects is too complex to be represented (for instan
 -1 on any other error\&.
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 \fCflags\fP is currently not used\&. It should be 0\&.
 .PP
@@ -195,7 +195,7 @@ Export a list of topology differences to a XML buffer\&. If not \fCNULL\fP, \fCr
 .PP
 The returned buffer ends with a \\0 that is included in the returned length\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 The XML buffer should later be freed with \fBhwloc_free_xmlbuffer()\fP\&. 
 .RE
@@ -206,7 +206,7 @@ The XML buffer should later be freed with \fBhwloc_free_xmlbuffer()\fP\&.
 .PP
 Load a list of topology differences from a XML file\&. If not \fCNULL\fP, \fCrefname\fP will be filled with the identifier string of the reference topology for the difference file, if any was specified in the XML file\&. This identifier is usually the name of the other XML file that contains the reference topology\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 the pointer returned in refname should later be freed by the caller\&. 
 .RE
@@ -217,7 +217,7 @@ the pointer returned in refname should later be freed by the caller\&.
 .PP
 Load a list of topology differences from a XML buffer\&. If not \fCNULL\fP, \fCrefname\fP will be filled with the identifier string of the reference topology for the difference file, if any was specified in the XML file\&. This identifier is usually the name of the other XML file that contains the reference topology\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 the pointer returned in refname should later be freed by the caller\&. 
 .RE

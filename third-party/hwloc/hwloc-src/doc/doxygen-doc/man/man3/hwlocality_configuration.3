@@ -1,8 +1,8 @@
-.TH "hwlocality_configuration" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_configuration" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_configuration
+hwlocality_configuration \- Topology Detection Configuration and Query
 .SH SYNOPSIS
 .br
 .PP
@@ -19,6 +19,9 @@ hwlocality_configuration
 .RI "struct \fBhwloc_topology_membind_support\fP"
 .br
 .ti -1c
+.RI "struct \fBhwloc_topology_misc_support\fP"
+.br
+.ti -1c
 .RI "struct \fBhwloc_topology_support\fP"
 .br
 .in -1c
@@ -26,7 +29,7 @@ hwlocality_configuration
 
 .in +1c
 .ti -1c
-.RI "enum \fBhwloc_topology_flags_e\fP { \fBHWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED\fP, \fBHWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM\fP, \fBHWLOC_TOPOLOGY_FLAG_THISSYSTEM_ALLOWED_RESOURCES\fP }"
+.RI "enum \fBhwloc_topology_flags_e\fP { \fBHWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED\fP, \fBHWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM\fP, \fBHWLOC_TOPOLOGY_FLAG_THISSYSTEM_ALLOWED_RESOURCES\fP, \fBHWLOC_TOPOLOGY_FLAG_IMPORT_SUPPORT\fP = (1UL<<3) }"
 .br
 .ti -1c
 .RI "enum \fBhwloc_type_filter_e\fP { \fBHWLOC_TYPE_FILTER_KEEP_ALL\fP, \fBHWLOC_TYPE_FILTER_KEEP_NONE\fP, \fBHWLOC_TYPE_FILTER_KEEP_STRUCTURE\fP, \fBHWLOC_TYPE_FILTER_KEEP_IMPORTANT\fP }"
@@ -109,6 +112,15 @@ This is useful when the topology is not loaded directly from the local machine (
 This flag is ignored unless \fBHWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM\fP is also set since the loaded topology must match the underlying machine where restrictions will be gathered from\&.
 .PP
 Setting the environment variable HWLOC_THISSYSTEM_ALLOWED_RESOURCES would result in the same behavior\&. 
+.TP
+\fB\fIHWLOC_TOPOLOGY_FLAG_IMPORT_SUPPORT \fP\fP
+Import support from the imported topology\&. When importing a XML topology from a remote machine, binding is disabled by default (see \fBHWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM\fP)\&. This disabling is also marked by putting zeroes in the corresponding supported feature bits reported by \fBhwloc_topology_get_support()\fP\&.
+.PP
+The flag \fBHWLOC_TOPOLOGY_FLAG_IMPORT_SUPPORT\fP actually imports support bits from the remote machine\&. It also sets the flag \fCimported_support\fP in the struct \fBhwloc_topology_misc_support\fP array\&. If the imported XML did not contain any support information (exporter hwloc is too old), this flag is not set\&.
+.PP
+Note that these supported features are only relevant for the hwloc installation that actually exported the XML topology (it may vary with the operating system, or with how hwloc was compiled)\&.
+.PP
+Note that setting this flag however does not enable binding for the locally imported hwloc topology, it only reports what the remote hwloc and machine support\&. 
 .SS "enum \fBhwloc_type_filter_e\fP"
 
 .PP
@@ -133,7 +145,7 @@ If all objects in the level are the only child of their parent, and if none of t
 Cannot be set for I/O and Misc objects since the topology structure does not matter there\&. 
 .TP
 \fB\fIHWLOC_TYPE_FILTER_KEEP_IMPORTANT \fP\fP
-Only keep likely-important objects of the given type\&. It is only useful for I/O object types\&. For \fBHWLOC_OBJ_PCI_DEVICE\fP and \fBHWLOC_OBJ_OS_DEVICE\fP, it means that only objects of major/common kinds are kept (storage, network, OpenFabrics, Intel MICs, CUDA, OpenCL, NVML, and displays)\&. Also, only OS devices directly attached on PCI (e\&.g\&. no USB) are reported\&. For \fBHWLOC_OBJ_BRIDGE\fP, it means that bridges are kept only if they have children\&.
+Only keep likely-important objects of the given type\&. It is only useful for I/O object types\&. For \fBHWLOC_OBJ_PCI_DEVICE\fP and \fBHWLOC_OBJ_OS_DEVICE\fP, it means that only objects of major/common kinds are kept (storage, network, OpenFabrics, CUDA, OpenCL, RSMI, NVML, and displays)\&. Also, only OS devices directly attached on PCI (e\&.g\&. no USB) are reported\&. For \fBHWLOC_OBJ_BRIDGE\fP, it means that bridges are kept only if they have children\&.
 .PP
 This flag equivalent to \fBHWLOC_TYPE_FILTER_KEEP_ALL\fP for Normal, Memory and Misc types since they are likely important\&. 
 .SH "Function Documentation"
@@ -143,7 +155,7 @@ This flag equivalent to \fBHWLOC_TYPE_FILTER_KEEP_ALL\fP for Normal, Memory and 
 .PP
 Get OR'ed flags of a topology\&. Get the OR'ed set of \fBhwloc_topology_flags_e\fP of a topology\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 the flags previously set with \fBhwloc_topology_set_flags()\fP\&. 
 .RE
@@ -154,7 +166,11 @@ the flags previously set with \fBhwloc_topology_set_flags()\fP\&.
 .PP
 Retrieve the topology support\&. Each flag indicates whether a feature is supported\&. If set to 0, the feature is not supported\&. If set to 1, the feature is supported, but the corresponding call may still fail in some corner cases\&.
 .PP
-These features are also listed by hwloc-info --support 
+These features are also listed by hwloc-info --support
+.PP
+The reported features are what the current topology supports on the current machine\&. If the topology was exported to XML from another machine and later imported here, support still describes what is supported for this imported topology after import\&. By default, binding will be reported as unsupported in this case (see \fBHWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM\fP)\&.
+.PP
+Topology flag \fBHWLOC_TOPOLOGY_FLAG_IMPORT_SUPPORT\fP may be used to report the supported features of the original remote machine instead\&. If it was successfully imported, \fCimported_support\fP will be set in the struct \fBhwloc_topology_misc_support\fP array\&. 
 .SS "int hwloc_topology_get_type_filter (\fBhwloc_topology_t\fP topology, \fBhwloc_obj_type_t\fP type, enum \fBhwloc_type_filter_e\fP * filter)"
 
 .PP
@@ -168,7 +184,7 @@ Retrieve the topology-specific userdata pointer\&. Retrieve the application-give
 .PP
 Does the topology context come from this system? 
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 1 if this topology context was built using the system running this program\&. 
 .PP

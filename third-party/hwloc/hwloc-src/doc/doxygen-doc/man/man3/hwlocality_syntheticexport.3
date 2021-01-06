@@ -1,8 +1,8 @@
-.TH "hwlocality_syntheticexport" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_syntheticexport" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_syntheticexport
+hwlocality_syntheticexport \- Exporting Topologies to Synthetic
 .SH SYNOPSIS
 .br
 .PP
@@ -55,14 +55,14 @@ This exported string may be given back to \fBhwloc_topology_set_synthetic()\fP\&
 .PP
 \fCflags\fP is a OR'ed set of \fBhwloc_topology_export_synthetic_flags_e\fP\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 The number of characters that were written, not including the terminating \\0\&.
 .PP
 -1 if the topology could not be exported, for instance if it is not symmetric\&.
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 I/O and Misc children are ignored, the synthetic string only describes normal children\&.
 .PP

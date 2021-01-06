@@ -1,5 +1,5 @@
 /*
- * Copyright © 2015-2019 Inria.  All rights reserved.
+ * Copyright © 2015-2020 Inria.  All rights reserved.
  * See COPYING in top-level directory.
  */
 
@@ -285,6 +285,12 @@ static int dump_one_proc(hwloc_topology_t topo, hwloc_obj_t pu, const char *path
     }
   }
 
+  /* 0x1a = Hybrid Information Enumeration Leaf on Intel ; Reserved on AMD */
+  if (highest_cpuid >= 0x1a) {
+    regs[0] = 0x1a; regs[2] = 0;
+    dump_one_cpuid(output, regs, 0x5);
+  }
+
   /* 0x1b = (Removed) PCONFIG Information on Intel ; Reserved on AMD */
 
   /* 0x1f = V2 Extended Topology Enumeration on Intel ; Reserved on AMD */
@@ -364,6 +370,12 @@ static int dump_one_proc(hwloc_topology_t topo, hwloc_obj_t pu, const char *path
   /* 0x80000019 = TLB1G + Perf optim identifiers on AMD ; Reserved on Intel */
   if (highest_ext_cpuid >= 0x80000019) {
     regs[0] = 0x80000019;
+    dump_one_cpuid(output, regs, 0x1);
+  }
+
+  /* 0x8000001a = Performance Optimization Identifiers on AMD ; Reserved on Intel */
+  if (highest_ext_cpuid >= 0x8000001a) {
+    regs[0] = 0x8000001a;
     dump_one_cpuid(output, regs, 0x1);
   }
 

@@ -1,32 +1,19 @@
-.TH "hwlocality_components_core_funcs" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_components_core_funcs" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_components_core_funcs
+hwlocality_components_core_funcs \- Components and Plugins: Core functions to be used by components
 .SH SYNOPSIS
 .br
 .PP
-.SS "Typedefs"
-
-.in +1c
-.ti -1c
-.RI "typedef void(* \fBhwloc_report_error_t\fP) (const char *msg, int line)"
-.br
-.in -1c
 .SS "Functions"
 
 .in +1c
 .ti -1c
-.RI "struct \fBhwloc_obj\fP * \fBhwloc_insert_object_by_cpuset\fP (struct hwloc_topology *topology, \fBhwloc_obj_t\fP obj)"
-.br
-.ti -1c
-.RI "void \fBhwloc_report_os_error\fP (const char *msg, int line)"
-.br
-.ti -1c
 .RI "int \fBhwloc_hide_errors\fP (void)"
 .br
 .ti -1c
-.RI "struct \fBhwloc_obj\fP * \fBhwloc__insert_object_by_cpuset\fP (struct hwloc_topology *topology, \fBhwloc_obj_t\fP root, \fBhwloc_obj_t\fP obj, \fBhwloc_report_error_t\fP report_error)"
+.RI "\fBhwloc_obj_t\fP \fBhwloc__insert_object_by_cpuset\fP (struct hwloc_topology *topology, \fBhwloc_obj_t\fP root, \fBhwloc_obj_t\fP obj, const char *reason)"
 .br
 .ti -1c
 .RI "void \fBhwloc_insert_object_by_parent\fP (struct hwloc_topology *topology, \fBhwloc_obj_t\fP parent, \fBhwloc_obj_t\fP obj)"
@@ -47,18 +34,28 @@ hwlocality_components_core_funcs
 .SH "Detailed Description"
 .PP 
 
-.SH "Typedef Documentation"
-.PP 
-.SS "typedef void(* hwloc_report_error_t) (const char *msg, int line)"
-
-.PP
-Type of error callbacks during object insertion\&. 
 .SH "Function Documentation"
 .PP 
-.SS "struct \fBhwloc_obj\fP* hwloc__insert_object_by_cpuset (struct hwloc_topology * topology, \fBhwloc_obj_t\fP root, \fBhwloc_obj_t\fP obj, \fBhwloc_report_error_t\fP report_error)"
+.SS "\fBhwloc_obj_t\fP hwloc__insert_object_by_cpuset (struct hwloc_topology * topology, \fBhwloc_obj_t\fP root, \fBhwloc_obj_t\fP obj, const char * reason)"
 
 .PP
-Add an object to the topology and specify which error callback to use\&. This function is similar to \fBhwloc_insert_object_by_cpuset()\fP but it allows specifying where to start insertion from (if \fCroot\fP is NULL, the topology root object is used), and specifying the error callback\&. 
+Add an object to the topology\&. Insert new object \fCobj\fP in the topology starting under existing object \fCroot\fP (if \fCNULL\fP, the topology root object is used)\&.
+.PP
+It is sorted along the tree of other objects according to the inclusion of cpusets, to eventually be added as a child of the smallest object including this object\&.
+.PP
+If the cpuset is empty, the type of the object (and maybe some attributes) must be enough to find where to insert the object\&. This is especially true for NUMA nodes with memory and no CPUs\&.
+.PP
+The given object should not have children\&.
+.PP
+This shall only be called before levels are built\&.
+.PP
+The caller should check whether the object type is filtered-out before calling this function\&.
+.PP
+The topology cpuset/nodesets will be enlarged to include the object sets\&.
+.PP
+\fCreason\fP is a unique string identifying where and why this insertion call was performed (it will be displayed in case of internal insertion error)\&.
+.PP
+Returns the object on success\&. Returns NULL and frees obj on error\&. Returns another object and frees obj if it was merged with an identical pre-existing object\&. 
 .SS "\fBhwloc_obj_t\fP hwloc_alloc_setup_object (\fBhwloc_topology_t\fP topology, \fBhwloc_obj_type_t\fP type, unsigned os_index)"
 
 .PP
@@ -67,24 +64,6 @@ Allocate and initialize an object of the given type and physical index\&. If \fC
 
 .PP
 Check whether insertion errors are hidden\&. 
-.SS "struct \fBhwloc_obj\fP* hwloc_insert_object_by_cpuset (struct hwloc_topology * topology, \fBhwloc_obj_t\fP obj)"
-
-.PP
-Add an object to the topology\&. It is sorted along the tree of other objects according to the inclusion of cpusets, to eventually be added as a child of the smallest object including this object\&.
-.PP
-If the cpuset is empty, the type of the object (and maybe some attributes) must be enough to find where to insert the object\&. This is especially true for NUMA nodes with memory and no CPUs\&.
-.PP
-The given object should not have children\&.
-.PP
-This shall only be called before levels are built\&.
-.PP
-In case of error, \fBhwloc_report_os_error()\fP is called\&.
-.PP
-The caller should check whether the object type is filtered-out before calling this function\&.
-.PP
-The topology cpuset/nodesets will be enlarged to include the object sets\&.
-.PP
-Returns the object on success\&. Returns NULL and frees obj on error\&. Returns another object and frees obj if it was merged with an identical pre-existing object\&. 
 .SS "void hwloc_insert_object_by_parent (struct hwloc_topology * topology, \fBhwloc_obj_t\fP parent, \fBhwloc_obj_t\fP obj)"
 
 .PP
@@ -111,7 +90,7 @@ Used when PCI backend adds a hostbridge parent, when distances add a new Group, 
 .PP
 Make sure that plugins can lookup core symbols\&. This is a sanity check to avoid lazy-lookup failures when libhwloc is loaded within a plugin, and later tries to load its own plugins\&. This may fail (and abort the program) if libhwloc symbols are in a private namespace\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 0 on success\&. 
 .PP
@@ -120,7 +99,7 @@ Make sure that plugins can lookup core symbols\&. This is a sanity check to avoi
 .PP
 Plugins should call this function in their init() callback to avoid later crashes if lazy symbol resolution is used by the upper layer that loaded hwloc (e\&.g\&. OpenCL implementations using dlopen with RTLD_LAZY)\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 The build system must define HWLOC_INSIDE_PLUGIN if and only if building the caller as a plugin\&.
 .PP
@@ -128,10 +107,6 @@ This function should remain inline so plugins can call it even when they cannot 
 .RE
 .PP
 
-.SS "void hwloc_report_os_error (const char * msg, int line)"
-
-.PP
-Report an insertion error from a backend\&. 
 .SS "int hwloc_topology_reconnect (\fBhwloc_topology_t\fP topology, unsigned long flags)"
 
 .PP

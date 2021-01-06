@@ -31,8 +31,11 @@
     <LinkIncremental>false</LinkIncremental>
     <EmbedManifest>true</EmbedManifest>
     <TargetName>$(ProjectName)-12</TargetName>
-    <IntDir>$(SolutionDir)$(Platform)\$(Configuration)\</IntDir>
+    <IntDir>$(SolutionDir)$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
     <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\</OutDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IntDir>$(Platform)\$(Configuration)\$(ProjectName)\</IntDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -65,11 +68,15 @@
       <AdditionalDependencies>libhwloc.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <EntryPointSymbol>mainCRTStartup</EntryPointSymbol>
     </Link>
+    <Manifest>
+      <AdditionalManifestFiles>app.manifest</AdditionalManifestFiles>
+    </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\utils\lstopo\lstopo.c" />
     <ClCompile Include="..\..\utils\lstopo\lstopo-ascii.c" />
     <ClCompile Include="..\..\utils\lstopo\lstopo-draw.c" />
+    <ClCompile Include="..\..\utils\lstopo\lstopo-tikz.c" />
     <ClCompile Include="..\..\utils\lstopo\lstopo-fig.c" />
     <ClCompile Include="..\..\utils\lstopo\lstopo-svg.c" />
     <ClCompile Include="..\..\utils\lstopo\lstopo-text.c" />

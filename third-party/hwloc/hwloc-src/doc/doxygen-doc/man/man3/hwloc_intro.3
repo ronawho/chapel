@@ -1,9 +1,9 @@
-.TH "hwloc_intro" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwloc_intro" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwloc_introHardware Locality (hwloc) Introduction 
- \- 
+hwloc_intro \- Hardware Locality (hwloc) Introduction 
+
 .SH "Portable abstraction of hierarchical architectures for high-performance computing"
 .PP
 .PP
@@ -56,7 +56,7 @@ Symmetrical tree of resources generated from a list of level arities, see \fBSyn
 Remote machine simulation through the gathering of topology as XML files, see \fBImporting and exporting topologies from/to XML files\fP\&. 
 .PP
 .PP
-hwloc can display the topology in a human-readable format, either in graphical mode (X11), or by exporting in one of several different formats, including: plain text, PDF, PNG, and FIG (see \fBCommand-line Examples\fP below)\&. Note that some of the export formats require additional support libraries\&.
+hwloc can display the topology in a human-readable format, either in graphical mode (X11), or by exporting in one of several different formats, including: plain text, LaTeX tikzpicture, PDF, PNG, and FIG (see \fBCommand-line Examples\fP below)\&. Note that some of the export formats require additional support libraries\&.
 .PP
 hwloc offers a programming interface for manipulating topologies and objects\&. It also brings a powerful CPU bitmap API that is used to describe topology objects location on physical/logical processors\&. See the \fBProgramming Interface\fP below\&. It may also be used to binding applications onto certain cores or memory nodes\&. Several utility programs are also provided to ease command-line manipulation of topology objects, binding of processes, and so on\&.
 .PP
@@ -94,11 +94,13 @@ the NVIDIA Management Library (NVML) for NVML device discovery\&. It is included
 .IP "\(bu" 2
 the NV-CONTROL X extension library (NVCtrl) for NVIDIA display discovery\&. The relevant development package is usually \fClibXNVCtrl-devel\fP or \fClibxnvctrl-dev\fP\&. It is also available within nvidia-settings from ftp://download.nvidia.com/XFree86/nvidia-settings/ and https://github.com/NVIDIA/nvidia-settings/ \&.  
 .IP "\(bu" 2
+the AMD ROCm SMI library for RSMI device discovery\&. The relevant development package is usually \fCrocm-smi-lib64\fP or \fClibrocm-smi-dev\fP\&.  
+.IP "\(bu" 2
 libxml2 for full XML import/export support (otherwise, the internal minimalistic parser will only be able to import XML files that were exported by the same hwloc release)\&. See \fBImporting and exporting topologies from/to XML files\fP for details\&. The relevant development package is usually \fClibxml2-devel\fP or \fClibxml2-dev\fP\&.  
 .IP "\(bu" 2
 libudev on Linux for easier discovery of OS device information (otherwise hwloc will try to manually parse udev raw files)\&. The relevant development package is usually \fClibudev-devel\fP or \fClibudev-dev\fP\&.  
 .IP "\(bu" 2
-libtool's ltdl library for dynamic plugin loading\&. The relevant development package is usually \fClibtool-ltdl-devel\fP or \fClibltdl-dev\fP\&.  
+libtool's ltdl library for dynamic plugin loading if the native dlopen cannot be used\&. The relevant development package is usually \fClibtool-ltdl-devel\fP or \fClibltdl-dev\fP\&.  
 .PP
 .PP
 PCI and XML support may be statically built inside the main hwloc library, or as separate dynamically-loaded plugins (see the \fBComponents and plugins\fP section)\&.
@@ -481,9 +483,9 @@ shell$
  
 .SH "History / Credits"
 .PP
-hwloc is the evolution and merger of the libtopology (http://runtime.bordeaux.inria.fr/libtopology/) project and the Portable Linux Processor Affinity (PLPA) (http://www.open-mpi.org/projects/plpa/) project\&. Because of functional and ideological overlap, these two code bases and ideas were merged and released under the name 'hwloc' as an Open MPI sub-project\&.
+hwloc is the evolution and merger of the libtopology project and the Portable Linux Processor Affinity (PLPA) (https://www.open-mpi.org/projects/plpa/) project\&. Because of functional and ideological overlap, these two code bases and ideas were merged and released under the name 'hwloc' as an Open MPI sub-project\&.
 .PP
-libtopology was initially developed by the inria Runtime Team-Project (http://runtime.bordeaux.inria.fr/) (headed by Raymond Namyst (http://dept-info.labri.fr/~namyst/)\&. PLPA was initially developed by the Open MPI development team as a sub-project\&. Both are now deprecated in favor of hwloc, which is distributed as an Open MPI sub-project\&.
+libtopology was initially developed by the Inria Runtime Team-Project\&. PLPA was initially developed by the Open MPI development team as a sub-project\&. Both are now deprecated in favor of hwloc, which is distributed as an Open MPI sub-project\&.
 .PP
  
 .SH "Further Reading"
@@ -505,6 +507,8 @@ The documentation chapters include
 \fBMiscellaneous objects\fP 
 .IP "\(bu" 2
 \fBObject attributes\fP 
+.IP "\(bu" 2
+\fBTopology Attributes: Distances, Memory Attributes and CPU Kinds\fP 
 .IP "\(bu" 2
 \fBImporting and exporting topologies from/to XML files\fP 
 .IP "\(bu" 2

@@ -1,8 +1,8 @@
-.TH "hwlocality_linux" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_linux" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_linux
+hwlocality_linux \- Linux-specific helpers
 .SH SYNOPSIS
 .br
 .PP
@@ -32,7 +32,7 @@ This includes helpers for manipulating Linux kernel cpumap files, and hwloc equi
 .PP
 Get the current binding of thread \fCtid\fP\&. The behavior is exactly the same as the Linux sched_getaffinity system call, but uses a hwloc cpuset\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 This is equivalent to calling \fBhwloc_get_proc_cpubind()\fP with \fBHWLOC_CPUBIND_THREAD\fP as flags\&. 
 .RE
@@ -43,7 +43,7 @@ This is equivalent to calling \fBhwloc_get_proc_cpubind()\fP with \fBHWLOC_CPUBI
 .PP
 Get the last physical CPU where thread \fCtid\fP ran\&. 
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 This is equivalent to calling \fBhwloc_get_proc_last_cpu_location()\fP with \fBHWLOC_CPUBIND_THREAD\fP as flags\&. 
 .RE
@@ -54,7 +54,7 @@ This is equivalent to calling \fBhwloc_get_proc_last_cpu_location()\fP with \fBH
 .PP
 Convert a linux kernel cpumask file \fCpath\fP into a hwloc bitmap \fCset\fP\&. Might be used when reading CPU set from sysfs attributes such as topology and caches for processors, or local_cpus for devices\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 This function ignores the HWLOC_FSROOT environment variable\&. 
 .RE
@@ -65,7 +65,7 @@ This function ignores the HWLOC_FSROOT environment variable\&.
 .PP
 Bind a thread \fCtid\fP on cpus given in cpuset \fCset\fP\&. The behavior is exactly the same as the Linux sched_setaffinity system call, but uses a hwloc cpuset\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 This is equivalent to calling \fBhwloc_set_proc_cpubind()\fP with HWLOC_CPUBIND_THREAD as flags\&. 
 .RE

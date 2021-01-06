@@ -1,6 +1,6 @@
 /*
  * Copyright © 2009 CNRS
- * Copyright © 2009-2019 Inria.  All rights reserved.
+ * Copyright © 2009-2020 Inria.  All rights reserved.
  * Copyright © 2009-2012 Université Bordeaux
  * Copyright © 2009-2011 Cisco Systems, Inc.  All rights reserved.
  * See COPYING in top-level directory.
@@ -13,6 +13,7 @@
 #include "hwloc.h"
 #include "private/misc.h" /* for hwloc_strncasecmp() */
 
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
@@ -217,7 +218,7 @@ hwloc_utils_autodetect_input_format(const char *input, int verbose)
 }
 
 static __hwloc_inline int
-hwloc_utils_enable_input_format(struct hwloc_topology *topology,
+hwloc_utils_enable_input_format(struct hwloc_topology *topology, unsigned long flags,
 				const char *input,
 				enum hwloc_utils_input_format *input_format,
 				int verbose, const char *callname)
@@ -258,6 +259,9 @@ hwloc_utils_enable_input_format(struct hwloc_topology *topology,
       fprintf(stderr, "Cannot force linux component first because HWLOC_COMPONENTS environment variable is already set to %s.\n", env);
     else
       putenv((char *) "HWLOC_COMPONENTS=linux,pci,stop");
+    /* normally-set flags are overriden by envvar-forced backends */
+    if (flags & HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM)
+      putenv((char *) "HWLOC_THISSYSTEM=1");
 #else /* HWLOC_LINUX_SYS */
     fprintf(stderr, "This installation of hwloc does not support changing the file-system root, sorry.\n");
     exit(EXIT_FAILURE);
@@ -280,6 +284,9 @@ hwloc_utils_enable_input_format(struct hwloc_topology *topology,
       fprintf(stderr, "Cannot force x86 component first because HWLOC_COMPONENTS environment variable is already set to %s.\n", env);
     else
       putenv((char *) "HWLOC_COMPONENTS=x86,stop");
+    /* normally-set flags are overriden by envvar-forced backends */
+    if (flags & HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM)
+      putenv((char *) "HWLOC_THISSYSTEM=1");
 #else
     fprintf(stderr, "This installation of hwloc does not support loading from a cpuid dump, sorry.\n");
     exit(EXIT_FAILURE);
@@ -496,6 +503,364 @@ hwloc_utils_userdata_free_recursive(hwloc_obj_t obj)
     hwloc_utils_userdata_free_recursive(child);
   for_each_misc_child(child, obj)
     hwloc_utils_userdata_free_recursive(child);
+}
+
+struct hwloc_utils_parsing_flag
+{
+    unsigned long ulong_flag;
+    const char *str_flag;
+};
+
+#define HWLOC_UTILS_PARSING_FLAG(flag){ flag, #flag }
+
+static __hwloc_inline void
+hwloc_utils_parsing_flag_error(const char *err_message, struct hwloc_utils_parsing_flag possible_flags[], int len_possible_flags) {
+  int i;
+  fprintf(stderr, "Supported %s flags are substrings of:\n", err_message);
+  for(i = 0; i < len_possible_flags; i++) {
+    fprintf(stderr, "  ");
+    fprintf(stderr, "%s", possible_flags[i].str_flag);
+    fprintf(stderr, "\n");
+  }
+}
+
+static __hwloc_inline unsigned long
+hwloc_utils_parse_flags(char * str, struct hwloc_utils_parsing_flag possible_flags[], int len_possible_flags, const char * kind) {
+  char *ptr;
+  char *end;
+  int ul_flag;
+  int i;
+  int j = 0;
+  unsigned long ul_flags = 0;
+
+  ul_flag = strtoul(str, &end, 0);
+  if(end != str && *end == '\0')
+    return ul_flag;
+
+  while (str[j]) {
+    str[j] = toupper(str[j]);
+    j++;
+  }
+
+  if(strcmp(str, "NONE") == 0)
+    return 0;
+
+  ptr = str;
+  while (ptr) {
+    int count = 0;
+    unsigned long prv_flags = ul_flags;
+    char *pch;
+    int nosuffix = 0;
+
+    /* skip separators at the beginning */
+    ptr += strspn(ptr, ",|+");
+
+    /* find separator after next token */
+    j = strcspn(ptr, " ,|+");
+    if (!j)
+      break;
+
+    if (ptr[j]) {
+      /* mark the end of the token */
+      ptr[j] = '\0';
+      /* mark beginning of next token */
+      end = ptr + j + 1;
+    } else {
+      /* no next token */
+      end = NULL;
+    }
+
+    /* '$' means matching the end of a flag */
+    pch = strchr(ptr, '$');
+    if(pch) {
+      nosuffix = 1;
+      *pch = '\0';
+    }
+
+    for(i = 0; i < len_possible_flags; i++) {
+      if(nosuffix == 1) {
+        /* match the end */
+        if(strcmp(ptr, possible_flags[i].str_flag + strlen(possible_flags[i].str_flag) - strlen(ptr)))
+          continue;
+      } else {
+        /* match anywhere */
+        if(!strstr(possible_flags[i].str_flag, ptr))
+          continue;
+      }
+
+      if(count){
+        fprintf(stderr, "Duplicate match for %s flag `%s'.\n", kind, ptr);
+        hwloc_utils_parsing_flag_error(kind, possible_flags, len_possible_flags);
+        return (unsigned long) - 1;
+      }
+
+      ul_flags |= possible_flags[i].ulong_flag;
+      count++;
+    }
+
+    if(prv_flags == ul_flags) {
+      fprintf(stderr, "Failed to parse %s flag `%s'.\n", kind, ptr);
+      hwloc_utils_parsing_flag_error(kind, possible_flags, len_possible_flags);
+      return (unsigned long) - 1;
+    }
+
+    ptr = end;
+  }
+
+  return ul_flags;
+}
+
+static __hwloc_inline hwloc_memattr_id_t
+hwloc_utils_parse_memattr_name(hwloc_topology_t topo, const char *str)
+{
+  const char *name;
+  hwloc_memattr_id_t id;
+  int err;
+  /* try by name, case insensitive */
+  for(id=0; ; id++) {
+    err = hwloc_memattr_get_name(topo, id, &name);
+    if (err < 0)
+      break;
+    if (!strcasecmp(name, str))
+      return id;
+  }
+  /* try by id */
+  if (*str < '0' || *str > '9')
+    return (hwloc_memattr_id_t) -1;
+  id = atoi(str);
+  err = hwloc_memattr_get_name(topo, id, &name);
+  if (err < 0)
+    return (hwloc_memattr_id_t) -1;
+  else
+    return id;
+}
+
+static __hwloc_inline int
+hwloc_utils_get_best_node_in_array_by_memattr(hwloc_topology_t topology, hwloc_memattr_id_t id,
+                                              unsigned nbnodes, hwloc_obj_t *nodes,
+                                              struct hwloc_location *initiator)
+{
+  unsigned nbtgs, i, j;
+  hwloc_obj_t *tgs;
+  int best;
+  hwloc_uint64_t *values, bestvalue;
+  unsigned long mflags;
+  int err;
+
+  err = hwloc_memattr_get_flags(topology, id, &mflags);
+  if (err < 0)
+    goto out;
+
+  nbtgs = 0;
+  err = hwloc_memattr_get_targets(topology, id, initiator, 0, &nbtgs, NULL, NULL);
+  if (err < 0)
+    goto out;
+
+  tgs = malloc(nbtgs * sizeof(*tgs));
+  values = malloc(nbtgs * sizeof(*values));
+  if (!tgs || !values)
+    goto out_with_arrays;
+
+  err = hwloc_memattr_get_targets(topology, id, initiator, 0, &nbtgs, tgs, values);
+  if (err < 0)
+    goto out_with_arrays;
+
+  best = -1;
+  bestvalue = 0;
+  for(i=0; i<nbnodes; i++) {
+    for(j=0; j<nbtgs; j++)
+      if (tgs[j] == nodes[i])
+        break;
+    if (j==nbtgs)
+      /* no target info for this node */
+      continue;
+    if (best == -1) {
+      best = i;
+      bestvalue = values[j];
+    } else if (mflags & HWLOC_MEMATTR_FLAG_HIGHER_FIRST) {
+      if (values[j] > bestvalue) {
+        best = i;
+        bestvalue = values[j];
+      }
+    } else {
+      assert(mflags & HWLOC_MEMATTR_FLAG_LOWER_FIRST);
+      if (values[j] < bestvalue) {
+        best = i;
+        bestvalue = values[j];
+      }
+    }
+  }
+
+  free(tgs);
+  free(values);
+  return best;
+
+ out_with_arrays:
+  free(tgs);
+  free(values);
+ out:
+  return -1;
+}
+
+static __hwloc_inline int
+hwloc_utils_get_best_node_in_nodeset_by_memattr(hwloc_topology_t topology, hwloc_memattr_id_t id,
+                                                hwloc_nodeset_t nodeset,
+                                                struct hwloc_location *initiator)
+{
+  unsigned nbtgs, i, j;
+  hwloc_obj_t *tgs;
+  int best;
+  hwloc_uint64_t *values, bestvalue;
+  unsigned long mflags;
+  int err;
+
+  err = hwloc_memattr_get_flags(topology, id, &mflags);
+  if (err < 0)
+    goto out;
+
+  nbtgs = 0;
+  err = hwloc_memattr_get_targets(topology, id, initiator, 0, &nbtgs, NULL, NULL);
+  if (err < 0)
+    goto out;
+
+  tgs = malloc(nbtgs * sizeof(*tgs));
+  values = malloc(nbtgs * sizeof(*values));
+  if (!tgs || !values)
+    goto out_with_arrays;
+
+  err = hwloc_memattr_get_targets(topology, id, initiator, 0, &nbtgs, tgs, values);
+  if (err < 0)
+    goto out_with_arrays;
+
+  best = -1;
+  bestvalue = 0;
+  hwloc_bitmap_foreach_begin(i, nodeset) {
+    for(j=0; j<nbtgs; j++)
+      if (tgs[j]->os_index == i)
+        break;
+    if (j==nbtgs)
+      /* no target info for this node */
+      continue;
+    if (best == -1) {
+      best = i;
+      bestvalue = values[j];
+    } else if (mflags & HWLOC_MEMATTR_FLAG_HIGHER_FIRST) {
+      if (values[j] > bestvalue) {
+        best = i;
+        bestvalue = values[j];
+      }
+    } else {
+      assert(mflags & HWLOC_MEMATTR_FLAG_LOWER_FIRST);
+      if (values[j] < bestvalue) {
+        best = i;
+        bestvalue = values[j];
+      }
+    }
+  } hwloc_bitmap_foreach_end();
+
+  if (best == -1)
+    hwloc_bitmap_zero(nodeset);
+  else
+    hwloc_bitmap_only(nodeset, best);
+
+  free(tgs);
+  free(values);
+  return 0;
+
+ out_with_arrays:
+  free(tgs);
+  free(values);
+ out:
+  return -1;
+}
+
+static __hwloc_inline unsigned long
+hwloc_utils_parse_restrict_flags(char * str){
+  struct hwloc_utils_parsing_flag possible_flags[] = {
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_RESTRICT_FLAG_REMOVE_CPULESS),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_RESTRICT_FLAG_BYNODESET),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_RESTRICT_FLAG_REMOVE_MEMLESS),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_RESTRICT_FLAG_ADAPT_MISC),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_RESTRICT_FLAG_ADAPT_IO)
+  };
+
+  return hwloc_utils_parse_flags(str, possible_flags, (int) sizeof(possible_flags) / sizeof(possible_flags[0]), "restrict");
+}
+
+static __hwloc_inline unsigned long
+hwloc_utils_parse_topology_flags(char * str) {
+  struct hwloc_utils_parsing_flag possible_flags[] = {
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_TOPOLOGY_FLAG_THISSYSTEM_ALLOWED_RESOURCES),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_TOPOLOGY_FLAG_IMPORT_SUPPORT)
+  };
+
+  return hwloc_utils_parse_flags(str, possible_flags, (int) sizeof(possible_flags) / sizeof(possible_flags[0]), "topology");
+}
+
+static __hwloc_inline unsigned long
+hwloc_utils_parse_allow_flags(char * str) {
+  struct hwloc_utils_parsing_flag possible_flags[] = {
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_ALLOW_FLAG_ALL),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_ALLOW_FLAG_LOCAL_RESTRICTIONS),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_ALLOW_FLAG_CUSTOM)
+  };
+
+  return hwloc_utils_parse_flags(str, possible_flags, (int) sizeof(possible_flags) / sizeof(possible_flags[0]), "allow");
+}
+
+static __hwloc_inline unsigned long
+hwloc_utils_parse_export_synthetic_flags(char * str) {
+  struct hwloc_utils_parsing_flag possible_flags[] = {
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_TOPOLOGY_EXPORT_SYNTHETIC_FLAG_NO_EXTENDED_TYPES),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_TOPOLOGY_EXPORT_SYNTHETIC_FLAG_NO_ATTRS),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_TOPOLOGY_EXPORT_SYNTHETIC_FLAG_V1),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_TOPOLOGY_EXPORT_SYNTHETIC_FLAG_IGNORE_MEMORY)
+  };
+
+  return hwloc_utils_parse_flags(str, possible_flags, (int) sizeof(possible_flags) / sizeof(possible_flags[0]), "synthetic");
+}
+
+static __hwloc_inline unsigned long
+hwloc_utils_parse_export_xml_flags(char * str) {
+  struct hwloc_utils_parsing_flag possible_flags[] = {
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_TOPOLOGY_EXPORT_XML_FLAG_V1)
+  };
+
+  return hwloc_utils_parse_flags(str, possible_flags, (int) sizeof(possible_flags) / sizeof(possible_flags[0]), "xml");
+}
+
+static __hwloc_inline unsigned long
+hwloc_utils_parse_distances_add_flags(char * str) {
+  struct hwloc_utils_parsing_flag possible_flags[] = {
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_DISTANCES_ADD_FLAG_GROUP),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_DISTANCES_ADD_FLAG_GROUP_INACCURATE)
+  };
+
+  return hwloc_utils_parse_flags(str, possible_flags, (int) sizeof(possible_flags) / sizeof(possible_flags[0]), "distances_add");
+}
+
+static __hwloc_inline unsigned long
+hwloc_utils_parse_memattr_flags(char *str) {
+  struct hwloc_utils_parsing_flag possible_flags[] = {
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_MEMATTR_FLAG_HIGHER_FIRST),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_MEMATTR_FLAG_LOWER_FIRST),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_MEMATTR_FLAG_NEED_INITIATOR)
+  };
+
+  return hwloc_utils_parse_flags(str, possible_flags, (int) sizeof(possible_flags) / sizeof(possible_flags[0]), "memattr");
+}
+
+static __hwloc_inline unsigned long
+hwloc_utils_parse_local_numanode_flags(char *str) {
+  struct hwloc_utils_parsing_flag possible_flags[] = {
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_LOCAL_NUMANODE_FLAG_LARGER_LOCALITY),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_LOCAL_NUMANODE_FLAG_SMALLER_LOCALITY),
+    HWLOC_UTILS_PARSING_FLAG(HWLOC_LOCAL_NUMANODE_FLAG_ALL)
+  };
+
+  return hwloc_utils_parse_flags(str, possible_flags, (int) sizeof(possible_flags) / sizeof(possible_flags[0]), "local_numanode");
 }
 
 #endif /* HWLOC_UTILS_MISC_H */

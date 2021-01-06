@@ -1,8 +1,8 @@
-.TH "hwlocality_tinker" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_tinker" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_tinker
+hwlocality_tinker \- Modifying a loaded Topology
 .SH SYNOPSIS
 .br
 .PP
@@ -37,6 +37,9 @@ hwlocality_tinker
 .ti -1c
 .RI "int \fBhwloc_obj_add_other_obj_sets\fP (\fBhwloc_obj_t\fP dst, \fBhwloc_obj_t\fP src)"
 .br
+.ti -1c
+.RI "int \fBhwloc_topology_refresh\fP (\fBhwloc_topology_t\fP topology)"
+.br
 .in -1c
 .SH "Detailed Description"
 .PP 
@@ -70,10 +73,10 @@ Flags to be given to \fBhwloc_topology_restrict()\fP\&.
 .in +1c
 .TP
 \fB\fIHWLOC_RESTRICT_FLAG_REMOVE_CPULESS \fP\fP
-Remove all objects that became CPU-less\&. By default, only objects that contain no PU and no memory are removed\&. 
+Remove all objects that became CPU-less\&. By default, only objects that contain no PU and no memory are removed\&. This flag may not be used with \fBHWLOC_RESTRICT_FLAG_BYNODESET\fP\&. 
 .TP
 \fB\fIHWLOC_RESTRICT_FLAG_BYNODESET \fP\fP
-Restrict by nodeset instead of CPU set\&. Only keep objects whose nodeset is included or partially included in the given set\&. This flag may not be used with \fBHWLOC_RESTRICT_FLAG_BYNODESET\fP\&. 
+Restrict by nodeset instead of CPU set\&. Only keep objects whose nodeset is included or partially included in the given set\&. This flag may not be used with \fBHWLOC_RESTRICT_FLAG_REMOVE_CPULESS\fP\&. 
 .TP
 \fB\fIHWLOC_RESTRICT_FLAG_REMOVE_MEMLESS \fP\fP
 Remove all objects that became Memory-less\&. By default, only objects that contain no PU and no memory are removed\&. This flag may only be used with \fBHWLOC_RESTRICT_FLAG_BYNODESET\fP\&. 
@@ -112,7 +115,7 @@ It is notably useful when importing a topology from another process running in a
 .PP
 \fCflags\fP must be set to one flag among \fBhwloc_allow_flags_e\fP\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 Removing objects from a topology should rather be performed with \fBhwloc_topology_restrict()\fP\&. 
 .RE
@@ -133,7 +136,7 @@ These sets cannot be larger than the current topology, or they would get restric
 .PP
 The core will setup the other sets after actual insertion\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 The inserted object if it was properly inserted\&.
 .PP
@@ -156,7 +159,7 @@ Add a MISC object as a leaf of the topology\&. A new MISC object will be created
 .PP
 The new leaf object will not have any \fCcpuset\fP\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 the newly-created object
 .PP
@@ -165,12 +168,20 @@ the newly-created object
 \fCNULL\fP if Misc objects are filtered-out of the topology (\fBHWLOC_TYPE_FILTER_KEEP_NONE\fP)\&.
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 If \fCname\fP contains some non-printable characters, they will be dropped when exporting to XML, see \fBhwloc_topology_export_xml()\fP in \fBhwloc/export\&.h\fP\&. 
 .RE
 .PP
 
+.SS "int hwloc_topology_refresh (\fBhwloc_topology_t\fP topology)"
+
+.PP
+Refresh internal structures after topology modification\&. Modifying the topology (by restricting, adding objects, modifying structures such as distances or memory attributes, etc\&.) may cause some internal caches to become invalid\&. These caches are automatically refreshed when accessed but this refreshing is not thread-safe\&.
+.PP
+This function is not thread-safe either, but it is a good way to end a non-thread-safe phase of topology modification\&. Once this refresh is done, multiple threads may concurrently consult the topology, objects, distances, attributes, etc\&.
+.PP
+See also \fBThread Safety\fP 
 .SS "int hwloc_topology_restrict (\fBhwloc_topology_t\fP restrict topology, \fBhwloc_const_bitmap_t\fP set, unsigned long flags)"
 
 .PP
@@ -180,12 +191,12 @@ If \fBHWLOC_RESTRICT_FLAG_BYNODESET\fP is passed in \fCflags\fP, \fCset\fP is co
 .PP
 \fCflags\fP is a OR'ed set of \fBhwloc_restrict_flags_e\fP\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 This call may not be reverted by restricting back to a larger set\&. Once dropped during restriction, objects may not be brought back, except by loading another topology with \fBhwloc_topology_load()\fP\&.
 .RE
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 0 on success\&.
 .PP

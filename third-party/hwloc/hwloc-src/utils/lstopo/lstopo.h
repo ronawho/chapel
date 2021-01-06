@@ -1,8 +1,9 @@
 /*
  * Copyright © 2009 CNRS
- * Copyright © 2009-2019 Inria.  All rights reserved.
+ * Copyright © 2009-2020 Inria.  All rights reserved.
  * Copyright © 2009-2010, 2012, 2015 Université Bordeaux
  * Copyright © 2011 Cisco Systems, Inc.  All rights reserved.
+ * Copyright © 2020 Hewlett Packard Enterprise.  All rights reserved.
  * See COPYING in top-level directory.
  */
 
@@ -32,6 +33,12 @@ enum lstopo_index_type_e {
   LSTOPO_INDEX_TYPE_NONE /* only used during the interactive display */
 };
 
+enum lstopo_show_legend_e {
+  LSTOPO_SHOW_LEGEND_ALL,
+  LSTOPO_SHOW_LEGEND_NONE,
+  LSTOPO_SHOW_LEGEND_NO_DEFAULT
+};
+
 FILE *open_output(const char *filename, int overwrite) __hwloc_attribute_malloc;
 
 struct draw_methods;
@@ -40,6 +47,11 @@ struct draw_methods;
 struct lstopo_output {
   hwloc_topology_t topology;
   unsigned depth;
+
+  /* when an interactive backends want a refresh of the topology */
+  int needs_topology_refresh;
+  /* when actually doing a refresh */
+  int refreshing;
 
   /* file config */
   FILE *file;
@@ -53,8 +65,11 @@ struct lstopo_output {
   int pci_collapse_enabled; /* global toggle for PCI collapsing */
   int pid_number;
   hwloc_pid_t pid;
-  int need_pci_domain;
   hwloc_bitmap_t cpubind_set, membind_set;
+
+  /* misc cached data */
+  int need_pci_domain;
+  unsigned nr_cpukind_styles;
 
   /* export config */
   unsigned long export_synthetic_flags;
@@ -62,19 +77,27 @@ struct lstopo_output {
   uint64_t shmem_output_addr;
 
   /* legend */
-  int legend;
+  enum lstopo_show_legend_e show_legend;
+#define LSTOPO_LEGEND_DEFAULT_LINES 3 /* hostname + index + date */
+  char legend_default_lines[LSTOPO_LEGEND_DEFAULT_LINES][128];
+  unsigned legend_default_lines_nr;
+  unsigned legend_info_lines_nr;
   char ** legend_append;
   unsigned legend_append_nr;
+  unsigned legend_maxtextwidth;
 
   /* text config */
   int show_distances_only;
+  int show_memattrs_only;
+  int show_cpukinds_only;
   hwloc_obj_type_t show_only;
   int show_cpuset;
   int show_taskset;
 
   /* draw config */
+  char title[256];
   unsigned plain_children_order;
-  unsigned int gridsize, fontsize, linespacing;
+  unsigned int gridsize, fontsize, linespacing, thickness;
   float text_xscale;
   enum lstopo_orient_e force_orient[HWLOC_OBJ_TYPE_MAX]; /* orientation of children within an object of the given type */
   unsigned no_half_lines; /* set by ASCII backend because it cannot write between lines of the terminal */
@@ -85,6 +108,7 @@ struct lstopo_output {
   int show_attrs[HWLOC_OBJ_TYPE_MAX];
   int show_binding;
   int show_disallowed;
+  int show_cpukinds;
   int factorize_enabled; /* global toggle for interactive keyboard shortcuts */
   unsigned factorize_min[HWLOC_OBJ_TYPE_MAX]; /* minimum number of object before factorizing (parent->arity must be strictly higher) */
 #define FACTORIZE_MIN_DEFAULT 4
@@ -152,6 +176,9 @@ struct lstopo_obj_userdata {
 #define LSTOPO_STYLE_T2  0x4
   unsigned style_set; /* OR'ed LSTOPO_STYLE_* */
 
+  /* PU style for CPU kind */
+  unsigned cpukind_style;
+
   /* object size (including children if they are outside of it, not including borders) */
   unsigned width;
   unsigned height;
@@ -191,12 +218,13 @@ struct lstopo_obj_userdata {
 };
 
 typedef int output_method (struct lstopo_output *output, const char *filename);
-extern output_method output_console, output_synthetic, output_ascii, output_fig, output_png, output_pdf, output_ps, output_nativesvg, output_cairosvg, output_x11, output_windows, output_xml, output_shmem;
+extern output_method output_console, output_synthetic, output_ascii, output_tikz, output_fig, output_png, output_pdf, output_ps, output_nativesvg, output_cairosvg, output_x11, output_windows, output_xml, output_android, output_shmem;
 
 extern int lstopo_shmem_adopt(const char *input, hwloc_topology_t *topologyp);
 
 struct draw_methods {
   int (*declare_color) (struct lstopo_output *loutput, struct lstopo_color *lcolor);
+  void (*destroy_color) (struct lstopo_output *loutput, struct lstopo_color *lcolor);
   /* only called when loutput->draw_methods == LSTOPO_DRAWING_DRAW */
   void (*box) (struct lstopo_output *loutput, const struct lstopo_color *lcolor, unsigned depth, unsigned x, unsigned width, unsigned y, unsigned height, hwloc_obj_t obj, unsigned box_id);
   void (*line) (struct lstopo_output *loutput, const struct lstopo_color *lcolor, unsigned depth, unsigned x1, unsigned y1, unsigned x2, unsigned y2, hwloc_obj_t obj, unsigned line_id);
@@ -209,7 +237,7 @@ extern void output_draw(struct lstopo_output *output);
 
 extern void lstopo_prepare_custom_styles(struct lstopo_output *loutput);
 extern void declare_colors(struct lstopo_output *output);
-extern void destroy_colors(void);
+extern void destroy_colors(struct lstopo_output *output);
 
 static __hwloc_inline int lstopo_pu_disallowed(struct lstopo_output *loutput, hwloc_obj_t l)
 {
@@ -236,7 +264,7 @@ static __hwloc_inline int lstopo_numa_binding(struct lstopo_output *loutput, hwl
 static __hwloc_inline int lstopo_busid_snprintf(struct lstopo_output *loutput, char *text, size_t textlen, hwloc_obj_t firstobj, int collapse, unsigned needdomain)
 {
   hwloc_obj_t lastobj;
-  char domain[6] = "";
+  char domain[10] = "";
   unsigned i;
 
   if (needdomain)

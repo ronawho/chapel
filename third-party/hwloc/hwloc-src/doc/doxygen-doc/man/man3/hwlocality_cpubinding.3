@@ -1,8 +1,8 @@
-.TH "hwlocality_cpubinding" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_cpubinding" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_cpubinding
+hwlocality_cpubinding \- CPU binding
 .SH SYNOPSIS
 .br
 .PP
@@ -67,12 +67,12 @@ hwloc_set_cpubind(topology, set, HWLOC_CPUBIND_THREAD),
 .fi
 .PP
 .PP
-\fBSee also:\fP
+\fBSee also\fP
 .RS 4
 Some example codes are available under doc/examples/ in the source tree\&.
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 To unbind, just call the binding function with either a full cpuset or a cpuset equal to the system cpuset\&.
 .PP
@@ -91,7 +91,7 @@ Process/Thread binding flags\&. These bit flags can be used to refine the bindin
 .PP
 The default (0) is to bind the current process, assumed to be single-threaded, in a non-strict way\&. This is the most portable way to bind as all operating systems usually provide it\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 Not all systems support all kinds of binding\&. See the 'Detailed Description' section of \fBCPU binding\fP for a description of errors that can occur\&. 
 .RE
@@ -110,14 +110,14 @@ Bind current thread of current process\&.
 \fB\fIHWLOC_CPUBIND_STRICT \fP\fP
 Request for strict binding from the OS\&. By default, when the designated CPUs are all busy while other CPUs are idle, operating systems may execute the thread/process on those other CPUs instead of the designated CPUs, to let them progress anyway\&. Strict binding means that the thread/process will _never_ execute on other cpus than the designated CPUs, even when those are busy with other tasks and other CPUs are idle\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 Depending on the operating system, strict binding may not be possible (e\&.g\&., the OS does not implement it) or not allowed (e\&.g\&., for an administrative reasons), and the function will fail in that case\&.
 .RE
 .PP
 When retrieving the binding of a process, this flag checks whether all its threads actually have the same binding\&. If the flag is not given, the binding of each thread will be accumulated\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 This flag is meaningless when retrieving the binding of a thread\&. 
 .RE
@@ -145,7 +145,7 @@ Get the last physical CPU where the current process or thread ran\&. The operati
 .PP
 Get the current physical binding of process \fCpid\fP\&. 
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 \fChwloc_pid_t\fP is \fCpid_t\fP on Unix platforms, and \fCHANDLE\fP on native Windows platforms\&.
 .PP
@@ -160,7 +160,7 @@ On non-Linux systems, HWLOC_CPUBIND_THREAD can not be used in \fCflags\fP\&.
 .PP
 Get the last physical CPU where a process ran\&. The operating system may move some tasks from one processor to another at any time according to their binding, so this function may return something that is already outdated\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 \fChwloc_pid_t\fP is \fCpid_t\fP on Unix platforms, and \fCHANDLE\fP on native Windows platforms\&.
 .PP
@@ -175,7 +175,7 @@ On non-Linux systems, \fBHWLOC_CPUBIND_THREAD\fP can not be used in \fCflags\fP\
 .PP
 Get the current physical binding of thread \fCtid\fP\&. 
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 \fChwloc_thread_t\fP is \fCpthread_t\fP on Unix platforms, and \fCHANDLE\fP on native Windows platforms\&.
 .PP
@@ -188,7 +188,7 @@ Get the current physical binding of thread \fCtid\fP\&.
 .PP
 Bind current process or thread on cpus given in physical bitmap \fCset\fP\&. 
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 -1 with errno set to ENOSYS if the action is not supported 
 .PP
@@ -201,7 +201,7 @@ Bind current process or thread on cpus given in physical bitmap \fCset\fP\&.
 .PP
 Bind a process \fCpid\fP on cpus given in physical bitmap \fCset\fP\&. 
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 \fChwloc_pid_t\fP is \fCpid_t\fP on Unix platforms, and \fCHANDLE\fP on native Windows platforms\&.
 .PP
@@ -216,7 +216,7 @@ On non-Linux systems, \fBHWLOC_CPUBIND_THREAD\fP can not be used in \fCflags\fP\
 .PP
 Bind a thread \fCthread\fP on cpus given in physical bitmap \fCset\fP\&. 
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 \fChwloc_thread_t\fP is \fCpthread_t\fP on Unix platforms, and \fCHANDLE\fP on native Windows platforms\&.
 .PP

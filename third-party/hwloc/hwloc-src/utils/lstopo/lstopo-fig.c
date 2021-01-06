@@ -1,6 +1,6 @@
 /*
  * Copyright © 2009 CNRS
- * Copyright © 2009-2019 Inria.  All rights reserved.
+ * Copyright © 2009-2020 Inria.  All rights reserved.
  * Copyright © 2009-2010 Université Bordeaux
  * Copyright © 2011 Cisco Systems, Inc.  All rights reserved.
  * See COPYING in top-level directory.
@@ -46,15 +46,26 @@ static void
 fig_box(struct lstopo_output *loutput, const struct lstopo_color *lcolor, unsigned depth, unsigned x, unsigned width, unsigned y, unsigned height, hwloc_obj_t obj __hwloc_attribute_unused, unsigned box_id __hwloc_attribute_unused)
 {
   FILE *file = loutput->file;
+  struct lstopo_obj_userdata *ou = obj ? obj->userdata : NULL;
+  unsigned linestyle = 0; /* solid */
+  unsigned dashspace = 0; /* no dash */
+  unsigned thickness = loutput->thickness;
 
   if (!width || !height)
     return;
+
+  if (loutput->show_cpukinds && ou && ou->cpukind_style) {
+    linestyle = 1; /* dash */
+    dashspace = 1U << ou->cpukind_style;
+    thickness *= (1 + ou->cpukind_style);
+  }
 
   x *= FIG_FACTOR;
   y *= FIG_FACTOR;
   width *= FIG_FACTOR;
   height *= FIG_FACTOR;
-  fprintf(file, "2 2 0 1 0 %d %u -1 20 0.0 0 0 -1 0 0 5\n\t", lcolor->private.fig.color, depth);
+  fprintf(file, "2 2 %u %u 0 %d %u -1 20 %u.0 0 0 -1 0 0 5\n\t",
+          linestyle, thickness, lcolor->private.fig.color, depth, dashspace);
   fprintf(file, " %u %u", x, y);
   fprintf(file, " %u %u", x + width, y);
   fprintf(file, " %u %u", x + width, y + height);
@@ -72,7 +83,7 @@ fig_line(struct lstopo_output *loutput, const struct lstopo_color *lcolor, unsig
   y1 *= FIG_FACTOR;
   x2 *= FIG_FACTOR;
   y2 *= FIG_FACTOR;
-  fprintf(file, "2 1 0 1 0 %d %u -1 -1 0.0 0 0 -1 0 0 2\n\t", lcolor->private.fig.color, depth);
+  fprintf(file, "2 1 0 %u 0 %d %u -1 -1 0.0 0 0 -1 0 0 2\n\t", loutput->thickness, lcolor->private.fig.color, depth);
   fprintf(file, " %u %u", x1, y1);
   fprintf(file, " %u %u", x2, y2);
   fprintf(file, "\n");
@@ -86,8 +97,13 @@ static void
 fig_text(struct lstopo_output *loutput, const struct lstopo_color *lcolor, int size, unsigned depth, unsigned x, unsigned y, const char *text, hwloc_obj_t obj __hwloc_attribute_unused, unsigned text_id __hwloc_attribute_unused)
 {
   FILE *file = loutput->file;
+  struct lstopo_obj_userdata *ou = obj ? obj->userdata : NULL;
+  unsigned fontflags = 0; /* normal */
   int len = (int)strlen(text);
   int color;
+
+  if (loutput->show_cpukinds && ou && (ou->cpukind_style % 2))
+    fontflags = 2; /* bold for odd styles */
 
   color = lcolor->private.fig.color;
   x *= FIG_FACTOR;
@@ -97,7 +113,8 @@ fig_text(struct lstopo_output *loutput, const struct lstopo_color *lcolor, int s
   y += (size * FIG_FACTOR * 4) / 10;
 
   size = FIG_FONTSIZE_SCALE(size);
-  fprintf(file, "4 0 %d %u -1 0 %d 0.0 4 %d %d %u %u %s\\001\n", color, depth, size, size * FIG_FACTOR, FIG_TEXT_WIDTH(len, size) * FIG_FACTOR, x, y + size * 10, text);
+  fprintf(file, "4 0 %d %u -1 %u %d 0.0 4 %d %d %u %u %s\\001\n",
+          color, depth, fontflags, size, size * FIG_FACTOR, FIG_TEXT_WIDTH(len, size) * FIG_FACTOR, x, y + size * 10, text);
 }
 
 static void
@@ -109,6 +126,7 @@ fig_textsize(struct lstopo_output *loutput __hwloc_attribute_unused, const char 
 
 static struct draw_methods fig_draw_methods = {
   fig_declare_color,
+  NULL,
   fig_box,
   fig_line,
   fig_text,
@@ -151,6 +169,6 @@ output_fig (struct lstopo_output *loutput, const char *filename)
   if (output != stdout)
     fclose(output);
 
-  destroy_colors();
+  destroy_colors(loutput);
   return 0;
 }

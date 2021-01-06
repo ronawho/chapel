@@ -3,7 +3,7 @@
 
 #
 # Copyright © 2009 CNRS
-# Copyright © 2009-2019 Inria.  All rights reserved.
+# Copyright © 2009-2020 Inria.  All rights reserved.
 # Copyright © 2009-2012 Université Bordeaux
 # Copyright © 2014 Cisco Systems, Inc.  All rights reserved.
 # See COPYING in top-level directory.
@@ -238,9 +238,6 @@ savedir "$destdir/$basename" /sys/devices/virtual/dmi/id/
 # Gather hugepage information
 savedir "$destdir/$basename" /sys/kernel/mm/hugepages/
 
-# Gather POWER device-tree
-savedir "$destdir/$basename" /proc/device-tree/cpus/
-
 # Gather the default /var/run/hwloc (in case it was created by a system-wide hwloc-dump-hwdata)
 if test -d /var/run/hwloc; then
   savedir "$destdir/$basename" /var/run/hwloc
@@ -270,6 +267,7 @@ fi
 cat /proc/mounts | while read -r dummy1 mntpath mnttype mntopts dummy2 ; do
   [ x$mnttype = xcpuset ] && savemntpnt "$mntpath"
   [ x$mnttype = xcgroup ] && echo $mntopts | grep -w cpuset >/dev/null && savemntpnt "$mntpath"
+  [ x$mnttype = xcgroup2 ] && savemntpnt "$mntpath"
 done
 
 #
@@ -337,7 +335,7 @@ export HWLOC_THISSYSTEM=0
 "$lstopo" - -v > "$dirname/$basename.output"
 echo "Expected topology output stored in $dirname/$basename.output"
 "$lstopo" -.xml --whole-io --disallowed > "$dirname/$basename.xml"
-echo "XML topology stored in in $dirname/$basename.xml"
+echo "XML topology stored in $dirname/$basename.xml"
 
 echo
 echo "WARNING: Do not post these files on a public list or website unless you"

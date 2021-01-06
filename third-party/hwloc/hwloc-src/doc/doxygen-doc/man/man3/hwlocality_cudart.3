@@ -1,8 +1,8 @@
-.TH "hwlocality_cudart" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_cudart" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_cudart
+hwlocality_cudart \- Interoperability with the CUDA Runtime API
 .SH SYNOPSIS
 .br
 .PP
@@ -30,7 +30,7 @@ This interface offers ways to retrieve topology information about CUDA devices w
 .SS "static int hwloc_cudart_get_device_cpuset (\fBhwloc_topology_t\fP topology, int idx, \fBhwloc_cpuset_t\fP set)\fC [inline]\fP, \fC [static]\fP"
 
 .PP
-Get the CPU set of logical processors that are physically close to device \fCidx\fP\&. Return the CPU set describing the locality of the CUDA device whose index is \fCidx\fP\&.
+Get the CPU set of processors that are physically close to device \fCidx\fP\&. Return the CPU set describing the locality of the CUDA device whose index is \fCidx\fP\&.
 .PP
 Topology \fCtopology\fP and device \fCidx\fP must match the local machine\&. I/O devices detection and the CUDA component are not needed in the topology\&.
 .PP
@@ -44,7 +44,7 @@ Get the hwloc OS device object corresponding to the CUDA device whose index is \
 .PP
 The topology \fCtopology\fP does not necessarily have to match the current machine\&. For instance the topology may be an XML import of a remote host\&. I/O devices detection and the CUDA component must be enabled in the topology\&. If not, the locality of the object may still be found using \fBhwloc_cudart_get_device_cpuset()\fP\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 The corresponding PCI device object can be obtained by looking at the OS device parent object (unless PCI devices are filtered out)\&.
 .PP

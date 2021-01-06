@@ -1,8 +1,8 @@
-.TH "hwlocality_helper_types" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_helper_types" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_helper_types
+hwlocality_helper_types \- Kinds of object Type
 .SH SYNOPSIS
 .br
 .PP
@@ -38,7 +38,7 @@ Each object type is either Normal (i\&.e\&. \fBhwloc_obj_type_is_normal()\fP ret
 .PP
 Check whether an object type is a CPU Cache (Data, Unified or Instruction)\&. Memory-side caches are not CPU caches\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 1 if an object of type \fCtype\fP is a Cache, 0 otherwise\&. 
 .RE
@@ -49,7 +49,7 @@ Check whether an object type is a CPU Cache (Data, Unified or Instruction)\&. Me
 .PP
 Check whether an object type is a CPU Data or Unified Cache\&. Memory-side caches are not CPU caches\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 1 if an object of type \fCtype\fP is a CPU Data or Unified Cache, 0 otherwise\&. 
 .RE
@@ -60,7 +60,7 @@ Check whether an object type is a CPU Data or Unified Cache\&. Memory-side cache
 .PP
 Check whether an object type is a CPU Instruction Cache,\&. Memory-side caches are not CPU caches\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 1 if an object of type \fCtype\fP is a CPU Instruction Cache, 0 otherwise\&. 
 .RE
@@ -71,7 +71,7 @@ Check whether an object type is a CPU Instruction Cache,\&. Memory-side caches a
 .PP
 Check whether an object type is I/O\&. I/O objects are objects attached to their parents in the I/O children list\&. This current includes Bridges, PCI and OS devices\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 1 if an object of type \fCtype\fP is a I/O object, 0 otherwise\&. 
 .RE
@@ -82,7 +82,7 @@ Check whether an object type is I/O\&. I/O objects are objects attached to their
 .PP
 Check whether an object type is Memory\&. Memory objects are objects attached to their parents in the Memory children list\&. This current includes NUMA nodes and Memory-side caches\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 1 if an object of type \fCtype\fP is a Memory object, 0 otherwise\&. 
 .RE
@@ -95,7 +95,7 @@ Check whether an object type is Normal\&. Normal objects are objects of the main
 .PP
 They are attached to parent as Normal children, not as Memory, I/O or Misc children\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 1 if an object of type \fCtype\fP is a Normal object, 0 otherwise\&. 
 .RE

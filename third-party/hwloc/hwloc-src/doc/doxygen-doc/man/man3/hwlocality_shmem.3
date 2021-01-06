@@ -1,8 +1,8 @@
-.TH "hwlocality_shmem" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_shmem" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_shmem
+hwlocality_shmem \- Sharing topologies between processes
 .SH SYNOPSIS
 .br
 .PP
@@ -45,7 +45,7 @@ The segment of the file pointed by descriptor \fCfd\fP, starting at offset \fCfi
 .PP
 The file pointed by descriptor \fCfd\fP, the offset \fCfileoffset\fP, the requested mapping virtual address \fCmmap_address\fP and the length \fClength\fP must be identical to what was given to \fBhwloc_shmem_topology_write()\fP earlier\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 Flags \fCflags\fP are currently unused, must be 0\&.
 .PP
@@ -54,7 +54,7 @@ The object userdata pointer should not be used unless the process that created t
 This function takes care of calling \fBhwloc_topology_abi_check()\fP\&.
 .RE
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 -1 with errno set to EBUSY if the virtual memory mapping defined by \fCmmap_address\fP and \fClength\fP isn't available in the process\&.
 .PP
@@ -69,7 +69,7 @@ This function takes care of calling \fBhwloc_topology_abi_check()\fP\&.
 .PP
 Get the required shared memory length for storing a topology\&. This length (in bytes) must be used in \fBhwloc_shmem_topology_write()\fP and \fBhwloc_shmem_topology_adopt()\fP later\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 Flags \fCflags\fP are currently unused, must be 0\&. 
 .RE
@@ -84,14 +84,14 @@ The segment of the file pointed by descriptor \fCfd\fP, starting at offset \fCfi
 .PP
 The mapping length \fClength\fP must have been previously obtained with \fBhwloc_shmem_topology_get_length()\fP and the topology must not have been modified in the meantime\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 Flags \fCflags\fP are currently unused, must be 0\&.
 .PP
 The object userdata pointer is duplicated but the pointed buffer is not\&. However the caller may also allocate it manually in shared memory to share it as well\&.
 .RE
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 -1 with errno set to EBUSY if the virtual memory mapping defined by \fCmmap_address\fP and \fClength\fP isn't available in the process\&. 
 .PP

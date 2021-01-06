@@ -1,8 +1,8 @@
-.TH "hwlocality_distances_get" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_distances_get" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_distances_get
+hwlocality_distances_get \- Retrieve distances between objects
 .SH SYNOPSIS
 .br
 .PP
@@ -94,7 +94,9 @@ Retrieve distance matrices for object at a specific depth in the topology\&. Ide
 .SS "int hwloc_distances_get_by_name (\fBhwloc_topology_t\fP topology, const char * name, unsigned * nr, struct \fBhwloc_distances_s\fP ** distances, unsigned long flags)"
 
 .PP
-Retrieve a distance matrix with the given name\&. Usually only one distances structure may match a given name\&. 
+Retrieve a distance matrix with the given name\&. Usually only one distances structure may match a given name\&.
+.PP
+The name of the most common structure is 'NUMALatency'\&. 
 .SS "int hwloc_distances_get_by_type (\fBhwloc_topology_t\fP topology, \fBhwloc_obj_type_t\fP type, unsigned * nr, struct \fBhwloc_distances_s\fP ** distances, unsigned long kind, unsigned long flags)"
 
 .PP
@@ -108,7 +110,7 @@ Get a description of what a distances structure contains\&. For instance 'NUMALa
 .PP
 Release a distance matrix structure previously returned by \fBhwloc_distances_get()\fP\&. 
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 This function is not required if the structure is removed with \fBhwloc_distances_release_remove()\fP\&. 
 .RE

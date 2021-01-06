@@ -1,4 +1,4 @@
-# Copyright © 2009-2019 Inria.  All rights reserved.
+# Copyright © 2009-2020 Inria.  All rights reserved.
 # Copyright © 2009-2010 Université Bordeaux
 # Copyright © 2009-2014 Cisco Systems, Inc.  All rights reserved.
 # See COPYING in top-level directory.
@@ -9,6 +9,7 @@ AM_LDFLAGS = $(HWLOC_LDFLAGS)
 
 # Add your output files here.
 xml_outputs = \
+        8intel64-4n2t-memattrs.xml \
         16amd64-8n2c-cpusets.xml \
         16amd64-4distances.xml \
         16amd64-4distances.console.output \
@@ -32,6 +33,7 @@ xml_outputs = \
         192em64t-12gr2n8c2t.xml \
         192em64t-24n8c2t.xml \
         fakeheterodistances.xml \
+        fakecpukinds.xml \
         8em64t-2p2ca2co-nonodesets.v1tov2.xml \
         8ia64-2n2s2c+1n.v1tov2.xml \
         16amd64-4distances.v1tov2.xml \

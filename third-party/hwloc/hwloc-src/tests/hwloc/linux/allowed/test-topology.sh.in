@@ -3,7 +3,7 @@
 
 #
 # Copyright © 2009 CNRS
-# Copyright © 2009-2018 Inria.  All rights reserved.
+# Copyright © 2009-2020 Inria.  All rights reserved.
 # Copyright © 2009-2011 Université Bordeaux
 # Copyright © 2009-2014 Cisco Systems, Inc.  All rights reserved.
 # See COPYING in top-level directory.
@@ -16,7 +16,7 @@ HWLOC_top_srcdir="@HWLOC_top_srcdir@"
 HWLOC_top_builddir="@HWLOC_top_builddir@"
 lstopo="$HWLOC_top_builddir/utils/lstopo/lstopo-no-graphics"
 
-HWLOC_PLUGINS_PATH=${HWLOC_top_builddir}/hwloc
+HWLOC_PLUGINS_PATH=${HWLOC_top_builddir}/hwloc/.libs
 export HWLOC_PLUGINS_PATH
 
 HWLOC_THISSYSTEM=1
@@ -27,6 +27,9 @@ export HWLOC_THISSYSTEM_ALLOWED_RESOURCES
 
 HWLOC_DONT_ADD_VERSION_INFO=1
 export HWLOC_DONT_ADD_VERSION_INFO
+
+HWLOC_XML_EXPORT_SUPPORT=0
+export HWLOC_XML_EXPORT_SUPPORT
 
 actual_output="$1"
 
@@ -123,7 +126,7 @@ fi
 
 # if there's a .env file, source it
 if [ -f "$topology".env ] ; then
-    source "$topology".env
+    . "$topology".env
 fi
 
 result=1

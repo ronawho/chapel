@@ -1,8 +1,8 @@
-.TH "hwlocality_object_strings" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_object_strings" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_object_strings
+hwlocality_object_strings \- Converting between Object Types and Attributes, and Strings
 .SH SYNOPSIS
 .br
 .PP
@@ -39,7 +39,7 @@ Only the major attributes are printed in non-verbose mode\&.
 .PP
 If \fCsize\fP is 0, \fCstring\fP may safely be \fCNULL\fP\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 the number of character that were actually written if not truncating, or that would have been written (not including the ending \\0)\&. 
 .RE
@@ -58,7 +58,7 @@ The output string may be parsed back by \fBhwloc_type_sscanf()\fP\&.
 .PP
 If \fCsize\fP is 0, \fCstring\fP may safely be \fCNULL\fP\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 the number of character that were actually written if not truncating, or that would have been written (not including the ending \\0)\&. 
 .RE
@@ -81,12 +81,12 @@ Type-specific attributes, for instance Cache type, Cache depth, Group depth, Bri
 .PP
 \fCattrp\fP is only filled if not \fCNULL\fP and if its size specified in \fCattrsize\fP is large enough\&. It should be at least as large as union \fBhwloc_obj_attr_u\fP\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 0 if a type was correctly identified, otherwise -1\&.
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 This function is guaranteed to match any string returned by \fBhwloc_obj_type_string()\fP or \fBhwloc_obj_type_snprintf()\fP\&.
 .PP
@@ -105,7 +105,7 @@ If multiple such levels exist (for instance if giving Group without any depth), 
 .PP
 The matched object type is set in \fCtypep\fP if \fCtypep\fP is non \fCNULL\fP\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 This function is similar to \fBhwloc_type_sscanf()\fP followed by \fBhwloc_get_type_depth()\fP but it also automatically disambiguates multiple group levels etc\&.
 .PP

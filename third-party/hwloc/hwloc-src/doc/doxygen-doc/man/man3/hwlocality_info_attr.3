@@ -1,8 +1,8 @@
-.TH "hwlocality_info_attr" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_info_attr" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_info_attr
+hwlocality_info_attr \- Consulting and Adding Key-Value Info Attributes
 .SH SYNOPSIS
 .br
 .PP
@@ -28,12 +28,12 @@ Add the given info name and value pair to the given object\&. The info is append
 .PP
 The input strings are copied before being added in the object infos\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 \fC0\fP on success, \fC-1\fP on error\&.
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 This function may be used to enforce object colors in the lstopo graphical output by using 'lstopoStyle' as a name and 'Background=#rrggbb' as a value\&. See CUSTOM COLORS in the lstopo(1) manpage for details\&.
 .PP
@@ -46,7 +46,7 @@ If \fCvalue\fP contains some non-printable characters, they will be dropped when
 .PP
 Search the given key name in object infos and return the corresponding value\&. If multiple keys match the given name, only the first one is returned\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 \fCNULL\fP if no such key exists\&. 
 .RE

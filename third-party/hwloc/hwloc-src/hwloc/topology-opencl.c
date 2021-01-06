@@ -1,5 +1,5 @@
 /*
- * Copyright © 2012-2019 Inria.  All rights reserved.
+ * Copyright © 2012-2020 Inria.  All rights reserved.
  * Copyright © 2013, 2018 Université Bordeaux.  All right reserved.
  * See COPYING in top-level directory.
  */
@@ -33,6 +33,9 @@
 /* Copyright (c) 2008-2018 The Khronos Group Inc. */
 #define HWLOC_CL_DEVICE_TYPE_CUSTOM (1<<4)
 
+/* Only supported since OpenCL 2.0 */
+/* Copyright (c) 2008-2013 The Khronos Group Inc. */
+#define HWLOC_CL_PLATFORM_NOT_FOUND_KHR -1001
 
 static int
 hwloc_opencl_discover(struct hwloc_backend *backend, struct hwloc_disc_status *dstatus)
@@ -57,8 +60,12 @@ hwloc_opencl_discover(struct hwloc_backend *backend, struct hwloc_disc_status *d
     return 0;
 
   clret = clGetPlatformIDs(0, NULL, &nr_platforms);
-  if (CL_SUCCESS != clret || !nr_platforms)
+  if (CL_SUCCESS != clret || !nr_platforms) {
+    if (CL_SUCCESS != clret && HWLOC_CL_PLATFORM_NOT_FOUND_KHR != clret && !hwloc_hide_errors()) {
+      fprintf(stderr, "OpenCL: Failed to get number of platforms with clGetPlatformIDs(): %d\n", clret);
+    }
     return -1;
+  }
   hwloc_debug("%u OpenCL platforms\n", nr_platforms);
 
   platform_ids = malloc(nr_platforms * sizeof(*platform_ids));

@@ -1,8 +1,8 @@
-.TH "hwlocality_membinding" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_membinding" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_membinding
+hwlocality_membinding \- Memory binding
 .SH SYNOPSIS
 .br
 .PP
@@ -84,12 +84,12 @@ Each hwloc memory binding function takes a bitmap argument that is a CPU set by 
 .PP
 Memory binding by CPU set cannot work for CPU-less NUMA memory nodes\&. Binding by nodeset should therefore be preferred whenever possible\&.
 .PP
-\fBSee also:\fP
+\fBSee also\fP
 .RS 4
 Some example codes are available under doc/examples/ in the source tree\&.
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 On some operating systems, memory binding affects the CPU binding; see \fBHWLOC_MEMBIND_NOCPUBIND\fP 
 .RE
@@ -139,7 +139,7 @@ Not all systems support all kinds of binding\&. \fBhwloc_topology_get_support()\
 .in +1c
 .TP
 \fB\fIHWLOC_MEMBIND_DEFAULT \fP\fP
-Reset the memory allocation policy to the system default\&. Depending on the operating system, this may correspond to \fBHWLOC_MEMBIND_FIRSTTOUCH\fP (Linux), or \fBHWLOC_MEMBIND_BIND\fP (AIX, HP-UX, Solaris, Windows)\&. This policy is never returned by get membind functions\&. The nodeset argument is ignored\&. 
+Reset the memory allocation policy to the system default\&. Depending on the operating system, this may correspond to \fBHWLOC_MEMBIND_FIRSTTOUCH\fP (Linux, FreeBSD), or \fBHWLOC_MEMBIND_BIND\fP (AIX, HP-UX, Solaris, Windows)\&. This policy is never returned by get membind functions\&. The nodeset argument is ignored\&. 
 .TP
 \fB\fIHWLOC_MEMBIND_FIRSTTOUCH \fP\fP
 Allocate each memory page individually on the local NUMA node of the thread that touches it\&. The given nodeset should usually be \fBhwloc_topology_get_topology_nodeset()\fP so that the touching thread may run and allocate on any node in the system\&.
@@ -164,7 +164,7 @@ Returned by get_membind() functions when multiple threads or parts of a memory a
 .PP
 Allocate some memory\&. This is equivalent to malloc(), except that it tries to allocate page-aligned memory from the OS\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 The allocated memory should be freed with \fBhwloc_free()\fP\&. 
 .RE
@@ -175,7 +175,7 @@ The allocated memory should be freed with \fBhwloc_free()\fP\&.
 .PP
 Allocate some memory on NUMA memory nodes specified by \fCset\fP\&. 
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 NULL with errno set to ENOSYS if the action is not supported and \fBHWLOC_MEMBIND_STRICT\fP is given 
 .PP
@@ -186,7 +186,7 @@ NULL with errno set to ENOMEM if the memory allocation failed even before trying
 .PP
 If \fBHWLOC_MEMBIND_BYNODESET\fP is specified, set is considered a nodeset\&. Otherwise it's a cpuset\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 The allocated memory should be freed with \fBhwloc_free()\fP\&. 
 .RE
@@ -263,7 +263,7 @@ If \fBHWLOC_MEMBIND_BYNODESET\fP is specified, set is considered a nodeset\&. Ot
 .PP
 If any other flags are specified, -1 is returned and errno is set to EINVAL\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 \fChwloc_pid_t\fP is \fCpid_t\fP on Unix platforms, and \fCHANDLE\fP on native Windows platforms\&. 
 .RE
@@ -274,7 +274,7 @@ If any other flags are specified, -1 is returned and errno is set to EINVAL\&.
 .PP
 Bind the already-allocated memory identified by (addr, len) to the NUMA node(s) specified by \fCset\fP\&. If \fBHWLOC_MEMBIND_BYNODESET\fP is specified, set is considered a nodeset\&. Otherwise it's a cpuset\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 0 if \fClen\fP is 0\&. 
 .PP
@@ -291,7 +291,7 @@ Set the default memory binding policy of the current process or thread to prefer
 .PP
 If \fBHWLOC_MEMBIND_BYNODESET\fP is specified, set is considered a nodeset\&. Otherwise it's a cpuset\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 -1 with errno set to ENOSYS if the action is not supported 
 .PP
@@ -304,14 +304,14 @@ If \fBHWLOC_MEMBIND_BYNODESET\fP is specified, set is considered a nodeset\&. Ot
 .PP
 Set the default memory binding policy of the specified process to prefer the NUMA node(s) specified by \fCset\fP\&. If \fBHWLOC_MEMBIND_BYNODESET\fP is specified, set is considered a nodeset\&. Otherwise it's a cpuset\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 -1 with errno set to ENOSYS if the action is not supported 
 .PP
 -1 with errno set to EXDEV if the binding cannot be enforced
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 \fChwloc_pid_t\fP is \fCpid_t\fP on Unix platforms, and \fCHANDLE\fP on native Windows platforms\&. 
 .RE

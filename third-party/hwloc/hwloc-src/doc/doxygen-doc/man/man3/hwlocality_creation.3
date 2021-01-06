@@ -1,8 +1,8 @@
-.TH "hwlocality_creation" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_creation" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_creation
+hwlocality_creation \- Topology Creation and Destruction
 .SH SYNOPSIS
 .br
 .PP
@@ -53,14 +53,14 @@ Verify that the topology is compatible with the current hwloc library\&. This is
 .PP
 If all libraries/programs use the same hwloc installation, this function always returns success\&.
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 \fC0\fP on success\&.
 .PP
 \fC-1\fP with \fCerrno\fP set to \fCEINVAL\fP if incompatible\&.
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 If sharing between processes with \fBhwloc_shmem_topology_write()\fP, the relevant check is already performed inside \fBhwloc_shmem_topology_adopt()\fP\&. 
 .RE
@@ -71,12 +71,12 @@ If sharing between processes with \fBhwloc_shmem_topology_write()\fP, the releva
 .PP
 Run internal checks on a topology structure\&. The program aborts if an inconsistency is detected in the given topology\&.
 .PP
-\fBParameters:\fP
+\fBParameters\fP
 .RS 4
 \fItopology\fP is the topology to be checked
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 This routine is only useful to developers\&.
 .PP
@@ -89,7 +89,7 @@ The input topology should have been previously loaded with \fBhwloc_topology_loa
 .PP
 Terminate and free a topology context\&. 
 .PP
-\fBParameters:\fP
+\fBParameters\fP
 .RS 4
 \fItopology\fP is the topology to be freed 
 .RE
@@ -102,7 +102,7 @@ Duplicate a topology\&. The entire topology structure as well as its objects are
 .PP
 This is useful for keeping a backup while modifying a topology\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 Object userdata is not duplicated since hwloc does not know what it point to\&. The objects of both old and new topologies will point to the same userdata\&. 
 .RE
@@ -113,12 +113,12 @@ Object userdata is not duplicated since hwloc does not know what it point to\&. 
 .PP
 Allocate a topology context\&. 
 .PP
-\fBParameters:\fP
+\fBParameters\fP
 .RS 4
 \fItopologyp\fP is assigned a pointer to the new allocated context\&.
 .RE
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 0 on success, -1 on error\&. 
 .RE
@@ -129,17 +129,17 @@ Allocate a topology context\&.
 .PP
 Build the actual topology\&. Build the actual topology once initialized with \fBhwloc_topology_init()\fP and tuned with \fBTopology Detection Configuration and Query\fP and \fBChanging the Source of Topology Discovery\fP routines\&. No other routine may be called earlier using this topology context\&.
 .PP
-\fBParameters:\fP
+\fBParameters\fP
 .RS 4
 \fItopology\fP is the topology to be loaded with objects\&.
 .RE
 .PP
-\fBReturns:\fP
+\fBReturns\fP
 .RS 4
 0 on success, -1 on error\&.
 .RE
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 On failure, the topology is reinitialized\&. It should be either destroyed with \fBhwloc_topology_destroy()\fP or configured and loaded again\&.
 .PP
@@ -148,7 +148,7 @@ This function may be called only once per topology\&.
 The binding of the current thread or process may temporarily change during this call but it will be restored before it returns\&.
 .RE
 .PP
-\fBSee also:\fP
+\fBSee also\fP
 .RS 4
 \fBTopology Detection Configuration and Query\fP and \fBChanging the Source of Topology Discovery\fP 
 .RE

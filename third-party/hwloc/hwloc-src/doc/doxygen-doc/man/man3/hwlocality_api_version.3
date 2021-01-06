@@ -1,8 +1,8 @@
-.TH "hwlocality_api_version" 3 "Mon Sep 30 2019" "Version 2.1.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
+.TH "hwlocality_api_version" 3 "Thu Nov 26 2020" "Version 2.4.0" "Hardware Locality (hwloc)" \" -*- nroff -*-
 .ad l
 .nh
 .SH NAME
-hwlocality_api_version
+hwlocality_api_version \- API version
 .SH SYNOPSIS
 .br
 .PP
@@ -10,10 +10,10 @@ hwlocality_api_version
 
 .in +1c
 .ti -1c
-.RI "#define \fBHWLOC_API_VERSION\fP   0x00020100"
+.RI "#define \fBHWLOC_API_VERSION\fP   0x00020400"
 .br
 .ti -1c
-.RI "#define \fBHWLOC_COMPONENT_ABI\fP   6"
+.RI "#define \fBHWLOC_COMPONENT_ABI\fP   7"
 .br
 .in -1c
 .SS "Functions"
@@ -28,20 +28,20 @@ hwlocality_api_version
 
 .SH "Macro Definition Documentation"
 .PP 
-.SS "#define HWLOC_API_VERSION   0x00020100"
+.SS "#define HWLOC_API_VERSION   0x00020400"
 
 .PP
 Indicate at build time which hwloc API version is being used\&. This number is updated to (X<<16)+(Y<<8)+Z when a new release X\&.Y\&.Z actually modifies the API\&.
 .PP
 Users may check for available features at build time using this number (see \fBHow do I handle API changes?\fP)\&.
 .PP
-\fBNote:\fP
+\fBNote\fP
 .RS 4
 This should not be confused with HWLOC_VERSION, the library version\&. Two stable releases of the same series usually have the same \fBHWLOC_API_VERSION\fP even if their HWLOC_VERSION are different\&. 
 .RE
 .PP
 
-.SS "#define HWLOC_COMPONENT_ABI   6"
+.SS "#define HWLOC_COMPONENT_ABI   7"
 
 .PP
 Current component and plugin ABI version (see \fBhwloc/plugins\&.h\fP) 
