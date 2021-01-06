@@ -261,7 +261,7 @@ void getNumCPUs(void) {
     }
   }
   hwloc_bitmap_and(logAccSet, logAccSet,
-                   hwloc_topology_get_online_cpuset(topology));
+                   hwloc_topology_get_allowed_cpuset(topology));
 
   hwloc_cpuset_t physAccSet;
   CHK_ERR_ERRNO((physAccSet = hwloc_bitmap_alloc()) != NULL);
@@ -329,7 +329,7 @@ void chpl_topo_setThreadLocality(c_sublocid_t subloc) {
   CHK_ERR_ERRNO((cpuset = hwloc_bitmap_alloc()) != NULL);
 
   hwloc_cpuset_from_nodeset(topology, cpuset,
-                            getNumaObj(subloc)->allowed_nodeset);
+                            getNumaObj(subloc)->nodeset);
 
   flags = HWLOC_CPUBIND_THREAD | HWLOC_CPUBIND_STRICT;
   CHK_ERR_ERRNO(hwloc_set_cpubind(topology, cpuset, flags) == 0);
@@ -533,14 +533,13 @@ void chpl_topo_setMemLocalityByPages(unsigned char* p, size_t size,
       || !do_set_area_membind)
     return;
 
-  _DBG_P("hwloc_set_area_membind_nodeset(%p, %#zx, %d)\n", p, size,
-         (int) hwloc_bitmap_first(numaObj->allowed_nodeset));
+  _DBG_P("hwloc_set_area_membind(%p, %#zx, %d)\n", p, size,
+         (int) hwloc_bitmap_first(numaObj->nodeset));
 
   flags = HWLOC_MEMBIND_MIGRATE | HWLOC_MEMBIND_STRICT;
-  CHK_ERR_ERRNO(hwloc_set_area_membind_nodeset(topology, p, size,
-                                               numaObj->allowed_nodeset,
-                                               HWLOC_MEMBIND_BIND, flags)
-                == 0);
+  CHK_ERR_ERRNO(hwloc_set_area_membind(topology, p, size,
+                                       numaObj->nodeset,
+                                       HWLOC_MEMBIND_BIND, flags) == 0);
 }
 
 
