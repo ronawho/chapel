@@ -1,0 +1,12 @@
+prefix=/tmp/eronagha/chapel/third-party/hwloc/install/linux64-x86_64-native-gnu-none-flat
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: hwloc
+Description: Hardware locality detection and management library
+Version: 2.1.0
+Requires.private: 
+Cflags: -I${includedir}
+Libs: -L${libdir} -lhwloc
+Libs.private: -lm   -lpthread

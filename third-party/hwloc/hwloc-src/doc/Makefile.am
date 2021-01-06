@@ -1,4 +1,4 @@
-# Copyright © 2009-2016 Inria.  All rights reserved.
+# Copyright © 2009-2019 Inria.  All rights reserved.
 # Copyright © 2009-2013 Université Bordeaux
 # Copyright © 2009-2016 Cisco Systems, Inc.  All rights reserved.
 # See COPYING in top-level directory.
@@ -28,12 +28,15 @@ DOX_TAG = $(DOX_DIR)/$(PACKAGE).tag
 # images already available in repository
 PREBUILT_IMAGES = images/dudley.png images/emmett.png images/hagrid.png \
         images/ppc64-with-smt.png images/ppc64-without-smt.png images/ppc64-full-with-smt.png \
-        images/devel09-pci.png
+        images/devel09-pci.png \
+        images/netloc_design.png images/netloc_draw.png
 # images built from repository before inclusion in make dist
 BUILT_IMAGES = images/diagram.png images/diagram.eps
 
 EXTRA_DIST = \
+        main.doxy \
         hwloc.doxy \
+        netloc.doxy \
         README.sed \
         doxygen.css \
         doxygen.cfg \
@@ -56,24 +59,31 @@ if HWLOC_BUILD_DOXYGEN
 # change.
 #
 
+hwloc_include_dir = $(HWLOC_top_srcdir)/include
+
 dox_inputs = $(DOX_CONFIG) \
+       $(srcdir)/main.doxy \
        $(srcdir)/hwloc.doxy \
-       $(HWLOC_top_srcdir)/include/hwloc.h \
-       $(HWLOC_top_srcdir)/include/hwloc/helper.h \
-       $(HWLOC_top_srcdir)/include/hwloc/bitmap.h \
-       $(HWLOC_top_srcdir)/include/hwloc/diff.h \
-       $(HWLOC_top_srcdir)/include/hwloc/plugins.h \
-       $(HWLOC_top_srcdir)/include/hwloc/glibc-sched.h \
-       $(HWLOC_top_srcdir)/include/hwloc/linux.h \
-       $(HWLOC_top_srcdir)/include/hwloc/linux-libnuma.h \
-       $(HWLOC_top_srcdir)/include/hwloc/opencl.h \
-       $(HWLOC_top_srcdir)/include/hwloc/cuda.h \
-       $(HWLOC_top_srcdir)/include/hwloc/cudart.h \
-       $(HWLOC_top_srcdir)/include/hwloc/nvml.h \
-       $(HWLOC_top_srcdir)/include/hwloc/gl.h \
-       $(HWLOC_top_srcdir)/include/hwloc/intel-mic.h \
-       $(HWLOC_top_srcdir)/include/hwloc/openfabrics-verbs.h \
-       $(HWLOC_top_srcdir)/include/hwloc/myriexpress.h
+       $(hwloc_include_dir)/hwloc.h \
+       $(hwloc_include_dir)/hwloc/helper.h \
+       $(hwloc_include_dir)/hwloc/bitmap.h \
+       $(hwloc_include_dir)/hwloc/export.h \
+       $(hwloc_include_dir)/hwloc/distances.h \
+       $(hwloc_include_dir)/hwloc/diff.h \
+       $(hwloc_include_dir)/hwloc/shmem.h \
+       $(hwloc_include_dir)/hwloc/plugins.h \
+       $(hwloc_include_dir)/hwloc/glibc-sched.h \
+       $(hwloc_include_dir)/hwloc/linux.h \
+       $(hwloc_include_dir)/hwloc/linux-libnuma.h \
+       $(hwloc_include_dir)/hwloc/opencl.h \
+       $(hwloc_include_dir)/hwloc/cuda.h \
+       $(hwloc_include_dir)/hwloc/cudart.h \
+       $(hwloc_include_dir)/hwloc/nvml.h \
+       $(hwloc_include_dir)/hwloc/gl.h \
+       $(hwloc_include_dir)/hwloc/intel-mic.h \
+       $(hwloc_include_dir)/hwloc/openfabrics-verbs.h \
+       $(srcdir)/netloc.doxy \
+       $(hwloc_include_dir)/netloc.h
 
 #
 # Create the images that we need for the PDF output and the HTML
@@ -258,9 +268,16 @@ man3_object_typesdir = $(man3dir)
 man3_object_types_DATA = \
         $(DOX_MAN_DIR)/man3/hwlocality_object_types.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_OBJ_BRIDGE.3 \
-        $(DOX_MAN_DIR)/man3/HWLOC_OBJ_CACHE.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_OBJ_CORE.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_OBJ_GROUP.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_OBJ_L1CACHE.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_OBJ_L2CACHE.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_OBJ_L3CACHE.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_OBJ_L4CACHE.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_OBJ_L5CACHE.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_OBJ_L1ICACHE.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_OBJ_L2ICACHE.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_OBJ_L3ICACHE.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_OBJ_MACHINE.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_OBJ_MISC.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_OBJ_NUMANODE.3 \
@@ -268,7 +285,6 @@ man3_object_types_DATA = \
         $(DOX_MAN_DIR)/man3/HWLOC_OBJ_PU.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_OBJ_PCI_DEVICE.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_OBJ_PACKAGE.3 \
-        $(DOX_MAN_DIR)/man3/HWLOC_OBJ_SYSTEM.3 \
         $(DOX_MAN_DIR)/man3/hwloc_obj_type_t.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_OBJ_CACHE_UNIFIED.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_OBJ_CACHE_DATA.3 \
@@ -296,16 +312,15 @@ man3_objects_DATA = \
         $(DOX_MAN_DIR)/man3/hwlocality_objects.3 \
         $(DOX_MAN_DIR)/man3/hwloc_obj.3 \
         $(DOX_MAN_DIR)/man3/hwloc_obj_t.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_obj_memory_s.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_obj_memory_s_hwloc_obj_memory_page_type_s.3 \
         $(DOX_MAN_DIR)/man3/hwloc_obj_attr_u.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_obj_attr_u_hwloc_numanode_attr_s.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_obj_attr_u_hwloc_numanode_attr_s_hwloc_memory_page_type_s.3 \
         $(DOX_MAN_DIR)/man3/hwloc_obj_attr_u_hwloc_bridge_attr_s.3 \
         $(DOX_MAN_DIR)/man3/hwloc_obj_attr_u_hwloc_cache_attr_s.3 \
         $(DOX_MAN_DIR)/man3/hwloc_obj_attr_u_hwloc_group_attr_s.3 \
         $(DOX_MAN_DIR)/man3/hwloc_obj_attr_u_hwloc_osdev_attr_s.3 \
         $(DOX_MAN_DIR)/man3/hwloc_obj_attr_u_hwloc_pcidev_attr_s.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_distances_s.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_obj_info_s.3
+        $(DOX_MAN_DIR)/man3/hwloc_info_s.3
 
 man3_creationdir = $(man3dir)
 man3_creation_DATA = \
@@ -315,37 +330,8 @@ man3_creation_DATA = \
         $(DOX_MAN_DIR)/man3/hwloc_topology_load.3 \
         $(DOX_MAN_DIR)/man3/hwloc_topology_destroy.3 \
         $(DOX_MAN_DIR)/man3/hwloc_topology_dup.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_abi_check.3 \
         $(DOX_MAN_DIR)/man3/hwloc_topology_check.3
-
-man3_configurationdir = $(man3dir)
-man3_configuration_DATA = \
-        $(DOX_MAN_DIR)/man3/hwlocality_configuration.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_ignore_type.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_ignore_type_keep_structure.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_ignore_all_keep_structure.3 \
-        $(DOX_MAN_DIR)/man3/HWLOC_TOPOLOGY_FLAG_IO_BRIDGES.3 \
-        $(DOX_MAN_DIR)/man3/HWLOC_TOPOLOGY_FLAG_IO_DEVICES.3 \
-        $(DOX_MAN_DIR)/man3/HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM.3 \
-        $(DOX_MAN_DIR)/man3/HWLOC_TOPOLOGY_FLAG_WHOLE_IO.3 \
-        $(DOX_MAN_DIR)/man3/HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM.3 \
-        $(DOX_MAN_DIR)/man3/HWLOC_TOPOLOGY_FLAG_ICACHES.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_flags_e.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_get_flags.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_set_flags.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_set_pid.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_set_fsroot.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_set_synthetic.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_set_xml.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_set_xmlbuffer.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_set_custom.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_set_distance_matrix.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_is_thissystem.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_discovery_support.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_cpubind_support.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_membind_support.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_support.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_set_userdata.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_get_userdata.3
 
 man3_levelsdir = $(man3dir)
 man3_levels_DATA = \
@@ -358,6 +344,7 @@ man3_levels_DATA = \
         $(DOX_MAN_DIR)/man3/HWLOC_TYPE_DEPTH_BRIDGE.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_TYPE_DEPTH_PCI_DEVICE.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_TYPE_DEPTH_OS_DEVICE.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_get_memory_parents_depth.3 \
         $(DOX_MAN_DIR)/man3/hwloc_get_type_or_above_depth.3 \
         $(DOX_MAN_DIR)/man3/hwloc_get_type_or_below_depth.3 \
         $(DOX_MAN_DIR)/man3/hwloc_get_depth_type.3 \
@@ -375,8 +362,8 @@ man3_object_strings_DATA = \
         $(DOX_MAN_DIR)/man3/hwloc_obj_type_string.3 \
         $(DOX_MAN_DIR)/man3/hwloc_obj_type_snprintf.3 \
         $(DOX_MAN_DIR)/man3/hwloc_obj_attr_snprintf.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_obj_cpuset_snprintf.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_obj_type_sscanf.3
+        $(DOX_MAN_DIR)/man3/hwloc_type_sscanf.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_type_sscanf_as_depth.3
 
 man3_object_info_attrsdir = $(man3dir)
 man3_object_info_attrs_DATA = \
@@ -414,47 +401,80 @@ man3_membinding_DATA = \
         $(DOX_MAN_DIR)/man3/HWLOC_MEMBIND_NOCPUBIND.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_MEMBIND_BYNODESET.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_MEMBIND_PROCESS.3 \
-        $(DOX_MAN_DIR)/man3/HWLOC_MEMBIND_REPLICATE.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_MEMBIND_STRICT.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_MEMBIND_THREAD.3 \
         $(DOX_MAN_DIR)/man3/hwloc_membind_flags_t.3 \
         $(DOX_MAN_DIR)/man3/hwloc_membind_policy_t.3 \
         $(DOX_MAN_DIR)/man3/hwloc_set_membind.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_set_membind_nodeset.3  \
         $(DOX_MAN_DIR)/man3/hwloc_get_membind.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_get_membind_nodeset.3  \
         $(DOX_MAN_DIR)/man3/hwloc_set_proc_membind.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_set_proc_membind_nodeset.3  \
         $(DOX_MAN_DIR)/man3/hwloc_get_proc_membind.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_get_proc_membind_nodeset.3  \
         $(DOX_MAN_DIR)/man3/hwloc_set_area_membind.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_set_area_membind_nodeset.3  \
         $(DOX_MAN_DIR)/man3/hwloc_get_area_membind.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_get_area_membind_nodeset.3  \
         $(DOX_MAN_DIR)/man3/hwloc_get_area_memlocation.3 \
         $(DOX_MAN_DIR)/man3/hwloc_alloc.3 \
         $(DOX_MAN_DIR)/man3/hwloc_alloc_membind.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_alloc_membind_nodeset.3  \
         $(DOX_MAN_DIR)/man3/hwloc_alloc_membind_policy.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_alloc_membind_policy_nodeset.3 \
         $(DOX_MAN_DIR)/man3/hwloc_free.3
+
+man3_setsourcedir = $(man3dir)
+man3_setsource_DATA = \
+        $(DOX_MAN_DIR)/man3/hwlocality_setsource.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_set_pid.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_set_synthetic.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_set_xml.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_set_xmlbuffer.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_components_flag_e.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_TOPOLOGY_COMPONENTS_FLAG_BLACKLIST.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_set_components.3
+
+man3_configurationdir = $(man3dir)
+man3_configuration_DATA = \
+        $(DOX_MAN_DIR)/man3/hwlocality_configuration.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_TOPOLOGY_FLAG_THISSYSTEM_ALLOWED_RESOURCES.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_flags_e.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_get_flags.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_set_flags.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_is_thissystem.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_discovery_support.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_cpubind_support.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_membind_support.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_support.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_type_filter_e.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_TYPE_FILTER_KEEP_ALL.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_TYPE_FILTER_KEEP_NONE.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_TYPE_FILTER_KEEP_STRUCTURE.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_TYPE_FILTER_KEEP_IMPORTANT.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_set_type_filter.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_set_all_types_filter.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_set_cache_types_filter.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_set_icache_types_filter.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_set_io_types_filter.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_get_type_filter.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_set_userdata.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_get_userdata.3
 
 man3_tinkerdir = $(man3dir)
 man3_tinker_DATA = \
         $(DOX_MAN_DIR)/man3/hwlocality_tinker.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_insert_misc_object_by_cpuset.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_insert_misc_object_by_parent.3 \
-        $(DOX_MAN_DIR)/man3/HWLOC_RESTRICT_FLAG_ADAPT_DISTANCES.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_RESTRICT_FLAG_REMOVE_CPULESS.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_RESTRICT_FLAG_BYNODESET.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_RESTRICT_FLAG_REMOVE_MEMLESS.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_RESTRICT_FLAG_ADAPT_IO.3 \
         $(DOX_MAN_DIR)/man3/HWLOC_RESTRICT_FLAG_ADAPT_MISC.3 \
         $(DOX_MAN_DIR)/man3/hwloc_restrict_flags_e.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_restrict.3
-
-man3_customdir = $(man3dir)
-man3_custom_DATA = \
-        $(DOX_MAN_DIR)/man3/hwlocality_custom.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_custom_insert_topology.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_custom_insert_group_object_by_parent.3
+        $(DOX_MAN_DIR)/man3/hwloc_topology_restrict.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_ALLOW_FLAG_ALL.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_ALLOW_FLAG_LOCAL_RESTRICTIONS.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_ALLOW_FLAG_CUSTOM.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_allow_flags_e.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_allow.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_insert_misc_object.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_alloc_group_object.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_topology_insert_group_object.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_obj_add_other_obj_sets.3
 
 man3_xmlexportdir = $(man3dir)
 man3_xmlexport_DATA = \
@@ -471,6 +491,13 @@ man3_syntheticexportdir = $(man3dir)
 man3_syntheticexport_DATA = \
         $(DOX_MAN_DIR)/man3/hwlocality_syntheticexport.3 \
         $(DOX_MAN_DIR)/man3/hwloc_topology_export_synthetic.3
+
+man3_shmemdir = $(man3dir)
+man3_shmem_DATA = \
+        $(DOX_MAN_DIR)/man3/hwlocality_shmem.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_shmem_topology_get_length.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_shmem_topology_write.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_shmem_topology_adopt.3
 
 man3_bitmapdir = $(man3dir)
 man3_bitmap_DATA = \
@@ -494,6 +521,7 @@ man3_bitmap_DATA = \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_free.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_from_ith_ulong.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_from_ulong.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_bitmap_from_ulongs.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_intersects.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_isequal.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_isfull.3 \
@@ -506,6 +534,7 @@ man3_bitmap_DATA = \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_list_sscanf.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_next.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_not.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_bitmap_nr_ulongs.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_only.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_or.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_set.3 \
@@ -519,6 +548,7 @@ man3_bitmap_DATA = \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_taskset_sscanf.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_to_ith_ulong.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_to_ulong.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_bitmap_to_ulongs.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_weight.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_xor.3 \
         $(DOX_MAN_DIR)/man3/hwloc_bitmap_zero.3
@@ -552,6 +582,16 @@ man3_helper_ancestors_DATA = \
         $(DOX_MAN_DIR)/man3/hwloc_get_common_ancestor_obj.3 \
         $(DOX_MAN_DIR)/man3/hwloc_obj_is_in_subtree.3
 
+man3_helper_find_typesdir = $(man3dir)
+man3_helper_find_types_DATA = \
+        $(DOX_MAN_DIR)/man3/hwlocality_helper_types.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_obj_type_is_normal.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_obj_type_is_memory.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_obj_type_is_io.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_obj_type_is_cache.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_obj_type_is_dcache.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_obj_type_is_icache.3
+
 man3_helper_find_cachedir = $(man3dir)
 man3_helper_find_cache_DATA = \
         $(DOX_MAN_DIR)/man3/hwlocality_helper_find_cache.3 \
@@ -580,7 +620,6 @@ man3_helper_topology_sets_DATA = \
         $(DOX_MAN_DIR)/man3/hwlocality_helper_topology_sets.3 \
         $(DOX_MAN_DIR)/man3/hwloc_topology_get_allowed_cpuset.3 \
         $(DOX_MAN_DIR)/man3/hwloc_topology_get_complete_nodeset.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_topology_get_online_cpuset.3 \
         $(DOX_MAN_DIR)/man3/hwloc_topology_get_topology_cpuset.3 \
         $(DOX_MAN_DIR)/man3/hwloc_topology_get_allowed_nodeset.3 \
         $(DOX_MAN_DIR)/man3/hwloc_topology_get_complete_cpuset.3 \
@@ -590,17 +629,35 @@ man3_helper_nodeset_convertdir = $(man3dir)
 man3_helper_nodeset_convert_DATA = \
         $(DOX_MAN_DIR)/man3/hwlocality_helper_nodeset_convert.3 \
         $(DOX_MAN_DIR)/man3/hwloc_cpuset_to_nodeset.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_cpuset_to_nodeset_strict.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_cpuset_from_nodeset.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_cpuset_from_nodeset_strict.3
+        $(DOX_MAN_DIR)/man3/hwloc_cpuset_from_nodeset.3
 
 man3_helper_distancesdir = $(man3dir)
 man3_helper_distances_DATA = \
-        $(DOX_MAN_DIR)/man3/hwlocality_distances.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_get_whole_distance_matrix_by_depth.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_get_whole_distance_matrix_by_type.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_get_distance_matrix_covering_obj_by_depth.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_get_latency.3
+        $(DOX_MAN_DIR)/man3/hwlocality_distances_get.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_s.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_kind_e.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_DISTANCES_KIND_FROM_OS.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_DISTANCES_KIND_FROM_USER.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_DISTANCES_KIND_MEANS_LATENCY.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_DISTANCES_KIND_MEANS_BANDWIDTH.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_get.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_get_by_depth.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_get_by_type.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_get_by_name.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_get_name.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_release.3 \
+        $(DOX_MAN_DIR)/man3/hwlocality_distances_consult.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_obj_index.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_obj_pair_values.3 \
+        $(DOX_MAN_DIR)/man3/hwlocality_distances_add.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_add_flag_e.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_DISTANCES_ADD_FLAG_GROUP.3 \
+        $(DOX_MAN_DIR)/man3/HWLOC_DISTANCES_ADD_FLAG_GROUP_INACCURATE.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_add.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_remove.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_remove_by_depth.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_remove_by_type.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_distances_release_remove.3
 
 man3_helper_advanced_iodir = $(man3dir)
 man3_helper_advanced_io_DATA = \
@@ -611,8 +668,7 @@ man3_helper_advanced_io_DATA = \
         $(DOX_MAN_DIR)/man3/hwloc_get_pcidev_by_busidstring.3 \
         $(DOX_MAN_DIR)/man3/hwloc_get_next_osdev.3 \
         $(DOX_MAN_DIR)/man3/hwloc_get_next_bridge.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_bridge_covers_pcibus.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_get_hostbridge_by_pcibus.3
+        $(DOX_MAN_DIR)/man3/hwloc_bridge_covers_pcibus.3
 
 man3_diffdir = $(man3dir)
 man3_diff_DATA = \
@@ -639,6 +695,7 @@ man3_diff_DATA = \
 man3_cudadir = $(man3dir)
 man3_cuda_DATA = \
         $(DOX_MAN_DIR)/man3/hwlocality_opencl.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_opencl_get_device_pci_busid.3 \
         $(DOX_MAN_DIR)/man3/hwloc_opencl_get_device_cpuset.3 \
         $(DOX_MAN_DIR)/man3/hwloc_opencl_get_device_osdev.3 \
         $(DOX_MAN_DIR)/man3/hwloc_opencl_get_device_osdev_by_index.3 \
@@ -674,10 +731,10 @@ man3_glibc_sched_DATA = \
 man3_linuxdir = $(man3dir)
 man3_linux_DATA = \
         $(DOX_MAN_DIR)/man3/hwlocality_linux.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_linux_parse_cpumap_file.3 \
         $(DOX_MAN_DIR)/man3/hwloc_linux_set_tid_cpubind.3 \
         $(DOX_MAN_DIR)/man3/hwloc_linux_get_tid_cpubind.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_linux_get_tid_last_cpu_location.3
+        $(DOX_MAN_DIR)/man3/hwloc_linux_get_tid_last_cpu_location.3 \
+        $(DOX_MAN_DIR)/man3/hwloc_linux_read_path_as_cpumask.3
 
 man3_linux_libnumadir = $(man3dir)
 man3_linux_libnuma_DATA = \
@@ -691,12 +748,6 @@ man3_linux_libnuma_DATA = \
         $(DOX_MAN_DIR)/man3/hwloc_nodeset_from_linux_libnuma_ulongs.3 \
         $(DOX_MAN_DIR)/man3/hwloc_cpuset_to_linux_libnuma_ulongs.3 \
         $(DOX_MAN_DIR)/man3/hwloc_nodeset_to_linux_libnuma_ulongs.3
-
-man3_myriexpressdir = $(man3dir)
-man3_myriexpress_DATA = \
-        $(DOX_MAN_DIR)/man3/hwlocality_myriexpress.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_mx_board_get_device_cpuset.3 \
-        $(DOX_MAN_DIR)/man3/hwloc_mx_endpoint_get_device_cpuset.3
 
 man3_openfabricsdir = $(man3dir)
 man3_openfabrics_DATA = \
@@ -734,13 +785,15 @@ $(man3_object_info_attrs_DATA): $(DOX_TAG)
 $(man3_cpubinding_DATA): $(DOX_TAG)
 $(man3_membinding_DATA): $(DOX_TAG)
 $(man3_tinker_DATA): $(DOX_TAG)
-$(man3_custom_DATA): $(DOX_TAG)
+$(man3_setsource_DATA): $(DOX_TAG)
 $(man3_xmlexport_DATA): $(DOX_TAG)
 $(man3_syntheticexport_DATA): $(DOX_TAG)
+$(man3_shmem_DATA): $(DOX_TAG)
 $(man3_bitmap_DATA): $(DOX_TAG)
 $(man3_helper_find_inside_DATA): $(DOX_TAG)
 $(man3_helper_find_covering_DATA): $(DOX_TAG)
 $(man3_helper_ancestors_DATA): $(DOX_TAG)
+$(man3_helper_find_types_DATA): $(DOX_TAG)
 $(man3_helper_find_cache_DATA): $(DOX_TAG)
 $(man3_helper_find_misc_DATA): $(DOX_TAG)
 $(man3_helper_distribute_DATA): $(DOX_TAG)
@@ -753,7 +806,6 @@ $(man3_cuda_DATA): $(DOX_TAG)
 $(man3_glibc_sched_DATA): $(DOX_TAG)
 $(man3_linux_DATA): $(DOX_TAG)
 $(man3_linux_libnuma_DATA): $(DOX_TAG)
-$(man3_myriexpress_DATA): $(DOX_TAG)
 $(man3_openfabrics_DATA): $(DOX_TAG)
 
 $(DOX_LETTERPDF): $(DOX_TAG)
@@ -789,7 +841,7 @@ if HWLOC_BUILD_README
 # Rules for creating the top-level README file.  There does not appear
 # to be an easy way to know if AC_PATH_PROG found something in
 # configure.ac (!), so put a run-time check here to see if we have
-# w3c.  
+# w3c.
 #
 # Just like BUILD_DOXYGEN, BUILD_README will automatically be false if
 # we're not building standalone.
@@ -799,7 +851,7 @@ $(HWLOC_top_srcdir)/README: $(DOX_TAG)
 	sed -n -f $(srcdir)/README.sed $(DOX_HTML_DIR)/index.html > $(DOX_HTML_README)
 	LC_ALL=C $(HWLOC_W3_GENERATOR) $(DOX_HTML_README) \
 	 | $(SED) -n -e 's/^   //' -e '/^Introduction$$/,$$p' \
-	 | $(SED) -e '/^Installation$$/,$$ d' \
+	 | $(SED) -e '/^--*-$$/,$$ d' \
 	 > $@
 	echo >> $@
 	echo >> $@

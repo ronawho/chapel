@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=9"/>
 <meta name="generator" content="Doxygen 1.8.13"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Hardware Locality (hwloc): hwloc_obj_memory_s Struct Reference</title>
+<title>Hardware Locality (hwloc): Finding Objects covering at least CPU set</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -19,7 +19,7 @@
  <tr style="height: 56px;">
   <td id="projectalign" style="padding-left: 0.5em;">
    <div id="projectname">Hardware Locality (hwloc)
-   &#160;<span id="projectnumber">1.11.13</span>
+   &#160;<span id="projectnumber">2.1.0</span>
    </div>
   </td>
  </tr>
@@ -39,99 +39,215 @@ $(function() {
 </div><!-- top -->
 <div class="header">
   <div class="summary">
-<a href="#nested-classes">Data Structures</a> &#124;
-<a href="#pub-attribs">Data Fields</a>  </div>
+<a href="#func-members">Functions</a>  </div>
   <div class="headertitle">
-<div class="title">hwloc_obj_memory_s Struct Reference<div class="ingroups"><a class="el" href="a00152.html">Object Structure and Attributes</a></div></div>  </div>
+<div class="title">Finding Objects covering at least CPU set</div>  </div>
 </div><!--header-->
 <div class="contents">
-
-<p><code>#include &lt;<a class="el" href="a00101_source.html">hwloc.h</a>&gt;</code></p>
 <table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="nested-classes"></a>
-Data Structures</h2></td></tr>
-<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00200.html">hwloc_obj_memory_page_type_s</a></td></tr>
-<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
-</table><table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
-Data Fields</h2></td></tr>
-<tr class="memitem:a8befd0b3f4f8b695cafed04b31f36a44"><td class="memItemLeft" align="right" valign="top">hwloc_uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00196.html#a8befd0b3f4f8b695cafed04b31f36a44">total_memory</a></td></tr>
-<tr class="separator:a8befd0b3f4f8b695cafed04b31f36a44"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aace044c7f3fd9dffe50202296bf1dc5a"><td class="memItemLeft" align="right" valign="top">hwloc_uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00196.html#aace044c7f3fd9dffe50202296bf1dc5a">local_memory</a></td></tr>
-<tr class="separator:aace044c7f3fd9dffe50202296bf1dc5a"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a208c27f4491077d7fb9ba5db8b29cb57"><td class="memItemLeft" align="right" valign="top">unsigned&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00196.html#a208c27f4491077d7fb9ba5db8b29cb57">page_types_len</a></td></tr>
-<tr class="separator:a208c27f4491077d7fb9ba5db8b29cb57"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a865eba7b12b986d72dbe7a2cfd97c50d"><td class="memItemLeft" align="right" valign="top">struct <a class="el" href="a00200.html">hwloc_obj_memory_s::hwloc_obj_memory_page_type_s</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00196.html#a865eba7b12b986d72dbe7a2cfd97c50d">page_types</a></td></tr>
-<tr class="separator:a865eba7b12b986d72dbe7a2cfd97c50d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:ga0e66aa2dc6b2527cfd10723af646c9d7"><td class="memItemLeft" align="right" valign="top">static <a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00196.html#ga0e66aa2dc6b2527cfd10723af646c9d7">hwloc_get_child_covering_cpuset</a> (<a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a> topology, <a class="el" href="a00183.html#ga1f784433e9b606261f62d1134f6a3b25">hwloc_const_cpuset_t</a> set, <a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a> parent)</td></tr>
+<tr class="separator:ga0e66aa2dc6b2527cfd10723af646c9d7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga41acdcdbb8b95d70ecf6c572a3f67dca"><td class="memItemLeft" align="right" valign="top">static <a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00196.html#ga41acdcdbb8b95d70ecf6c572a3f67dca">hwloc_get_obj_covering_cpuset</a> (<a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a> topology, <a class="el" href="a00183.html#ga1f784433e9b606261f62d1134f6a3b25">hwloc_const_cpuset_t</a> set)</td></tr>
+<tr class="separator:ga41acdcdbb8b95d70ecf6c572a3f67dca"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gaba4b6d86eba1169ced4b0e941d2bb5f0"><td class="memItemLeft" align="right" valign="top">static <a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00196.html#gaba4b6d86eba1169ced4b0e941d2bb5f0">hwloc_get_next_obj_covering_cpuset_by_depth</a> (<a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a> topology, <a class="el" href="a00183.html#ga1f784433e9b606261f62d1134f6a3b25">hwloc_const_cpuset_t</a> set, int depth, <a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a> prev)</td></tr>
+<tr class="separator:gaba4b6d86eba1169ced4b0e941d2bb5f0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga91cfae08b092e7966002e15d1e987213"><td class="memItemLeft" align="right" valign="top">static <a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00196.html#ga91cfae08b092e7966002e15d1e987213">hwloc_get_next_obj_covering_cpuset_by_type</a> (<a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a> topology, <a class="el" href="a00183.html#ga1f784433e9b606261f62d1134f6a3b25">hwloc_const_cpuset_t</a> set, <a class="el" href="a00184.html#gacd37bb612667dc437d66bfb175a8dc55">hwloc_obj_type_t</a> type, <a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a> prev)</td></tr>
+<tr class="separator:ga91cfae08b092e7966002e15d1e987213"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Object memory. </p>
-</div><h2 class="groupheader">Field Documentation</h2>
-<a id="aace044c7f3fd9dffe50202296bf1dc5a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aace044c7f3fd9dffe50202296bf1dc5a">&#9670;&nbsp;</a></span>local_memory</h2>
+<h2 class="groupheader">Function Documentation</h2>
+<a id="ga0e66aa2dc6b2527cfd10723af646c9d7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ga0e66aa2dc6b2527cfd10723af646c9d7">&#9670;&nbsp;</a></span>hwloc_get_child_covering_cpuset()</h2>
 
 <div class="memitem">
 <div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">hwloc_uint64_t hwloc_obj_memory_s::local_memory</td>
+          <td class="memname">static <a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a> hwloc_get_child_covering_cpuset </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a>&#160;</td>
+          <td class="paramname"><em>topology</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="a00183.html#ga1f784433e9b606261f62d1134f6a3b25">hwloc_const_cpuset_t</a>&#160;</td>
+          <td class="paramname"><em>set</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a>&#160;</td>
+          <td class="paramname"><em>parent</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
         </tr>
       </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
 </div><div class="memdoc">
 
-<p>Local memory (in bytes) </p>
+<p>Get the child covering at least CPU set <code>set</code>. </p>
+<dl class="section return"><dt>Returns</dt><dd><code>NULL</code> if no child matches or if <code>set</code> is empty.</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>This function cannot work if parent does not have a CPU set (I/O or Misc objects). </dd></dl>
 
 </div>
 </div>
-<a id="a865eba7b12b986d72dbe7a2cfd97c50d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a865eba7b12b986d72dbe7a2cfd97c50d">&#9670;&nbsp;</a></span>page_types</h2>
+<a id="gaba4b6d86eba1169ced4b0e941d2bb5f0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#gaba4b6d86eba1169ced4b0e941d2bb5f0">&#9670;&nbsp;</a></span>hwloc_get_next_obj_covering_cpuset_by_depth()</h2>
 
 <div class="memitem">
 <div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">struct <a class="el" href="a00200.html">hwloc_obj_memory_s::hwloc_obj_memory_page_type_s</a> *  hwloc_obj_memory_s::page_types</td>
+          <td class="memname">static <a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a> hwloc_get_next_obj_covering_cpuset_by_depth </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a>&#160;</td>
+          <td class="paramname"><em>topology</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="a00183.html#ga1f784433e9b606261f62d1134f6a3b25">hwloc_const_cpuset_t</a>&#160;</td>
+          <td class="paramname"><em>set</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>depth</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a>&#160;</td>
+          <td class="paramname"><em>prev</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
         </tr>
       </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
 </div><div class="memdoc">
+
+<p>Iterate through same-depth objects covering at least CPU set <code>set</code>. </p>
+<p>If object <code>prev</code> is <code>NULL</code>, return the first object at depth <code>depth</code> covering at least part of CPU set <code>set</code>. The next invokation should pass the previous return value in <code>prev</code> so as to obtain the next object covering at least another part of <code>set</code>.</p>
+<dl class="section note"><dt>Note</dt><dd>This function cannot work if objects at the given depth do not have CPU sets (I/O or Misc objects). </dd></dl>
 
 </div>
 </div>
-<a id="a208c27f4491077d7fb9ba5db8b29cb57"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a208c27f4491077d7fb9ba5db8b29cb57">&#9670;&nbsp;</a></span>page_types_len</h2>
+<a id="ga91cfae08b092e7966002e15d1e987213"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ga91cfae08b092e7966002e15d1e987213">&#9670;&nbsp;</a></span>hwloc_get_next_obj_covering_cpuset_by_type()</h2>
 
 <div class="memitem">
 <div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">unsigned hwloc_obj_memory_s::page_types_len</td>
+          <td class="memname">static <a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a> hwloc_get_next_obj_covering_cpuset_by_type </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a>&#160;</td>
+          <td class="paramname"><em>topology</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="a00183.html#ga1f784433e9b606261f62d1134f6a3b25">hwloc_const_cpuset_t</a>&#160;</td>
+          <td class="paramname"><em>set</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="a00184.html#gacd37bb612667dc437d66bfb175a8dc55">hwloc_obj_type_t</a>&#160;</td>
+          <td class="paramname"><em>type</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a>&#160;</td>
+          <td class="paramname"><em>prev</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
         </tr>
       </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
 </div><div class="memdoc">
 
-<p>Size of array <code>page_types</code>. </p>
+<p>Iterate through same-type objects covering at least CPU set <code>set</code>. </p>
+<p>If object <code>prev</code> is <code>NULL</code>, return the first object of type <code>type</code> covering at least part of CPU set <code>set</code>. The next invokation should pass the previous return value in <code>prev</code> so as to obtain the next object of type <code>type</code> covering at least another part of <code>set</code>.</p>
+<p>If there are no or multiple depths for type <code>type</code>, <code>NULL</code> is returned. The caller may fallback to <a class="el" href="a00196.html#gaba4b6d86eba1169ced4b0e941d2bb5f0" title="Iterate through same-depth objects covering at least CPU set set. ">hwloc_get_next_obj_covering_cpuset_by_depth()</a> for each depth.</p>
+<dl class="section note"><dt>Note</dt><dd>This function cannot work if objects of the given type do not have CPU sets (I/O or Misc objects). </dd></dl>
 
 </div>
 </div>
-<a id="a8befd0b3f4f8b695cafed04b31f36a44"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8befd0b3f4f8b695cafed04b31f36a44">&#9670;&nbsp;</a></span>total_memory</h2>
+<a id="ga41acdcdbb8b95d70ecf6c572a3f67dca"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ga41acdcdbb8b95d70ecf6c572a3f67dca">&#9670;&nbsp;</a></span>hwloc_get_obj_covering_cpuset()</h2>
 
 <div class="memitem">
 <div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">hwloc_uint64_t hwloc_obj_memory_s::total_memory</td>
+          <td class="memname">static <a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a> hwloc_get_obj_covering_cpuset </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a>&#160;</td>
+          <td class="paramname"><em>topology</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="a00183.html#ga1f784433e9b606261f62d1134f6a3b25">hwloc_const_cpuset_t</a>&#160;</td>
+          <td class="paramname"><em>set</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
         </tr>
       </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
 </div><div class="memdoc">
 
-<p>Total memory (in bytes) in this object and its children. </p>
+<p>Get the lowest object covering at least CPU set <code>set</code>. </p>
+<dl class="section return"><dt>Returns</dt><dd><code>NULL</code> if no object matches or if <code>set</code> is empty. </dd></dl>
 
 </div>
 </div>
-<hr/>The documentation for this struct was generated from the following file:<ul>
-<li><a class="el" href="a00101_source.html">hwloc.h</a></li>
-</ul>
 </div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>

@@ -21,13 +21,13 @@
     <ClCompile Include="..\..\utils\lstopo\lstopo-ascii.c">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\utils\lstopo\lstopo-color.c">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="..\..\utils\lstopo\lstopo-draw.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\utils\lstopo\lstopo-fig.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\utils\lstopo\lstopo-svg.c">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="..\..\utils\lstopo\lstopo-text.c">
@@ -39,6 +39,9 @@
     <ClCompile Include="..\..\utils\lstopo\lstopo-windows.c">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\utils\hwloc\common-ps.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\include\hwloc.h">
@@ -48,9 +51,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\hwloc\helper.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="..\..\include\hwloc\myriexpress.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\include\hwloc\openfabrics-verbs.h">
@@ -84,6 +84,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\utils\hwloc\misc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\utils\hwloc\common-ps.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="..\..\utils\lstopo\lstopo.h">

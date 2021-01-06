@@ -6,8 +6,8 @@
  * See COPYING in top-level directory.
  */
 
-#include <private/autogen/config.h>
-#include <hwloc.h>
+#include "private/autogen/config.h"
+#include "hwloc.h"
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -23,9 +23,7 @@ static hwloc_pid_t pid;
 static int verbose_mode = 0;
 static int logical = 1;
 static int show_ancestors = 0;
-static hwloc_obj_type_t show_ancestor_type = (hwloc_obj_type_t) -1;
-static int show_ancestor_attrdepth = -1;
-static hwloc_obj_cache_type_t show_ancestor_attrcachetype = (hwloc_obj_cache_type_t) -1;
+static int show_ancestor_depth = HWLOC_TYPE_DEPTH_UNKNOWN;
 static int show_children = 0;
 static int show_descendants_depth = HWLOC_TYPE_DEPTH_UNKNOWN;
 static int show_index_prefix = 0;
@@ -48,6 +46,8 @@ void usage(const char *name, FILE *where)
   fprintf (where, "Object filtering options:\n");
   fprintf (where, "  --restrict <cpuset>   Restrict the topology to processors listed in <cpuset>\n");
   fprintf (where, "  --restrict binding    Restrict the topology to the current process binding\n");
+  fprintf (where, "  --filter <type>:<knd> Filter objects of the given type, or all.\n");
+  fprintf (where, "     <knd> may be `all' (keep all), `none' (remove all), `structure' or `important'\n");
   fprintf (where, "  --no-icaches          Do not show instruction caches\n");
   fprintf (where, "  --no-io               Do not show any I/O device or bridge\n");
   fprintf (where, "  --no-bridges          Do not any I/O bridge except hostbridges\n");
@@ -57,7 +57,7 @@ void usage(const char *name, FILE *where)
   fprintf (where, "  --thissystem          Assume that the input topology provides the topology\n"
 		  "                        for the system on which we are running\n");
   fprintf (where, "  --pid <pid>           Detect topology as seen by process <pid>\n");
-  fprintf (where, "  --whole-system        Do not consider administration limitations\n");
+  fprintf (where, "  --disallowed          Include objects disallowed by administrative limitations\n");
   fprintf (where, "  -l --logical          Use logical object indexes for input (default)\n");
   fprintf (where, "  -p --physical         Use physical object indexes for input\n");
   fprintf (where, "Miscellaneous options:\n");
@@ -65,7 +65,7 @@ void usage(const char *name, FILE *where)
 }
 
 static void
-hwloc_info_show_obj(hwloc_obj_t obj, const char *type, const char *prefix, int verbose)
+hwloc_info_show_obj(hwloc_topology_t topology, hwloc_obj_t obj, const char *type, const char *prefix, int verbose)
 {
   char s[128];
   unsigned i;
@@ -76,49 +76,62 @@ hwloc_info_show_obj(hwloc_obj_t obj, const char *type, const char *prefix, int v
   printf("%s logical index = %u\n", prefix, obj->logical_index);
   if (obj->os_index != (unsigned) -1)
     printf("%s os index = %u\n", prefix, obj->os_index);
+  printf("%s gp index = %llu\n", prefix, (unsigned long long) obj->gp_index);
   if (obj->name)
     printf("%s name = %s\n", prefix, obj->name);
-  if (obj->depth != (unsigned) -1)
-    printf("%s depth = %d\n", prefix, (int) obj->depth); /* special levels have negative values */
+  printf("%s depth = %d\n", prefix, obj->depth);
   printf("%s sibling rank = %u\n", prefix, obj->sibling_rank);
   printf("%s children = %u\n", prefix, obj->arity);
-  if (obj->memory.local_memory)
-    printf("%s local memory = %llu\n", prefix, (unsigned long long) obj->memory.local_memory);
-  if (obj->memory.total_memory)
-    printf("%s total memory = %llu\n", prefix, (unsigned long long) obj->memory.total_memory);
+  printf("%s memory children = %u\n", prefix, obj->memory_arity);
+  printf("%s i/o children = %u\n", prefix, obj->io_arity);
+  printf("%s misc children = %u\n", prefix, obj->misc_arity);
+
+  if (obj->type == HWLOC_OBJ_NUMANODE) {
+    printf("%s local memory = %llu\n", prefix, (unsigned long long) obj->attr->numanode.local_memory);
+  }
+  if (obj->total_memory)
+    printf("%s total memory = %llu\n", prefix, (unsigned long long) obj->total_memory);
 
   if (obj->cpuset) {
     hwloc_bitmap_snprintf(s, sizeof(s), obj->cpuset);
     printf("%s cpuset = %s\n", prefix, s);
-  }
-  if (obj->complete_cpuset) {
+
     hwloc_bitmap_snprintf(s, sizeof(s), obj->complete_cpuset);
     printf("%s complete cpuset = %s\n", prefix, s);
-  }
-  if (obj->online_cpuset) {
-    hwloc_bitmap_snprintf(s, sizeof(s), obj->online_cpuset);
-    printf("%s online cpuset = %s\n", prefix, s);
-  }
-  if (obj->allowed_cpuset) {
-    hwloc_bitmap_snprintf(s, sizeof(s), obj->allowed_cpuset);
-    printf("%s allowed cpuset = %s\n", prefix, s);
-  }
 
-  if (obj->nodeset) {
+    {
+      hwloc_bitmap_t allowed_cpuset = hwloc_bitmap_dup(obj->cpuset);
+      hwloc_bitmap_and(allowed_cpuset, allowed_cpuset, hwloc_topology_get_allowed_cpuset(topology));
+      hwloc_bitmap_snprintf(s, sizeof(s), allowed_cpuset);
+      hwloc_bitmap_free(allowed_cpuset);
+      printf("%s allowed cpuset = %s\n", prefix, s);
+    }
+
     hwloc_bitmap_snprintf(s, sizeof(s), obj->nodeset);
     printf("%s nodeset = %s\n", prefix, s);
-  }
-  if (obj->complete_nodeset) {
+
     hwloc_bitmap_snprintf(s, sizeof(s), obj->complete_nodeset);
     printf("%s complete nodeset = %s\n", prefix, s);
-  }
-  if (obj->allowed_nodeset) {
-    hwloc_bitmap_snprintf(s, sizeof(s), obj->allowed_nodeset);
-    printf("%s allowed nodeset = %s\n", prefix, s);
+
+    {
+      hwloc_bitmap_t allowed_nodeset = hwloc_bitmap_dup(obj->nodeset);
+      hwloc_bitmap_and(allowed_nodeset, allowed_nodeset, hwloc_topology_get_allowed_nodeset(topology));
+      hwloc_bitmap_snprintf(s, sizeof(s), allowed_nodeset);
+      hwloc_bitmap_free(allowed_nodeset);
+      printf("%s allowed nodeset = %s\n", prefix, s);
+    }
   }
 
   switch (obj->type) {
-  case HWLOC_OBJ_CACHE:
+  case HWLOC_OBJ_L1CACHE:
+  case HWLOC_OBJ_L2CACHE:
+  case HWLOC_OBJ_L3CACHE:
+  case HWLOC_OBJ_L4CACHE:
+  case HWLOC_OBJ_L5CACHE:
+  case HWLOC_OBJ_L1ICACHE:
+  case HWLOC_OBJ_L2ICACHE:
+  case HWLOC_OBJ_L3ICACHE:
+  case HWLOC_OBJ_MEMCACHE:
     printf("%s attr cache depth = %u\n", prefix, obj->attr->cache.depth);
     switch (obj->attr->cache.type) {
     case HWLOC_OBJ_CACHE_UNIFIED: printf("%s attr cache type = Unified\n", prefix); break;
@@ -185,7 +198,8 @@ hwloc_info_show_obj(hwloc_obj_t obj, const char *type, const char *prefix, int v
   printf("%s symmetric subtree = %d\n", prefix, obj->symmetric_subtree);
 
   for(i=0; i<obj->infos_count; i++) {
-    printf("%s info %s = %s\n", prefix, obj->infos[i].name, obj->infos[i].value);
+    struct hwloc_info_s *info = &obj->infos[i];
+    printf("%s info %s = %s\n", prefix, info->name, info->value);
   }
 }
 
@@ -220,37 +234,24 @@ hwloc_calc_process_location_info_cb(struct hwloc_calc_location_context_s *lconte
 	       prefix, parents, parent->logical_index, level, objs, obj->logical_index);
       else
 	printf("%s%s L#%u\n", prefix, parents, parent->logical_index);
-      hwloc_info_show_obj(parent, parents, prefix, verbose);
+      hwloc_info_show_obj(topology, parent, parents, prefix, verbose);
       parent = parent->parent;
       level++;
     }
-  } else if (show_ancestor_type != (hwloc_obj_type_t) -1) {
+  } else if (show_ancestor_depth != HWLOC_TYPE_DEPTH_UNKNOWN) {
     char parents[128];
     hwloc_obj_t parent = obj;
     while (parent) {
-      if (parent->type == show_ancestor_type) {
-	if (parent->type == HWLOC_OBJ_GROUP
-	    && show_ancestor_attrdepth != -1
-	    && show_ancestor_attrdepth != (int) parent->attr->group.depth)
-	  goto next;
-	if (parent->type == HWLOC_OBJ_CACHE
-	    && show_ancestor_attrdepth != -1
-	    && show_ancestor_attrdepth != (int) parent->attr->cache.depth)
-	  goto next;
-	if (parent->type == HWLOC_OBJ_CACHE
-	    && show_ancestor_attrcachetype != (hwloc_obj_cache_type_t) -1
-	    && parent->attr->cache.type != HWLOC_OBJ_CACHE_UNIFIED
-	    && show_ancestor_attrcachetype != parent->attr->cache.type)
-	  goto next;
+      if (parent->depth == show_ancestor_depth) {
 	hwloc_obj_type_snprintf(parents, sizeof(parents), parent, 1);
 	if (verbose < 0)
 	  printf("%s%s:%u\n", prefix, parents, parent->logical_index);
 	else
 	  printf("%s%s L#%u = parent of %s L#%u\n",
 		 prefix, parents, parent->logical_index, objs, obj->logical_index);
-	hwloc_info_show_obj(parent, parents, prefix, verbose);
+	hwloc_info_show_obj(topology, parent, parents, prefix, verbose);
+	break;
       }
-next:
       parent = parent->parent;
     }
   } else if (show_children) {
@@ -266,7 +267,7 @@ next:
       else
 	printf("%s%s L#%u = child #%u of %s L#%u\n",
 	       prefix, childs, child->logical_index, i, objs, obj->logical_index);
-      hwloc_info_show_obj(child, childs, prefix, verbose);
+      hwloc_info_show_obj(topology, child, childs, prefix, verbose);
       i++;
     }
   } else if (show_descendants_depth != HWLOC_TYPE_DEPTH_UNKNOWN) {
@@ -285,7 +286,7 @@ next:
 	else
 	  printf("%s%s L#%u = descendant #%u of %s L#%u\n",
 		 prefix, childs, child->logical_index, i, objs, obj->logical_index);
-	hwloc_info_show_obj(child, childs, prefix, verbose);
+	hwloc_info_show_obj(topology, child, childs, prefix, verbose);
       }
     } else {
       /* custom level */
@@ -316,7 +317,7 @@ next:
 	else
 	  printf("%s%s L#%u = descendant #%u of %s L#%u\n",
 		 prefix, childs, child->logical_index, i, objs, obj->logical_index);
-	hwloc_info_show_obj(child, childs, prefix, verbose);
+	hwloc_info_show_obj(topology, child, childs, prefix, verbose);
 	i++;
       }
     }
@@ -325,7 +326,7 @@ next:
       printf("%s%s:%u\n", prefix, objs, obj->logical_index);
     else
       printf("%s%s L#%u\n", prefix, objs, obj->logical_index);
-    hwloc_info_show_obj(obj, objs, prefix, verbose);
+    hwloc_info_show_obj(topology, obj, objs, prefix, verbose);
   }
 
   current_obj++;
@@ -336,22 +337,17 @@ main (int argc, char *argv[])
 {
   int err;
   hwloc_topology_t topology;
-  unsigned topodepth;
-  unsigned long flags = HWLOC_TOPOLOGY_FLAG_IO_DEVICES | HWLOC_TOPOLOGY_FLAG_IO_BRIDGES | HWLOC_TOPOLOGY_FLAG_ICACHES;
+  int topodepth;
+  unsigned long flags = 0;
   char * callname;
   char * input = NULL;
   enum hwloc_utils_input_format input_format = HWLOC_UTILS_INPUT_DEFAULT;
-  hwloc_obj_type_t show_descendants_type = (hwloc_obj_type_t) -1;
-  int show_descendants_attrdepth = -1;
-  hwloc_obj_cache_type_t show_descendants_attrcachetype = (hwloc_obj_cache_type_t) -1;
+  const char *show_ancestor_type = NULL;
+  const char *show_descendants_type = NULL;
   char *restrictstring = NULL;
   size_t typelen;
   int opt;
   enum hwloc_info_mode { HWLOC_INFO_MODE_UNKNOWN, HWLOC_INFO_MODE_TOPOLOGY, HWLOC_INFO_MODE_OBJECTS, HWLOC_INFO_MODE_SUPPORT } mode = HWLOC_INFO_MODE_UNKNOWN;
-
-  /* enable verbose backends */
-  putenv((char *) "HWLOC_XML_VERBOSE=1");
-  putenv((char *) "HWLOC_SYNTHETIC_VERBOSE=1");
 
   callname = strrchr(argv[0], '/');
   if (!callname)
@@ -362,11 +358,20 @@ main (int argc, char *argv[])
   argc--;
   argv++;
 
+  hwloc_utils_check_api_version(callname);
+
+  /* enable verbose backends */
+  if (!getenv("HWLOC_XML_VERBOSE"))
+    putenv((char *) "HWLOC_XML_VERBOSE=1");
+  if (!getenv("HWLOC_SYNTHETIC_VERBOSE"))
+    putenv((char *) "HWLOC_SYNTHETIC_VERBOSE=1");
+
   err = hwloc_topology_init (&topology);
   if (err)
     return EXIT_FAILURE;
 
-  hwloc_topology_set_flags(topology, flags);
+  hwloc_topology_set_all_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_ALL);
+  hwloc_topology_set_io_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_IMPORTANT);
 
   while (argc >= 1) {
     opt = 0;
@@ -394,12 +399,7 @@ main (int argc, char *argv[])
 	  usage (callname, stderr);
 	  exit(EXIT_FAILURE);
 	}
-	err = hwloc_obj_type_sscanf(argv[1], &show_ancestor_type, &show_ancestor_attrdepth, &show_ancestor_attrcachetype, sizeof(show_ancestor_attrcachetype));
-        if (err < 0) {
-          fprintf(stderr, "unrecognized --ancestor type %s\n", argv[1]);
-          usage(callname, stderr);
-          return EXIT_FAILURE;
-        }
+	show_ancestor_type = argv[1];
 	opt = 1;
       }
       else if (!strcmp (argv[0], "--children"))
@@ -409,25 +409,75 @@ main (int argc, char *argv[])
 	  usage (callname, stderr);
 	  exit(EXIT_FAILURE);
 	}
-	err = hwloc_obj_type_sscanf(argv[1], &show_descendants_type, &show_descendants_attrdepth, &show_descendants_attrcachetype, sizeof(show_descendants_attrcachetype));
-        if (err < 0) {
-          fprintf(stderr, "unrecognized --descendants type %s\n", argv[1]);
-          usage(callname, stderr);
-          return EXIT_FAILURE;
-        }
+	show_descendants_type = argv[1];
 	opt = 1;
       }
-      else if (!strcmp (argv[0], "--no-icaches"))
-	flags &= ~HWLOC_TOPOLOGY_FLAG_ICACHES;
-      else if (!strcmp (argv[0], "--whole-system"))
-	flags |= HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM;
-      else if (!strcmp (argv[0], "--no-io"))
-	flags &= ~(HWLOC_TOPOLOGY_FLAG_IO_DEVICES | HWLOC_TOPOLOGY_FLAG_IO_BRIDGES);
-      else if (!strcmp (argv[0], "--no-bridges"))
-	flags &= ~(HWLOC_TOPOLOGY_FLAG_IO_BRIDGES);
-      else if (!strcmp (argv[0], "--whole-io"))
-	flags |= HWLOC_TOPOLOGY_FLAG_WHOLE_IO;
-      else if (!strcmp (argv[0], "--thissystem"))
+      else if (!strcmp (argv[0], "--filter")) {
+        hwloc_obj_type_t type;
+        char *colon;
+        enum hwloc_type_filter_e filter = HWLOC_TYPE_FILTER_KEEP_ALL;
+        int all = 0;
+	int allio = 0;
+	int allcaches = 0;
+	int allicaches = 0;
+        if (argc < 2) {
+	  usage (callname, stderr);
+	  exit(EXIT_FAILURE);
+	}
+        colon = strchr(argv[1], ':');
+        if (colon) {
+          *colon = '\0';
+          if (!strcmp(colon+1, "none"))
+            filter = HWLOC_TYPE_FILTER_KEEP_NONE;
+          else if (!strcmp(colon+1, "all"))
+            filter = HWLOC_TYPE_FILTER_KEEP_ALL;
+          else if (!strcmp(colon+1, "structure"))
+            filter = HWLOC_TYPE_FILTER_KEEP_STRUCTURE;
+	  else if (!strcmp(colon+1, "important"))
+	    filter = HWLOC_TYPE_FILTER_KEEP_IMPORTANT;
+	  else {
+	    fprintf(stderr, "Unsupported filtering kind `%s' passed to --filter.\n", colon+1);
+	    usage (callname, stderr);
+	    exit(EXIT_FAILURE);
+	  }
+        }
+        if (!strcmp(argv[1], "all"))
+          all = 1;
+	else if (!strcmp(argv[1], "io"))
+	  allio = 1;
+	else if (!strcmp(argv[1], "cache"))
+	  allcaches = 1;
+	else if (!strcmp(argv[1], "icache"))
+	  allicaches = 1;
+        else if (hwloc_type_sscanf(argv[1], &type, NULL, 0) < 0) {
+          fprintf(stderr, "Unsupported type `%s' passed to --filter.\n", argv[1]);
+	  usage (callname, stderr);
+	  exit(EXIT_FAILURE);
+        }
+        if (all)
+          hwloc_topology_set_all_types_filter(topology, filter);
+	else if (allio)
+          hwloc_topology_set_io_types_filter(topology, filter);
+	else if (allcaches) {
+	  hwloc_topology_set_cache_types_filter(topology, filter);
+	  hwloc_topology_set_type_filter(topology, HWLOC_OBJ_MEMCACHE, filter);
+	} else if (allicaches)
+	  hwloc_topology_set_icache_types_filter(topology, filter);
+        else
+          hwloc_topology_set_type_filter(topology, type, filter);
+        opt = 1;
+      }
+      else if (!strcmp (argv[0], "--no-icaches")) {
+	hwloc_topology_set_icache_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_NONE);
+      } else if (!strcmp (argv[0], "--disallowed") || !strcmp (argv[0], "--whole-system"))
+	flags |= HWLOC_TOPOLOGY_FLAG_INCLUDE_DISALLOWED;
+      else if (!strcmp (argv[0], "--no-io")) {
+	hwloc_topology_set_io_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_NONE);
+      } else if (!strcmp (argv[0], "--no-bridges")) {
+	hwloc_topology_set_type_filter(topology, HWLOC_OBJ_BRIDGE, HWLOC_TYPE_FILTER_KEEP_NONE);
+      } else if (!strcmp (argv[0], "--whole-io")) {
+	hwloc_topology_set_io_types_filter(topology, HWLOC_TYPE_FILTER_KEEP_ALL);
+      } else if (!strcmp (argv[0], "--thissystem"))
 	flags |= HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM;
       else if (!strcmp (argv[0], "--restrict")) {
 	if (argc < 2) {
@@ -495,28 +545,35 @@ main (int argc, char *argv[])
 
   topodepth = hwloc_topology_get_depth(topology);
 
-  if (show_descendants_type != (hwloc_obj_type_t) -1) {
-    show_descendants_depth = hwloc_get_type_depth(topology, show_descendants_type);
+  if (show_ancestor_type) {
+    err = hwloc_type_sscanf_as_depth(show_ancestor_type, NULL, topology, &show_ancestor_depth);
+    if (err < 0) {
+      fprintf(stderr, "unrecognized --ancestor type %s\n", show_ancestor_type);
+      usage(callname, stderr);
+      return EXIT_FAILURE;
+    }
+    if (show_ancestor_depth == HWLOC_TYPE_DEPTH_UNKNOWN) {
+      fprintf(stderr, "unavailable --ancestor type %s\n", show_ancestor_type);
+      return EXIT_FAILURE;
+    }
+    if (show_ancestor_depth == HWLOC_TYPE_DEPTH_MULTIPLE) {
+      fprintf(stderr, "multiple --ancestor type %s\n", show_ancestor_type);
+      return EXIT_FAILURE;
+    }
+  }
+  if (show_descendants_type) {
+    err = hwloc_type_sscanf_as_depth(show_descendants_type, NULL, topology, &show_descendants_depth);
+    if (err < 0) {
+      fprintf(stderr, "unrecognized --descendants type %s\n", show_descendants_type);
+      usage(callname, stderr);
+      return EXIT_FAILURE;
+    }
     if (show_descendants_depth == HWLOC_TYPE_DEPTH_UNKNOWN) {
-      fprintf(stderr, "unavailable --descendants type %s\n", hwloc_obj_type_string(show_descendants_type));
+      fprintf(stderr, "unavailable --descendants type %s\n", show_descendants_type);
       return EXIT_FAILURE;
     }
     if (show_descendants_depth == HWLOC_TYPE_DEPTH_MULTIPLE) {
-      if (show_descendants_type == HWLOC_OBJ_CACHE)
-	show_descendants_depth = hwloc_get_cache_type_depth(topology, show_descendants_attrdepth, show_descendants_attrcachetype);
-      else if (show_descendants_type == HWLOC_OBJ_GROUP) {
-	unsigned i;
-	for(i=0; i<hwloc_topology_get_depth(topology); i++) {
-	  hwloc_obj_t obj = hwloc_get_obj_by_depth(topology, i, 0);
-	  if (obj->type == HWLOC_OBJ_GROUP && obj->attr->group.depth == (unsigned) show_descendants_attrdepth) {
-	    show_descendants_depth = i;
-	    break;
-	  }
-        }
-      }
-    }
-    if (show_descendants_depth == HWLOC_TYPE_DEPTH_MULTIPLE) {
-      fprintf(stderr, "multiple --descendants type %s\n", hwloc_obj_type_string(show_descendants_type));
+      fprintf(stderr, "multiple --descendants type %s\n", show_descendants_type);
       return EXIT_FAILURE;
     }
   }
@@ -554,6 +611,10 @@ main (int argc, char *argv[])
     const struct hwloc_topology_support *support = hwloc_topology_get_support(topology);
 #define DO(x,y) printf(#x ":" #y " = %u\n", (unsigned char) support->x->y);
     DO(discovery, pu);
+    DO(discovery, disallowed_pu);
+    DO(discovery, numa);
+    DO(discovery, numa_memory);
+    DO(discovery, disallowed_numa);
 
     DO(cpubind, set_thisproc_cpubind);
     DO(cpubind, get_thisproc_cpubind);

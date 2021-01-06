@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=9"/>
 <meta name="generator" content="Doxygen 1.8.13"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Hardware Locality (hwloc): hwloc_obj_attr_u::hwloc_cache_attr_s Struct Reference</title>
+<title>Hardware Locality (hwloc): Interoperability with Linux libnuma unsigned long masks</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -19,7 +19,7 @@
  <tr style="height: 56px;">
   <td id="projectalign" style="padding-left: 0.5em;">
    <div id="projectname">Hardware Locality (hwloc)
-   &#160;<span id="projectnumber">1.11.13</span>
+   &#160;<span id="projectnumber">2.1.0</span>
    </div>
   </td>
  </tr>
@@ -36,120 +36,240 @@ $(function() {
 });
 </script>
 <div id="main-nav"></div>
-<div id="nav-path" class="navpath">
-  <ul>
-<li class="navelem"><a class="el" href="a00208.html">hwloc_obj_attr_u</a></li><li class="navelem"><a class="el" href="a00212.html">hwloc_cache_attr_s</a></li>  </ul>
-</div>
 </div><!-- top -->
 <div class="header">
   <div class="summary">
-<a href="#pub-attribs">Data Fields</a>  </div>
+<a href="#func-members">Functions</a>  </div>
   <div class="headertitle">
-<div class="title">hwloc_obj_attr_u::hwloc_cache_attr_s Struct Reference</div>  </div>
+<div class="title">Interoperability with Linux libnuma unsigned long masks</div>  </div>
 </div><!--header-->
 <div class="contents">
-
-<p><code>#include &lt;<a class="el" href="a00101_source.html">hwloc.h</a>&gt;</code></p>
 <table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-attribs"></a>
-Data Fields</h2></td></tr>
-<tr class="memitem:abe5e788943ed04302976740c829674c0"><td class="memItemLeft" align="right" valign="top">hwloc_uint64_t&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00212.html#abe5e788943ed04302976740c829674c0">size</a></td></tr>
-<tr class="separator:abe5e788943ed04302976740c829674c0"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5c8f7f39193736c2187ed626940835d5"><td class="memItemLeft" align="right" valign="top">unsigned&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00212.html#a5c8f7f39193736c2187ed626940835d5">depth</a></td></tr>
-<tr class="separator:a5c8f7f39193736c2187ed626940835d5"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a801e8a668e28caf06c8b88e9ae5c10db"><td class="memItemLeft" align="right" valign="top">unsigned&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00212.html#a801e8a668e28caf06c8b88e9ae5c10db">linesize</a></td></tr>
-<tr class="separator:a801e8a668e28caf06c8b88e9ae5c10db"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ad06525e474d1e2d1423ed71bb998592d"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00212.html#ad06525e474d1e2d1423ed71bb998592d">associativity</a></td></tr>
-<tr class="separator:ad06525e474d1e2d1423ed71bb998592d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ad8edc8ded2b7a70d6abbc874801930f4"><td class="memItemLeft" align="right" valign="top"><a class="el" href="a00151.html#gab6e1e7efedae8b341f3ee14fbe53d66c">hwloc_obj_cache_type_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00212.html#ad8edc8ded2b7a70d6abbc874801930f4">type</a></td></tr>
-<tr class="separator:ad8edc8ded2b7a70d6abbc874801930f4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="func-members"></a>
+Functions</h2></td></tr>
+<tr class="memitem:gae577962390f84b0b12f503314ab0f972"><td class="memItemLeft" align="right" valign="top">static int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00212.html#gae577962390f84b0b12f503314ab0f972">hwloc_cpuset_to_linux_libnuma_ulongs</a> (<a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a> topology, <a class="el" href="a00183.html#ga1f784433e9b606261f62d1134f6a3b25">hwloc_const_cpuset_t</a> cpuset, unsigned long *mask, unsigned long *maxnode)</td></tr>
+<tr class="separator:gae577962390f84b0b12f503314ab0f972"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga585ccf818d2f217f4e53f9c6506c3128"><td class="memItemLeft" align="right" valign="top">static int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00212.html#ga585ccf818d2f217f4e53f9c6506c3128">hwloc_nodeset_to_linux_libnuma_ulongs</a> (<a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a> topology, <a class="el" href="a00183.html#ga2f5276235841ad66a79bedad16a5a10c">hwloc_const_nodeset_t</a> nodeset, unsigned long *mask, unsigned long *maxnode)</td></tr>
+<tr class="separator:ga585ccf818d2f217f4e53f9c6506c3128"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga0e9d051e068940f722f6fdc61814149d"><td class="memItemLeft" align="right" valign="top">static int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00212.html#ga0e9d051e068940f722f6fdc61814149d">hwloc_cpuset_from_linux_libnuma_ulongs</a> (<a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a> topology, <a class="el" href="a00183.html#ga4bbf39b68b6f568fb92739e7c0ea7801">hwloc_cpuset_t</a> cpuset, const unsigned long *mask, unsigned long maxnode)</td></tr>
+<tr class="separator:ga0e9d051e068940f722f6fdc61814149d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gad8491c672eb2594cc5e7b0a026867192"><td class="memItemLeft" align="right" valign="top">static int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00212.html#gad8491c672eb2594cc5e7b0a026867192">hwloc_nodeset_from_linux_libnuma_ulongs</a> (<a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a> topology, <a class="el" href="a00183.html#ga37e35730fa7e775b5bb0afe893d6d508">hwloc_nodeset_t</a> nodeset, const unsigned long *mask, unsigned long maxnode)</td></tr>
+<tr class="separator:gad8491c672eb2594cc5e7b0a026867192"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
-<div class="textblock"><p>Cache-specific Object Attributes. </p>
-</div><h2 class="groupheader">Field Documentation</h2>
-<a id="ad06525e474d1e2d1423ed71bb998592d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad06525e474d1e2d1423ed71bb998592d">&#9670;&nbsp;</a></span>associativity</h2>
+<p>This interface helps converting between Linux libnuma unsigned long masks and hwloc cpusets and nodesets.</p>
+<dl class="section note"><dt>Note</dt><dd>Topology <code>topology</code> must match the current machine.</dd>
+<dd>
+The behavior of libnuma is undefined if the kernel is not NUMA-aware. (when CONFIG_NUMA is not set in the kernel configuration). This helper and libnuma may thus not be strictly compatible in this case, which may be detected by checking whether numa_available() returns -1. </dd></dl>
+<h2 class="groupheader">Function Documentation</h2>
+<a id="ga0e9d051e068940f722f6fdc61814149d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ga0e9d051e068940f722f6fdc61814149d">&#9670;&nbsp;</a></span>hwloc_cpuset_from_linux_libnuma_ulongs()</h2>
 
 <div class="memitem">
 <div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">int hwloc_obj_attr_u::hwloc_cache_attr_s::associativity</td>
+          <td class="memname">static int hwloc_cpuset_from_linux_libnuma_ulongs </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a>&#160;</td>
+          <td class="paramname"><em>topology</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="a00183.html#ga4bbf39b68b6f568fb92739e7c0ea7801">hwloc_cpuset_t</a>&#160;</td>
+          <td class="paramname"><em>cpuset</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const unsigned long *&#160;</td>
+          <td class="paramname"><em>mask</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">unsigned long&#160;</td>
+          <td class="paramname"><em>maxnode</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
         </tr>
       </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
 </div><div class="memdoc">
 
-<p>Ways of associativity, -1 if fully associative, 0 if unknown. </p>
+<p>Convert the array of unsigned long <code>mask</code> into hwloc CPU set. </p>
+<p><code>mask</code> is a array of unsigned long that will be read. <code>maxnode</code> contains the maximal node number that may be read in <code>mask</code>.</p>
+<p>This function may be used after calling get_mempolicy or any other function that takes an array of unsigned long as output parameter (and possibly a maximal node number as input parameter). </p>
 
 </div>
 </div>
-<a id="a5c8f7f39193736c2187ed626940835d5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a5c8f7f39193736c2187ed626940835d5">&#9670;&nbsp;</a></span>depth</h2>
+<a id="gae577962390f84b0b12f503314ab0f972"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#gae577962390f84b0b12f503314ab0f972">&#9670;&nbsp;</a></span>hwloc_cpuset_to_linux_libnuma_ulongs()</h2>
 
 <div class="memitem">
 <div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">unsigned hwloc_obj_attr_u::hwloc_cache_attr_s::depth</td>
+          <td class="memname">static int hwloc_cpuset_to_linux_libnuma_ulongs </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a>&#160;</td>
+          <td class="paramname"><em>topology</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="a00183.html#ga1f784433e9b606261f62d1134f6a3b25">hwloc_const_cpuset_t</a>&#160;</td>
+          <td class="paramname"><em>cpuset</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">unsigned long *&#160;</td>
+          <td class="paramname"><em>mask</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">unsigned long *&#160;</td>
+          <td class="paramname"><em>maxnode</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
         </tr>
       </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
 </div><div class="memdoc">
 
-<p>Depth of cache (e.g., L1, L2, ...etc.) </p>
+<p>Convert hwloc CPU set <code>cpuset</code> into the array of unsigned long <code>mask</code>. </p>
+<p><code>mask</code> is the array of unsigned long that will be filled. <code>maxnode</code> contains the maximal node number that may be stored in <code>mask</code>. <code>maxnode</code> will be set to the maximal node number that was found, plus one.</p>
+<p>This function may be used before calling set_mempolicy, mbind, migrate_pages or any other function that takes an array of unsigned long and a maximal node number as input parameter. </p>
 
 </div>
 </div>
-<a id="a801e8a668e28caf06c8b88e9ae5c10db"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a801e8a668e28caf06c8b88e9ae5c10db">&#9670;&nbsp;</a></span>linesize</h2>
+<a id="gad8491c672eb2594cc5e7b0a026867192"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#gad8491c672eb2594cc5e7b0a026867192">&#9670;&nbsp;</a></span>hwloc_nodeset_from_linux_libnuma_ulongs()</h2>
 
 <div class="memitem">
 <div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">unsigned hwloc_obj_attr_u::hwloc_cache_attr_s::linesize</td>
+          <td class="memname">static int hwloc_nodeset_from_linux_libnuma_ulongs </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a>&#160;</td>
+          <td class="paramname"><em>topology</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="a00183.html#ga37e35730fa7e775b5bb0afe893d6d508">hwloc_nodeset_t</a>&#160;</td>
+          <td class="paramname"><em>nodeset</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const unsigned long *&#160;</td>
+          <td class="paramname"><em>mask</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">unsigned long&#160;</td>
+          <td class="paramname"><em>maxnode</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
         </tr>
       </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
 </div><div class="memdoc">
 
-<p>Cache-line size in bytes. 0 if unknown. </p>
+<p>Convert the array of unsigned long <code>mask</code> into hwloc NUMA node set. </p>
+<p><code>mask</code> is a array of unsigned long that will be read. <code>maxnode</code> contains the maximal node number that may be read in <code>mask</code>.</p>
+<p>This function may be used after calling get_mempolicy or any other function that takes an array of unsigned long as output parameter (and possibly a maximal node number as input parameter). </p>
 
 </div>
 </div>
-<a id="abe5e788943ed04302976740c829674c0"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abe5e788943ed04302976740c829674c0">&#9670;&nbsp;</a></span>size</h2>
+<a id="ga585ccf818d2f217f4e53f9c6506c3128"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ga585ccf818d2f217f4e53f9c6506c3128">&#9670;&nbsp;</a></span>hwloc_nodeset_to_linux_libnuma_ulongs()</h2>
 
 <div class="memitem">
 <div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">hwloc_uint64_t hwloc_obj_attr_u::hwloc_cache_attr_s::size</td>
+          <td class="memname">static int hwloc_nodeset_to_linux_libnuma_ulongs </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="a00186.html#ga9d1e76ee15a7dee158b786c30b6a6e38">hwloc_topology_t</a>&#160;</td>
+          <td class="paramname"><em>topology</em>, </td>
         </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Size of cache in bytes. </p>
-
-</div>
-</div>
-<a id="ad8edc8ded2b7a70d6abbc874801930f4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ad8edc8ded2b7a70d6abbc874801930f4">&#9670;&nbsp;</a></span>type</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
         <tr>
-          <td class="memname"><a class="el" href="a00151.html#gab6e1e7efedae8b341f3ee14fbe53d66c">hwloc_obj_cache_type_t</a> hwloc_obj_attr_u::hwloc_cache_attr_s::type</td>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="a00183.html#ga2f5276235841ad66a79bedad16a5a10c">hwloc_const_nodeset_t</a>&#160;</td>
+          <td class="paramname"><em>nodeset</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">unsigned long *&#160;</td>
+          <td class="paramname"><em>mask</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">unsigned long *&#160;</td>
+          <td class="paramname"><em>maxnode</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
         </tr>
       </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
 </div><div class="memdoc">
 
-<p>Cache type. </p>
+<p>Convert hwloc NUMA node set <code>nodeset</code> into the array of unsigned long <code>mask</code>. </p>
+<p><code>mask</code> is the array of unsigned long that will be filled. <code>maxnode</code> contains the maximal node number that may be stored in <code>mask</code>. <code>maxnode</code> will be set to the maximal node number that was found, plus one.</p>
+<p>This function may be used before calling set_mempolicy, mbind, migrate_pages or any other function that takes an array of unsigned long and a maximal node number as input parameter. </p>
 
 </div>
 </div>
-<hr/>The documentation for this struct was generated from the following file:<ul>
-<li><a class="el" href="a00101_source.html">hwloc.h</a></li>
-</ul>
 </div><!-- contents -->
 <!-- start footer part -->
 <hr class="footer"/><address class="footer"><small>

@@ -5,7 +5,7 @@
 <meta http-equiv="X-UA-Compatible" content="IE=9"/>
 <meta name="generator" content="Doxygen 1.8.13"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Hardware Locality (hwloc): Components and Plugins: Discovery backends</title>
+<title>Hardware Locality (hwloc): Consulting and Adding Key-Value Info Attributes</title>
 <link href="tabs.css" rel="stylesheet" type="text/css"/>
 <script type="text/javascript" src="jquery.js"></script>
 <script type="text/javascript" src="dynsections.js"></script>
@@ -19,7 +19,7 @@
  <tr style="height: 56px;">
   <td id="projectalign" style="padding-left: 0.5em;">
    <div id="projectname">Hardware Locality (hwloc)
-   &#160;<span id="projectnumber">1.11.13</span>
+   &#160;<span id="projectnumber">2.1.0</span>
    </div>
   </td>
  </tr>
@@ -39,163 +39,44 @@ $(function() {
 </div><!-- top -->
 <div class="header">
   <div class="summary">
-<a href="#nested-classes">Data Structures</a> &#124;
-<a href="#enum-members">Enumerations</a> &#124;
 <a href="#func-members">Functions</a>  </div>
   <div class="headertitle">
-<div class="title">Components and Plugins: Discovery backends</div>  </div>
+<div class="title">Consulting and Adding Key-Value Info Attributes</div>  </div>
 </div><!--header-->
 <div class="contents">
 <table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="nested-classes"></a>
-Data Structures</h2></td></tr>
-<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">struct &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00304.html">hwloc_backend</a></td></tr>
-<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
-</table><table class="memberdecls">
-<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="enum-members"></a>
-Enumerations</h2></td></tr>
-<tr class="memitem:ga21513209613570877b6bfa9898106f2a"><td class="memItemLeft" align="right" valign="top">enum &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00189.html#ga21513209613570877b6bfa9898106f2a">hwloc_backend_flag_e</a> { <a class="el" href="a00189.html#gga21513209613570877b6bfa9898106f2aadc96f2cf3bdd5d41e102dfa1e1976b24">HWLOC_BACKEND_FLAG_NEED_LEVELS</a>
- }</td></tr>
-<tr class="separator:ga21513209613570877b6bfa9898106f2a"><td class="memSeparator" colspan="2">&#160;</td></tr>
-</table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="func-members"></a>
 Functions</h2></td></tr>
-<tr class="memitem:ga330a0b581de4817d0cf1e7401db22436"><td class="memItemLeft" align="right" valign="top">struct <a class="el" href="a00304.html">hwloc_backend</a> *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00189.html#ga330a0b581de4817d0cf1e7401db22436">hwloc_backend_alloc</a> (struct <a class="el" href="a00300.html">hwloc_disc_component</a> *component)</td></tr>
-<tr class="separator:ga330a0b581de4817d0cf1e7401db22436"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:gaa4edf46c5d88eef53b3b8f572d88b9c5"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00189.html#gaa4edf46c5d88eef53b3b8f572d88b9c5">hwloc_backend_enable</a> (struct hwloc_topology *topology, struct <a class="el" href="a00304.html">hwloc_backend</a> *backend)</td></tr>
-<tr class="separator:gaa4edf46c5d88eef53b3b8f572d88b9c5"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ga505a5470745bf0b601f4d25a69601411"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00189.html#ga505a5470745bf0b601f4d25a69601411">hwloc_backends_get_obj_cpuset</a> (struct <a class="el" href="a00304.html">hwloc_backend</a> *caller, struct <a class="el" href="a00204.html">hwloc_obj</a> *obj, <a class="el" href="a00174.html#gaa3c2bf4c776d603dcebbb61b0c923d84">hwloc_bitmap_t</a> cpuset)</td></tr>
-<tr class="separator:ga505a5470745bf0b601f4d25a69601411"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:gad8ac8bba9ab6b9af423baba0c8337c6b"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00189.html#gad8ac8bba9ab6b9af423baba0c8337c6b">hwloc_backends_notify_new_object</a> (struct <a class="el" href="a00304.html">hwloc_backend</a> *caller, struct <a class="el" href="a00204.html">hwloc_obj</a> *obj)</td></tr>
-<tr class="separator:gad8ac8bba9ab6b9af423baba0c8337c6b"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gab358661a92bb27d8542b255cc9f6f25e"><td class="memItemLeft" align="right" valign="top">static const char *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00189.html#gab358661a92bb27d8542b255cc9f6f25e">hwloc_obj_get_info_by_name</a> (<a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a> obj, const char *name)</td></tr>
+<tr class="separator:gab358661a92bb27d8542b255cc9f6f25e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gace7654bb8a9002caae1a4b8a59e7452e"><td class="memItemLeft" align="right" valign="top">int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="a00189.html#gace7654bb8a9002caae1a4b8a59e7452e">hwloc_obj_add_info</a> (<a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a> obj, const char *name, const char *value)</td></tr>
+<tr class="separator:gace7654bb8a9002caae1a4b8a59e7452e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
-<h2 class="groupheader">Enumeration Type Documentation</h2>
-<a id="ga21513209613570877b6bfa9898106f2a"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ga21513209613570877b6bfa9898106f2a">&#9670;&nbsp;</a></span>hwloc_backend_flag_e</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">enum <a class="el" href="a00189.html#ga21513209613570877b6bfa9898106f2a">hwloc_backend_flag_e</a></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Backend flags. </p>
-<table class="fieldtable">
-<tr><th colspan="2">Enumerator</th></tr><tr><td class="fieldname"><a id="gga21513209613570877b6bfa9898106f2aadc96f2cf3bdd5d41e102dfa1e1976b24"></a>HWLOC_BACKEND_FLAG_NEED_LEVELS&#160;</td><td class="fielddoc"><p>Levels should be reconnected before this backend discover() is used. </p>
-</td></tr>
-</table>
-
-</div>
-</div>
 <h2 class="groupheader">Function Documentation</h2>
-<a id="ga330a0b581de4817d0cf1e7401db22436"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ga330a0b581de4817d0cf1e7401db22436">&#9670;&nbsp;</a></span>hwloc_backend_alloc()</h2>
+<a id="gace7654bb8a9002caae1a4b8a59e7452e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#gace7654bb8a9002caae1a4b8a59e7452e">&#9670;&nbsp;</a></span>hwloc_obj_add_info()</h2>
 
 <div class="memitem">
 <div class="memproto">
       <table class="memname">
         <tr>
-          <td class="memname">struct <a class="el" href="a00304.html">hwloc_backend</a>* hwloc_backend_alloc </td>
+          <td class="memname">int hwloc_obj_add_info </td>
           <td>(</td>
-          <td class="paramtype">struct <a class="el" href="a00300.html">hwloc_disc_component</a> *&#160;</td>
-          <td class="paramname"><em>component</em></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Allocate a backend structure, set good default values, initialize backend-&gt;component and topology, etc. The caller will then modify whatever needed, and call <a class="el" href="a00189.html#gaa4edf46c5d88eef53b3b8f572d88b9c5" title="Enable a previously allocated and setup backend. ">hwloc_backend_enable()</a>. </p>
-
-</div>
-</div>
-<a id="gaa4edf46c5d88eef53b3b8f572d88b9c5"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#gaa4edf46c5d88eef53b3b8f572d88b9c5">&#9670;&nbsp;</a></span>hwloc_backend_enable()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">int hwloc_backend_enable </td>
-          <td>(</td>
-          <td class="paramtype">struct hwloc_topology *&#160;</td>
-          <td class="paramname"><em>topology</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">struct <a class="el" href="a00304.html">hwloc_backend</a> *&#160;</td>
-          <td class="paramname"><em>backend</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Enable a previously allocated and setup backend. </p>
-
-</div>
-</div>
-<a id="ga505a5470745bf0b601f4d25a69601411"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ga505a5470745bf0b601f4d25a69601411">&#9670;&nbsp;</a></span>hwloc_backends_get_obj_cpuset()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">int hwloc_backends_get_obj_cpuset </td>
-          <td>(</td>
-          <td class="paramtype">struct <a class="el" href="a00304.html">hwloc_backend</a> *&#160;</td>
-          <td class="paramname"><em>caller</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">struct <a class="el" href="a00204.html">hwloc_obj</a> *&#160;</td>
+          <td class="paramtype"><a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a>&#160;</td>
           <td class="paramname"><em>obj</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="a00174.html#gaa3c2bf4c776d603dcebbb61b0c923d84">hwloc_bitmap_t</a>&#160;</td>
-          <td class="paramname"><em>cpuset</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-</div><div class="memdoc">
-
-<p>Used by backends discovery callbacks to request locality information from others. </p>
-<p>Traverse the list of enabled backends until one has a get_obj_cpuset() method, and call it. </p>
-
-</div>
-</div>
-<a id="gad8ac8bba9ab6b9af423baba0c8337c6b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#gad8ac8bba9ab6b9af423baba0c8337c6b">&#9670;&nbsp;</a></span>hwloc_backends_notify_new_object()</h2>
-
-<div class="memitem">
-<div class="memproto">
-      <table class="memname">
-        <tr>
-          <td class="memname">int hwloc_backends_notify_new_object </td>
-          <td>(</td>
-          <td class="paramtype">struct <a class="el" href="a00304.html">hwloc_backend</a> *&#160;</td>
-          <td class="paramname"><em>caller</em>, </td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>name</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">struct <a class="el" href="a00204.html">hwloc_obj</a> *&#160;</td>
-          <td class="paramname"><em>obj</em>&#160;</td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>value</em>&#160;</td>
         </tr>
         <tr>
           <td></td>
@@ -205,9 +86,53 @@ Functions</h2></td></tr>
       </table>
 </div><div class="memdoc">
 
-<p>Used by backends discovery callbacks to notify other backends of new objects. </p>
-<p>Traverse the list of enabled backends (all but caller) and invoke their notify_new_object() method to notify them that a new object just got added to the topology.</p>
-<p>Currently only used for notifying of new PCI device objects. </p>
+<p>Add the given info name and value pair to the given object. </p>
+<p>The info is appended to the existing info array even if another key with the same name already exists.</p>
+<p>The input strings are copied before being added in the object infos.</p>
+<dl class="section return"><dt>Returns</dt><dd><code>0</code> on success, <code>-1</code> on error.</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>This function may be used to enforce object colors in the lstopo graphical output by using "lstopoStyle" as a name and "Background=#rrggbb" as a value. See CUSTOM COLORS in the lstopo(1) manpage for details.</dd>
+<dd>
+If <code>value</code> contains some non-printable characters, they will be dropped when exporting to XML, see <a class="el" href="a00206.html#ga333f79975b4eeb28a3d8fad3373583ce" title="Export the topology into an XML file. ">hwloc_topology_export_xml()</a> in <a class="el" href="a00134_source.html" title="Exporting Topologies to XML or to Synthetic strings. ">hwloc/export.h</a>. </dd></dl>
+
+</div>
+</div>
+<a id="gab358661a92bb27d8542b255cc9f6f25e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#gab358661a92bb27d8542b255cc9f6f25e">&#9670;&nbsp;</a></span>hwloc_obj_get_info_by_name()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static const char* hwloc_obj_get_info_by_name </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="a00185.html#ga79b8ab56877ef99ac59b833203391c7d">hwloc_obj_t</a>&#160;</td>
+          <td class="paramname"><em>obj</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const char *&#160;</td>
+          <td class="paramname"><em>name</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Search the given key name in object infos and return the corresponding value. </p>
+<p>If multiple keys match the given name, only the first one is returned.</p>
+<dl class="section return"><dt>Returns</dt><dd><code>NULL</code> if no such key exists. </dd></dl>
 
 </div>
 </div>

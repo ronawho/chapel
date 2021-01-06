@@ -206,12 +206,6 @@
 /* Define to 1 if you have the <memory.h> header file. */
 #define HAVE_MEMORY_H 1
 
-/* Define to 1 if we have -lmyriexpress */
-/* #undef HAVE_MYRIEXPRESS */
-
-/* Define to 1 if you have the <myriexpress.h> header file. */
-/* #undef HAVE_MYRIEXPRESS_H */
-
 /* Define to 1 if you have the `nl_langinfo' function. */
 /* #undef HAVE_NL_LANGINFO */
 
@@ -496,12 +490,6 @@
 /* Define to 1 if building the Linux PCI component */
 /* #undef HWLOC_HAVE_LINUXPCI */
 
-/* Define to 1 if mbind is available. */
-/* #undef HWLOC_HAVE_MBIND */
-
-/* Define to 1 if migrate_pages is available. */
-/* #undef HWLOC_HAVE_MIGRATE_PAGES */
-
 /* Define to 1 if you have the `NVML' library. */
 /* #undef HWLOC_HAVE_NVML */
 
@@ -525,9 +513,6 @@
 /* Define to 1 if glibc provides a prototype of sched_setaffinity() */
 #define HWLOC_HAVE_SCHED_SETAFFINITY 1
 
-/* Define to 1 if set_mempolicy is available. */
-/* #undef HWLOC_HAVE_SET_MEMPOLICY */
-
 /* Define to 1 if you have the <stdint.h> header file. */
 #define HWLOC_HAVE_STDINT_H 1
 
@@ -543,17 +528,11 @@
 /* Define to 1 on HP-UX */
 /* #undef HWLOC_HPUX_SYS */
 
-/* Define to 1 on Irix */
-/* #undef HWLOC_IRIX_SYS */
-
 /* Define to 1 on Linux */
 /* #undef HWLOC_LINUX_SYS */
 
 /* Define to 1 on *NETBSD */
 /* #undef HWLOC_NETBSD_SYS */
-
-/* Define to 1 on OSF */
-/* #undef HWLOC_OSF_SYS */
 
 /* The size of `unsigned int', as computed by sizeof */
 #define HWLOC_SIZEOF_UNSIGNED_INT 4
@@ -665,7 +644,6 @@
 
 
 /* Version number of package */
-#define HWLOC_VERSION "1.11.13"
 #define VERSION HWLOC_VERSION
 
 /* Define to 1 if the X Window System is missing or not being used. */
