@@ -42,6 +42,11 @@ module CopyAggregation {
       const loc = dst.locale.id;
       const dstAddr = getAddr(dst);
 
+      if loc == here.id {
+        dstAddr.deref() = srcVal;
+        return;
+      }
+
       // Get our current index into the buffer for dst's locale
       ref bufferIdx = bufferIdxs[loc];
 
