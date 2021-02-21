@@ -1727,6 +1727,13 @@ override proc BlockArr.doiCanBulkTransferRankChange() param return true;
 
 config param debugBlockScan = false;
 
+inline proc commBarrier() {
+  extern proc chpl_comm_barrier(msg: c_string);
+  atomicFence();
+  chpl_comm_barrier("scan barrier".localize().c_str());
+  atomicFence();
+}
+
 proc BlockArr.doiScan(op, dom) where (rank == 1) &&
                                      chpl__scanStateResTypesMatch(op) {
 
@@ -1734,16 +1741,8 @@ proc BlockArr.doiScan(op, dom) where (rank == 1) &&
   type resType = op.generate().type;
   var res = dom.buildArray(resType, initElts=!isPOD(resType));
 
-  // Store one element per locale in order to track our local total
-  // for a cross-locale scan as well as flags to negotiate reading and
-  // writing it.  This domain really wants an easier way to express
-  // it...
-  use ReplicatedDist;
   const ref targetLocs = this.dsiTargetLocales();
-  const elemPerLocDom = {1..1} dmapped Replicated(targetLocs);
-  var elemPerLoc: [elemPerLocDom] resType;
-  var inputReady$: [elemPerLocDom] sync bool;
-  var outputReady$: [elemPerLocDom] sync bool;
+  var elemPerLoc: [targetLocs.domain] resType;
 
   // Fire up tasks per participating locale
   coforall locid in dom.dist.targetLocDom {
@@ -1762,8 +1761,8 @@ proc BlockArr.doiScan(op, dom) where (rank == 1) &&
         writeln(locid, ": ", (numTasks, rngs, state, tot));
 
       // save our local scan total away and signal that it's ready
-      elemPerLoc[1] = tot;
-      inputReady$[1] = true;
+      elemPerLoc[locid] = tot;
+      commBarrier();
 
       // the "first" locale scans the per-locale contributions as they
       // become ready
@@ -1773,12 +1772,10 @@ proc BlockArr.doiScan(op, dom) where (rank == 1) &&
         var next: resType = metaop.identity;
         for locid in dom.dist.targetLocDom {
           const targetloc = targetLocs[locid];
-          const locready = inputReady$.replicand(targetloc)[1];
 
           // store the scan value and mark that it's ready
-          ref locVal = elemPerLoc.replicand(targetloc)[1];
+          ref locVal = elemPerLoc[locid];
           locVal <=> next;
-          outputReady$.replicand(targetloc)[1] = true;
 
           // accumulate to prep for the next iteration
           metaop.accumulateOntoState(next, locVal);
@@ -1786,10 +1783,10 @@ proc BlockArr.doiScan(op, dom) where (rank == 1) &&
         delete metaop;
       }
 
-      // block until someone tells us that our local value has been updated
-      // and then read it
-      const resready = outputReady$[1];
-      const myadjust = elemPerLoc[1];
+
+      // block until our local value has been updated and then read it
+      commBarrier();
+      const myadjust = elemPerLoc[locid];
       if debugBlockScan then
         writeln(locid, ": myadjust = ", myadjust);
 
