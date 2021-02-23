@@ -1736,14 +1736,14 @@ proc BlockArr.doiScan(op, dom) where (rank == 1) &&
 
   // Store one element per locale in order to track our local total
   // for a cross-locale scan as well as flags to negotiate reading and
-  // writing it.  This domain really wants an easier way to express
-  // it...
-  use ReplicatedDist;
+  // writing it
   const ref targetLocs = this.dsiTargetLocales();
-  const elemPerLocDom = {1..1} dmapped Replicated(targetLocs);
-  var elemPerLoc: [elemPerLocDom] resType;
-  var inputReady$: [elemPerLocDom] sync bool;
-  var outputReady$: [elemPerLocDom] sync bool;
+
+  var elemPerLoc: [targetLocs.domain] resType;
+  var inputReady$: [targetLocs.domain] sync bool;
+  // can be holes in this if targetLocs != Locales but that's ok, we just waste
+  // a little space.
+  var outputReady$ = newBlockArr(LocaleSpace, sync bool);
 
   // Fire up tasks per participating locale
   coforall locid in dom.dist.targetLocDom {
@@ -1762,34 +1762,37 @@ proc BlockArr.doiScan(op, dom) where (rank == 1) &&
         writeln(locid, ": ", (numTasks, rngs, state, tot));
 
       // save our local scan total away and signal that it's ready
-      elemPerLoc[1] = tot;
-      inputReady$[1] = true;
+      elemPerLoc[locid] = tot;
+      inputReady$[locid] = true;
 
       // the "first" locale scans the per-locale contributions as they
       // become ready
+      // TODO can we make this the initiating locale instead of first? May
+      // require on-stmt before array decls
       if (locid == dom.dist.targetLocDom.low) {
         const metaop = op.clone();
 
         var next: resType = metaop.identity;
         for locid in dom.dist.targetLocDom {
-          const targetloc = targetLocs[locid];
-          const locready = inputReady$.replicand(targetloc)[1];
+          const locready = inputReady$[locid];
 
           // store the scan value and mark that it's ready
-          ref locVal = elemPerLoc.replicand(targetloc)[1];
+          ref locVal = elemPerLoc[locid];
           locVal <=> next;
-          outputReady$.replicand(targetloc)[1] = true;
 
           // accumulate to prep for the next iteration
           metaop.accumulateOntoState(next, locVal);
         }
         delete metaop;
+        coforall locid in dom.dist.targetLocDom do on targetLocs[locid] {
+          outputReady$[locid] = true;
+        }
       }
 
       // block until someone tells us that our local value has been updated
       // and then read it
-      const resready = outputReady$[1];
-      const myadjust = elemPerLoc[1];
+      const resready = outputReady$[locid];
+      const myadjust = elemPerLoc[locid];
       if debugBlockScan then
         writeln(locid, ": myadjust = ", myadjust);
 
