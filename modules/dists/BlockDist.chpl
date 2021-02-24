@@ -1736,11 +1736,9 @@ proc BlockArr.doiScan(op, dom) where (rank == 1) &&
 
   // Store one element per locale in order to track our local total
   // for a cross-locale scan as well as flags to negotiate reading and
-  // writing it.  This domain really wants an easier way to express
-  // it...
-  use ReplicatedDist;
+  // writing it.
   const ref targetLocs = this.dsiTargetLocales();
-  const elemPerLocDom = {1..1} dmapped Replicated(targetLocs);
+  const elemPerLocDom = newBlockDom(LocaleSpace);
   var elemPerLoc: [elemPerLocDom] resType;
   var inputReady$: [elemPerLocDom] sync bool;
   var outputReady$: [elemPerLocDom] sync bool;
@@ -1762,8 +1760,8 @@ proc BlockArr.doiScan(op, dom) where (rank == 1) &&
         writeln(locid, ": ", (numTasks, rngs, state, tot));
 
       // save our local scan total away and signal that it's ready
-      elemPerLoc[1] = tot;
-      inputReady$[1] = true;
+      elemPerLoc[locid] = tot;
+      inputReady$[locid] = true;
 
       // the "first" locale scans the per-locale contributions as they
       // become ready
@@ -1772,13 +1770,12 @@ proc BlockArr.doiScan(op, dom) where (rank == 1) &&
 
         var next: resType = metaop.identity;
         for locid in dom.dist.targetLocDom {
-          const targetloc = targetLocs[locid];
-          const locready = inputReady$.replicand(targetloc)[1];
+          const locready = inputReady$[locid];
 
           // store the scan value and mark that it's ready
-          ref locVal = elemPerLoc.replicand(targetloc)[1];
+          ref locVal = elemPerLoc[locid];
           locVal <=> next;
-          outputReady$.replicand(targetloc)[1] = true;
+          outputReady$[locid] = true;
 
           // accumulate to prep for the next iteration
           metaop.accumulateOntoState(next, locVal);
@@ -1788,8 +1785,8 @@ proc BlockArr.doiScan(op, dom) where (rank == 1) &&
 
       // block until someone tells us that our local value has been updated
       // and then read it
-      const resready = outputReady$[1];
-      const myadjust = elemPerLoc[1];
+      const resready = outputReady$[locid];
+      const myadjust = elemPerLoc[locid];
       if debugBlockScan then
         writeln(locid, ": myadjust = ", myadjust);
 
