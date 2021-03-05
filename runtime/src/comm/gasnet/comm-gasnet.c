@@ -820,8 +820,15 @@ static void set_num_comm_domains() {
 #endif
 }
 
+static void attach_hook(void *segbase, uintptr_t segsize) {
+  printf("attach_hook %p %"PRIuPTR"\n", segbase, segsize);
+  chpl_topo_interleaveMemLocality(segbase, (size_t)segsize);
+}
+
 void chpl_comm_init(int *argc_p, char ***argv_p) {
 //  int status; // Some compilers complain about unused variable 'status'.
+
+  gasnet_client_attach_hook = &attach_hook;
 
   set_max_segsize();
   set_num_comm_domains();
