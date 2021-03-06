@@ -34,6 +34,7 @@
 #define TO_STR(x) #x
 
 static char _nlbuf[16];
+static char _nlbufHalf[16];
 static char** chpl_launch_create_argv(const char *launch_cmd,
                                       int argc, char* argv[],
                                       int32_t numLocales) {
@@ -41,13 +42,14 @@ static char** chpl_launch_create_argv(const char *launch_cmd,
   char *largv[maxlargc];
 
   snprintf(_nlbuf, sizeof(_nlbuf), "%d", numLocales);
+  snprintf(_nlbufHalf, sizeof(_nlbufHalf), "%d", numLocales/2);
 
   int largc = 9;
   largv[0] = (char *) launch_cmd;
   largv[1] = (char *) "-n";
   largv[2] = _nlbuf;
   largv[3] = (char *) "-N";
-  largv[4] = _nlbuf;
+  largv[4] = _nlbufHalf;
   largv[5] = (char *) "-c";
   largv[6] = (char *) "0";
   largv[7] = (char*) "-E";

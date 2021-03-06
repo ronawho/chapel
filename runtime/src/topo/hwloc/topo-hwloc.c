@@ -165,7 +165,7 @@ void chpl_topo_init(void) {
     for (level = 0, numaLevel = -1;
          level < topoDepth && numaLevel == -1;
          level++) {
-      if (hwloc_get_depth_type(topology, level) == HWLOC_OBJ_NUMANODE) {
+      if (hwloc_get_depth_type(topology, level) == HWLOC_OBJ_PACKAGE) {
         numaLevel = level;
       }
     }
