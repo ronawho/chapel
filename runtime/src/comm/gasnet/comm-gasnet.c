@@ -820,9 +820,39 @@ static void set_num_comm_domains() {
 #endif
 }
 
+typedef struct {
+  void *segment;
+  size_t size;
+} memory_region;
+
+void *thread_function(void *mem_region) {
+  memory_region* mem_reg = (memory_region*) mem_region;
+  printf("par attach_hook %p %"PRIuPTR"\n", mem_reg->segment, mem_reg->size);
+  chpl_topo_interleaveMemLocality(mem_reg->segment, mem_reg->size);
+  return NULL;
+}
+
+
 static void attach_hook(void *segbase, uintptr_t segsize) {
-  printf("attach_hook %p %"PRIuPTR"\n", segbase, segsize);
-  chpl_topo_interleaveMemLocality(segbase, (size_t)segsize);
+  //printf("attach_hook %p %"PRIuPTR"\n", segbase, segsize);
+  //chpl_topo_interleaveMemLocality(segbase, (size_t)segsize);
+
+  int32_t nthreads = chpl_topo_getNumCPUsPhysical(true);
+  pthread_t thread_id[nthreads];
+  memory_region mem_regions[nthreads];
+
+  size_t chunk_size = (size_t)segsize/(size_t)nthreads;
+  for (int i=0; i<nthreads; i++) {
+    void* mysegbase = (char*)segbase + i*chunk_size;
+    size_t mysegsize = (i == nthreads-1) ? (size_t)segsize - (nthreads-1)*chunk_size: chunk_size;
+    mem_regions[i].segment = mysegbase;
+    mem_regions[i].size = (size_t)mysegsize;
+    pthread_create(&thread_id[i], NULL, thread_function, (void *)&mem_regions[i]);
+  }
+
+  for (int i=0; i<nthreads; i++) {
+    pthread_join(thread_id[i], NULL);
+  }
 }
 
 void chpl_comm_init(int *argc_p, char ***argv_p) {
