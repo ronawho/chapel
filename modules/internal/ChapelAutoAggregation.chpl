@@ -82,8 +82,25 @@ module ChapelAutoAggregation {
     use SysCTypes;
     use CPtr;
     use AggregationPrimitives;
-    use ChapelLocks;
+  record chpl_LocalSpinlock {
+    var l: chpl__processorAtomicType(bool);
 
+    inline proc tryLock() {
+        return !l.read() && !l.testAndSet(memoryOrder.acquire);
+    }
+
+    inline proc lock() {
+      while !this.tryLock() do
+        chpl_task_yield();
+    }
+
+    inline proc unlock() {
+      l.clear(memoryOrder.release);
+    }
+  }
+use Time;
+  var aggregators: atomic int;
+  var maxAggregators: atomic int;
     private const yieldFrequency = getEnvInt("CHPL_AGGREGATION_YIELD_FREQUENCY", 1024);
     private const dstBuffSize = getEnvInt("CHPL_AGGREGATION_DST_BUFF_SIZE", 4096);
     // TODO tune
@@ -106,6 +123,7 @@ module ChapelAutoAggregation {
       var bufferIdxs: [myLocaleSpace] int;
 
       proc postinit() {
+
         for loc in myLocaleSpace {
           rBuffers[loc] = new remoteBuffer(aggType, bufferSize, loc);
         }
@@ -192,10 +210,19 @@ module ChapelAutoAggregation {
       var dstAddrs: [myLocaleSpace][0..#bufferSize] aggType;
       var lSrcAddrs: [myLocaleSpace][0..#bufferSize] aggType;
       var bufferIdxs: [myLocaleSpace] int;
-      var parent: unmanaged SrcAggregator(elemType);
-   
+      var parent, parent2, parent3, parent4: unmanaged SrcAggregator(elemType);
+      var lockT, copyT: Timer;
+
+      proc postinit() {
+        aggregators.add(1);
+        maxAggregators.add(1);
+      } 
       proc deinit() {
         flush();
+	var id = aggregators.fetchSub(1);
+	if id == 1 || id == maxAggregators.read() {
+	  writef("lockT %.2dr, copyT %.2dr\n", lockT.elapsed(), copyT.elapsed());
+	}
       }
 
       proc flush() {
@@ -230,8 +257,45 @@ module ChapelAutoAggregation {
         const myBufferIdx = bufferIdx;
         if myBufferIdx == 0 then return;
 
-        parent.copy(dstAddrs[loc], lSrcAddrs[loc], loc, myBufferIdx);
-   
+        var iters = 100;
+        lockT.start();
+        while true {
+          if parent.lock.tryLock() {
+            lockT.stop();
+            copyT.start();
+            parent.copy(dstAddrs[loc], lSrcAddrs[loc], loc, myBufferIdx);
+            copyT.stop();
+            parent.lock.unlock();
+            break;
+          } else if parent2.lock.tryLock() {
+            lockT.stop();
+            copyT.start();
+            parent2.copy(dstAddrs[loc], lSrcAddrs[loc], loc, myBufferIdx);
+            copyT.stop();
+            parent2.lock.unlock();
+            break;
+          } else if parent3.lock.tryLock() {
+            lockT.stop();
+            copyT.start();
+            parent3.copy(dstAddrs[loc], lSrcAddrs[loc], loc, myBufferIdx);
+            copyT.stop();
+            parent3.lock.unlock();
+            break;
+          } else if parent4.lock.tryLock() {
+            lockT.stop();
+            copyT.start();
+            parent4.copy(dstAddrs[loc], lSrcAddrs[loc], loc, myBufferIdx);
+            copyT.stop();
+            parent4.lock.unlock();
+            break;
+          }
+
+          iters -= 1;
+          if iters == 0 {
+            iters = 100;
+            chpl_task_yield();
+          }
+        }
         bufferIdx = 0;
       }
     }
@@ -269,7 +333,6 @@ module ChapelAutoAggregation {
       }
 
       inline proc copy(dstAddr: [] aggType, srcAddr: [] aggType, loc: int, size: int) {
-        lock.lock();
 
         ref bufferIdx = bufferIdxs[loc];
         // If there's not enough room in the buffer flush it (could partially
@@ -291,7 +354,6 @@ module ChapelAutoAggregation {
         } else {
           opsUntilYield -= 1;
         }
-        lock.unlock();
       }
 
       proc _flushBuffer(loc: int, ref bufferIdx, freeData) {
