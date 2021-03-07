@@ -82,28 +82,23 @@ module ChapelAutoAggregation {
     use SysCTypes;
     use CPtr;
     use AggregationPrimitives;
-  record chpl_LocalSpinlock {
-    var l: chpl__processorAtomicType(bool);
-
-    inline proc tryLock() {
-        return !l.read() && !l.testAndSet(memoryOrder.acquire);
+    use Time;
+    record chpl_LocalSpinlock {
+      var l: chpl__processorAtomicType(bool);
+      inline proc tryLock() {
+          return !l.read() && !l.testAndSet(memoryOrder.acquire);
+      }
+      inline proc lock() {
+        while !this.tryLock() do chpl_task_yield();
+      }
+      inline proc unlock() {
+        l.clear(memoryOrder.release);
+      }
     }
 
-    inline proc lock() {
-      while !this.tryLock() do
-        chpl_task_yield();
-    }
-
-    inline proc unlock() {
-      l.clear(memoryOrder.release);
-    }
-  }
-use Time;
-  var aggregators: atomic int;
-  var maxAggregators: atomic int;
     private const yieldFrequency = getEnvInt("CHPL_AGGREGATION_YIELD_FREQUENCY", 1024);
+    private const yieldFrequency2 = getEnvInt("CHPL_AGGREGATION_YIELD_FREQUENCY2", 32);
     private const dstBuffSize = getEnvInt("CHPL_AGGREGATION_DST_BUFF_SIZE", 4096);
-    // TODO tune
     private const srcBuffSize = getEnvInt("CHPL_AGGREGATION_SRC_BUFF_SIZE", 8192);
     private const localSrcBuffSize = getEnvInt("CHPL_AGGREGATION_LOCAL_SRC_BUFF_SIZE", 256);
 
@@ -123,7 +118,6 @@ use Time;
       var bufferIdxs: [myLocaleSpace] int;
 
       proc postinit() {
-
         for loc in myLocaleSpace {
           rBuffers[loc] = new remoteBuffer(aggType, bufferSize, loc);
         }
@@ -211,18 +205,9 @@ use Time;
       var lSrcAddrs: [myLocaleSpace][0..#bufferSize] aggType;
       var bufferIdxs: [myLocaleSpace] int;
       var parents: unmanaged MultiSrcAggregator(elemType);
-      var lockT, copyT: Timer;
 
-      proc postinit() {
-        aggregators.add(1);
-        maxAggregators.add(1);
-      } 
       proc deinit() {
         flush();
-	var id = aggregators.fetchSub(1);
-	if id == 1 || id == maxAggregators.read() {
-	  writef("lockT %.2dr, copyT %.2dr\n", lockT.elapsed(), copyT.elapsed());
-	}
       }
 
       proc flush() {
@@ -257,26 +242,24 @@ use Time;
         const myBufferIdx = bufferIdx;
         if myBufferIdx == 0 then return;
 
-        var iters = 100;
-        lockT.start();
+        var triesUntilYield = yieldFrequency2;
         var copied = false;
         while !copied {
+
           for parent in parents.aggs {
             if parent.lock.tryLock() {
-              lockT.stop();
-              copyT.start();
               parent.copy(dstAddrs[loc], lSrcAddrs[loc], loc, myBufferIdx);
-              copyT.stop();
               parent.lock.unlock();
               copied = true;
               break;
             }
           }
-          iters -= 1;
-          if iters == 0 {
-            iters = 100;
+          triesUntilYield -= 1;
+          if triesUntilYield == 0 && !copied{
             chpl_task_yield();
+            triesUntilYield = yieldFrequency2;
           }
+
         }
         bufferIdx = 0;
       }
