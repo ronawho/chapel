@@ -230,9 +230,7 @@ module ChapelAutoAggregation {
         const myBufferIdx = bufferIdx;
         if myBufferIdx == 0 then return;
 
-        for i in 0..<myBufferIdx {
-          parent.copy(dstAddrs[loc][i], lSrcAddrs[loc][i], loc);
-        }
+        parent.copy(dstAddrs[loc], lSrcAddrs[loc], loc, myBufferIdx);
    
         bufferIdx = 0;
       }
@@ -269,26 +267,20 @@ module ChapelAutoAggregation {
           _flushBuffer(loc, bufferIdxs[loc], freeData=true);
         }
       }
-      /*
-      inline proc copy(ref dst: elemType, const ref src: elemType) {
-        if verboseAggregation {
-          writeln("SrcAggregator.copy is called");
-        }
-        assert(dst.locale.id == here.id);
-        const dstAddr = getAddr(dst);
 
-        const loc = src.locale.id;
-        const srcAddr = getAddr(src);
-
-        copy(dstAddr, srcAddr, loc);
-      } */
-
-      inline proc copy(dstAddr: aggType, srcAddr: aggType, loc: int) {
+      inline proc copy(dstAddr: [] aggType, srcAddr: [] aggType, loc: int, size: int) {
         lock.lock();
+
         ref bufferIdx = bufferIdxs[loc];
-        lSrcAddrs[loc][bufferIdx] = srcAddr;
-        dstAddrs[loc][bufferIdx] = dstAddr;
-        bufferIdx += 1;
+        // If there's not enough room in the buffer flush it (could partially
+        // fill and flush later)
+        if bufferSize - bufferIdx - size < 0 {
+          _flushBuffer(loc, bufferIdx, freeData=false);
+        }
+
+        c_memcpy(c_ptrTo(lSrcAddrs[loc][bufferIdx]), c_ptrTo(srcAddr[0]), size*c_sizeof(aggType):int);
+        c_memcpy(c_ptrTo(dstAddrs[loc][bufferIdx]), c_ptrTo(dstAddr[0]), size*c_sizeof(aggType):int);
+        bufferIdx += size;
 
         if bufferIdx == bufferSize {
           _flushBuffer(loc, bufferIdx, freeData=false);
