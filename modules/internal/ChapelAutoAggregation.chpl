@@ -86,7 +86,9 @@ module ChapelAutoAggregation {
 
     private const yieldFrequency = getEnvInt("CHPL_AGGREGATION_YIELD_FREQUENCY", 1024);
     private const dstBuffSize = getEnvInt("CHPL_AGGREGATION_DST_BUFF_SIZE", 4096);
+    // TODO tune
     private const srcBuffSize = getEnvInt("CHPL_AGGREGATION_SRC_BUFF_SIZE", 4096);
+    private const localSrcBuffSize = getEnvInt("CHPL_AGGREGATION_LOCAL_SRC_BUFF_SIZE", srcBuffSize/8);
 
     /*
      * Aggregates copy(ref dst, src). Optimized for when src is local.
@@ -184,7 +186,7 @@ module ChapelAutoAggregation {
     record LocalSrcAggregator {
       type elemType;
       type aggType = c_ptr(elemType);
-      const bufferSize = srcBuffSize;
+      const bufferSize = localSrcBuffSize;
       const myLocaleSpace = LocaleSpace;
       var opsUntilYield = yieldFrequency;
       var dstAddrs: [myLocaleSpace][0..#bufferSize] aggType;
