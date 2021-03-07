@@ -180,7 +180,62 @@ module ChapelAutoAggregation {
      * Not parallel safe and is expected to be created on a per task basis
      * High memory usage since there are per-destination buffers
      */
-    record SrcAggregator {
+    record LocalSrcAggregator {
+      type elemType;
+      type aggType = c_ptr(elemType);
+      const bufferSize = srcBuffSize;
+      const myLocaleSpace = LocaleSpace;
+      var opsUntilYield = yieldFrequency;
+      var dstAddrs: [myLocaleSpace][0..#bufferSize] aggType;
+      var lSrcAddrs: [myLocaleSpace][0..#bufferSize] aggType;
+      var bufferIdxs: [myLocaleSpace] int;
+      var parent: unmanaged SrcAggregator(elemType);
+   
+      proc deinit() {
+        flush();
+      }
+
+      proc flush() {
+        for loc in myLocaleSpace {
+          _flushBuffer(loc, bufferIdxs[loc], freeData=true);
+        }
+      }
+
+      inline proc copy(ref dst: elemType, const ref src: elemType) {
+        const dstAddr = getAddr(dst);
+
+        const loc = src.locale.id;
+        const srcAddr = getAddr(src);
+
+        ref bufferIdx = bufferIdxs[loc];
+        lSrcAddrs[loc][bufferIdx] = srcAddr;
+        dstAddrs[loc][bufferIdx] = dstAddr;
+        bufferIdx += 1;
+
+        if bufferIdx == bufferSize {
+          _flushBuffer(loc, bufferIdx, freeData=false);
+          opsUntilYield = yieldFrequency;
+        } else if opsUntilYield == 0 {
+          chpl_task_yield();
+          opsUntilYield = yieldFrequency;
+        } else {
+          opsUntilYield -= 1;
+        }
+      }
+
+      proc _flushBuffer(loc: int, ref bufferIdx, freeData) {
+        const myBufferIdx = bufferIdx;
+        if myBufferIdx == 0 then return;
+
+        for i in 0..<myBufferIdx {
+          parent.copy(dstAddrs[loc][i], lSrcAddrs[loc][i], loc);
+        }
+   
+        bufferIdx = 0;
+      }
+    }
+
+    class SrcAggregator {
       type elemType;
       type aggType = c_ptr(elemType);
       const bufferSize = srcBuffSize;
@@ -210,7 +265,6 @@ module ChapelAutoAggregation {
           _flushBuffer(loc, bufferIdxs[loc], freeData=true);
         }
       }
-
       inline proc copy(ref dst: elemType, const ref src: elemType) {
         if verboseAggregation {
           writeln("SrcAggregator.copy is called");
@@ -221,6 +275,10 @@ module ChapelAutoAggregation {
         const loc = src.locale.id;
         const srcAddr = getAddr(src);
 
+        copy(dstAddr, srcAddr, loc);
+      }
+
+      inline proc copy(dstAddr: aggType, srcAddr: aggType, loc: int) {
         ref bufferIdx = bufferIdxs[loc];
         lSrcAddrs[loc][bufferIdx] = srcAddr;
         dstAddrs[loc][bufferIdx] = dstAddr;

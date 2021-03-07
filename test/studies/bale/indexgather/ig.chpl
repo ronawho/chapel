@@ -2,6 +2,8 @@ use CyclicDist;
 use BlockDist;
 use Random;
 use Time;
+use PrivateDist;
+use ChapelAutoAggregation.CopyAggregation;
 
 config const printStats = true,
              printArrays = false,
@@ -38,27 +40,16 @@ proc main() {
   }
 
   var tmp: [D2] int = -1;
+  var t: Timer; t.start();
+  {
+    var aggD = newBlockDom(0..<numLocales);
+    var aggs: [aggD] unmanaged SrcAggregator(int) = [a in aggD] new unmanaged SrcAggregator(int);
 
-  var t: Timer;
-  t.start();
-
-  select mode {
-    when Mode.ordered {
-      forall i in D2 do
-        tmp[i] = A[rindex[i]];
-    }
-    when Mode.unordered {
-      use UnorderedCopy;
-      forall i in D2 do
-        unorderedCopy(tmp[i], A[rindex[i]]);
-    }
-    when Mode.aggregated {
-      use ChapelAutoAggregation.CopyAggregation;
-      forall i in D2 with (var agg = new SrcAggregator(int)) do
-        agg.copy(tmp[i], A[rindex[i]]);
-    }
+    forall i in D2 with (ref agg = aggs[here.id]) do 
+      agg.copy(tmp[i], A[rindex[i]]);
+    
+    [a in aggs] delete a;
   }
-
   t.stop();
 
   if printStats {
