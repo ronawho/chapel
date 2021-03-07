@@ -87,8 +87,8 @@ module ChapelAutoAggregation {
     private const yieldFrequency = getEnvInt("CHPL_AGGREGATION_YIELD_FREQUENCY", 1024);
     private const dstBuffSize = getEnvInt("CHPL_AGGREGATION_DST_BUFF_SIZE", 4096);
     // TODO tune
-    private const srcBuffSize = getEnvInt("CHPL_AGGREGATION_SRC_BUFF_SIZE", 4096);
-    private const localSrcBuffSize = getEnvInt("CHPL_AGGREGATION_LOCAL_SRC_BUFF_SIZE", srcBuffSize/8);
+    private const srcBuffSize = getEnvInt("CHPL_AGGREGATION_SRC_BUFF_SIZE", 8192);
+    private const localSrcBuffSize = getEnvInt("CHPL_AGGREGATION_LOCAL_SRC_BUFF_SIZE", 256);
 
     /*
      * Aggregates copy(ref dst, src). Optimized for when src is local.
