@@ -45,9 +45,9 @@ proc main() {
     var aggD = newBlockDom(0..<numLocales);
     var aggs: [aggD] unmanaged SrcAggregator(int) = [a in aggD] new unmanaged SrcAggregator(int);
 
-    forall i in D2 with (ref agg = aggs[here.id]) do 
+    forall i in D2 with (ref parent = aggs[here.id], var agg = new LocalSrcAggregator(int, parent=parent)) do
       agg.copy(tmp[i], A[rindex[i]]);
-    
+
     [a in aggs] delete a;
   }
   t.stop();
@@ -61,11 +61,12 @@ proc main() {
     writeln("MB/s per node: ", mbPerTask * numTasksPerLocale / t.elapsed());
   }
 
+  if printArrays {
+    writeln(tmp);
+  }
+
   if verify {
     [t in tmp] assert (t >= 0 && t < tableSize);
   }
 
-  if printArrays {
-    writeln(tmp);
-  }
 }
