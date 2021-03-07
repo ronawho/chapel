@@ -5,7 +5,7 @@ use Time;
 use PrivateDist;
 use ChapelAutoAggregation.CopyAggregation;
 
-config const largeAggs = 4;
+config const largeAggs = 8;
 
 config const printStats = true,
              printArrays = false,
