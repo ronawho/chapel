@@ -5,6 +5,8 @@ use Time;
 use PrivateDist;
 use ChapelAutoAggregation.CopyAggregation;
 
+config const largeAggs = 4;
+
 config const printStats = true,
              printArrays = false,
              verify = true;
@@ -42,16 +44,10 @@ proc main() {
   var tmp: [D2] int = -1;
   var t: Timer; t.start();
   {
-    var aggD = newBlockDom(0..<numLocales);
-    var aggs: [aggD] unmanaged SrcAggregator(int) = [a in aggD] new unmanaged SrcAggregator(int);
-    var aggs2: [aggD] unmanaged SrcAggregator(int) = [a in aggD] new unmanaged SrcAggregator(int);
-    var aggs3: [aggD] unmanaged SrcAggregator(int) = [a in aggD] new unmanaged SrcAggregator(int);
-    var aggs4: [aggD] unmanaged SrcAggregator(int) = [a in aggD] new unmanaged SrcAggregator(int);
+    const aggD = newBlockDom(0..<numLocales);
+    var aggs: [aggD] unmanaged MultiSrcAggregator(int) = [aggD] new unmanaged MultiSrcAggregator(int, numAggs=largeAggs);
 
-    forall i in D2 with (ref parent  = aggs[here.id],  ref parent2 = aggs2[here.id],
-                         ref parent3 = aggs3[here.id], ref parent4 = aggs4[here.id],
-                         var agg = new LocalSrcAggregator(int, parent=parent, parent2=parent2,
-                                                               parent3=parent3, parent4=parent4)) do
+    forall i in D2 with (ref parents = aggs[here.id], var agg = new LocalSrcAggregator(int, parents=parents)) do
       agg.copy(tmp[i], A[rindex[i]]);
 
     [a in aggs] delete a;

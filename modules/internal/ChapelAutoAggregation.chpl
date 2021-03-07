@@ -210,7 +210,7 @@ use Time;
       var dstAddrs: [myLocaleSpace][0..#bufferSize] aggType;
       var lSrcAddrs: [myLocaleSpace][0..#bufferSize] aggType;
       var bufferIdxs: [myLocaleSpace] int;
-      var parent, parent2, parent3, parent4: unmanaged SrcAggregator(elemType);
+      var parents: unmanaged MultiSrcAggregator(elemType);
       var lockT, copyT: Timer;
 
       proc postinit() {
@@ -259,37 +259,19 @@ use Time;
 
         var iters = 100;
         lockT.start();
-        while true {
-          if parent.lock.tryLock() {
-            lockT.stop();
-            copyT.start();
-            parent.copy(dstAddrs[loc], lSrcAddrs[loc], loc, myBufferIdx);
-            copyT.stop();
-            parent.lock.unlock();
-            break;
-          } else if parent2.lock.tryLock() {
-            lockT.stop();
-            copyT.start();
-            parent2.copy(dstAddrs[loc], lSrcAddrs[loc], loc, myBufferIdx);
-            copyT.stop();
-            parent2.lock.unlock();
-            break;
-          } else if parent3.lock.tryLock() {
-            lockT.stop();
-            copyT.start();
-            parent3.copy(dstAddrs[loc], lSrcAddrs[loc], loc, myBufferIdx);
-            copyT.stop();
-            parent3.lock.unlock();
-            break;
-          } else if parent4.lock.tryLock() {
-            lockT.stop();
-            copyT.start();
-            parent4.copy(dstAddrs[loc], lSrcAddrs[loc], loc, myBufferIdx);
-            copyT.stop();
-            parent4.lock.unlock();
-            break;
+        var copied = false;
+        while !copied {
+          for parent in parents.aggs {
+            if parent.lock.tryLock() {
+              lockT.stop();
+              copyT.start();
+              parent.copy(dstAddrs[loc], lSrcAddrs[loc], loc, myBufferIdx);
+              copyT.stop();
+              parent.lock.unlock();
+              copied = true;
+              break;
+            }
           }
-
           iters -= 1;
           if iters == 0 {
             iters = 100;
@@ -297,6 +279,21 @@ use Time;
           }
         }
         bufferIdx = 0;
+      }
+    }
+
+    class MultiSrcAggregator {
+      type elemType;
+      var numAggs: int;
+      var aggs:[0..<numAggs] unmanaged SrcAggregator(elemType);
+
+      proc init(type elemType, numAggs) {
+        this.elemType = elemType;
+        this.numAggs = numAggs;
+        this.aggs = [0..<numAggs] new unmanaged SrcAggregator(elemType);
+      }
+      proc deinit() {
+        for agg in aggs do delete agg;
       }
     }
 
