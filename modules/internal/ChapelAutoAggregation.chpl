@@ -82,6 +82,7 @@ module ChapelAutoAggregation {
     use SysCTypes;
     use CPtr;
     use AggregationPrimitives;
+    use ChapelLocks;
 
     private const yieldFrequency = getEnvInt("CHPL_AGGREGATION_YIELD_FREQUENCY", 1024);
     private const dstBuffSize = getEnvInt("CHPL_AGGREGATION_DST_BUFF_SIZE", 4096);
@@ -248,6 +249,7 @@ module ChapelAutoAggregation {
       var rSrcVals: [myLocaleSpace] remoteBuffer(elemType);
 
       var bufferIdxs: [myLocaleSpace] int;
+      var lock: chpl_LocalSpinlock;
 
       proc postinit() {
         for loc in myLocaleSpace {
@@ -265,6 +267,7 @@ module ChapelAutoAggregation {
           _flushBuffer(loc, bufferIdxs[loc], freeData=true);
         }
       }
+      /*
       inline proc copy(ref dst: elemType, const ref src: elemType) {
         if verboseAggregation {
           writeln("SrcAggregator.copy is called");
@@ -276,9 +279,10 @@ module ChapelAutoAggregation {
         const srcAddr = getAddr(src);
 
         copy(dstAddr, srcAddr, loc);
-      }
+      } */
 
       inline proc copy(dstAddr: aggType, srcAddr: aggType, loc: int) {
+        lock.lock();
         ref bufferIdx = bufferIdxs[loc];
         lSrcAddrs[loc][bufferIdx] = srcAddr;
         dstAddrs[loc][bufferIdx] = dstAddr;
@@ -293,6 +297,7 @@ module ChapelAutoAggregation {
         } else {
           opsUntilYield -= 1;
         }
+        lock.unlock();
       }
 
       proc _flushBuffer(loc: int, ref bufferIdx, freeData) {
