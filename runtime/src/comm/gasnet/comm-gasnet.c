@@ -827,15 +827,17 @@ typedef struct {
 
 void *thread_function(void *mem_region) {
   memory_region* mem_reg = (memory_region*) mem_region;
-  printf("par attach_hook %p %"PRIuPTR"\n", mem_reg->segment, mem_reg->size);
   chpl_topo_interleaveMemLocality(mem_reg->segment, mem_reg->size);
+  // TOOD stop hardcoding page size (to THP size, not using 4K doesn't seem to
+  // impact perf too badly)
+  for (int64_t i=0; i<mem_reg->size; i+= 2<<20) {
+    ((char*)mem_reg->segment)[i] = 0;
+  }
   return NULL;
 }
 
 
 static void attach_hook(void *segbase, uintptr_t segsize) {
-  //printf("attach_hook %p %"PRIuPTR"\n", segbase, segsize);
-  //chpl_topo_interleaveMemLocality(segbase, (size_t)segsize);
 
   int32_t nthreads = chpl_topo_getNumCPUsPhysical(true);
   pthread_t thread_id[nthreads];
