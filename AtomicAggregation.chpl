@@ -1,19 +1,22 @@
-module AddAggregation {
-  use AggregationPrimitives;
+module AtomicAggregation {
   use CPtr;
+  use AggregationPrimitives;
 
   private const yieldFrequency = getEnvInt("CHPL_AGGREGATION_YIELD_FREQUENCY", 1024);
   private const dstBuffSize = getEnvInt("CHPL_AGGREGATION_DST_BUFF_SIZE", 4096);
 
+  proc AggregatedAtomic(type T) type {
+    return chpl__processorAtomicType(T);
+  }
+
   /*
-   * Aggregates add(ref dst, src). Optimized for when src is local. Not
-   * parallel safe and is expected to be created on a per-task basis. Updates
-   * to `dst` are  non-atomic. High memory usage since there are
-   * per-destination buffers
+   * Aggregates Atomic.add(ref dst, src). Optimized for when src is local. Not
+   * parallel safe and is expected to be created on a per-task basis.
+   * High memory usage since there are per-destination buffers
    */
-  record DstAddAggregator {
+  record AtomicDstAggregator {
     type elemType;
-    type aggType = (c_ptr(elemType), elemType);
+    type aggType = (c_ptr(AggregatedAtomic(elemType)), elemType);
     const bufferSize = dstBuffSize;
     const myLocaleSpace = LocaleSpace;
     var opsUntilYield = yieldFrequency;
@@ -37,7 +40,7 @@ module AddAggregation {
       }
     }
 
-    inline proc add(ref dst: elemType, const in srcVal: elemType) {
+    inline proc add(ref dst: AggregatedAtomic(elemType), const in srcVal: elemType) {
       // Get the locale of dst and the local address on that locale
       const loc = dst.locale.id;
       const dstAddr = getAddr(dst);
@@ -77,7 +80,7 @@ module AddAggregation {
       // Process remote buffer
       on Locales[loc] {
         for (dstAddr, srcVal) in rBuffer.localIter(remBufferPtr, myBufferIdx) {
-          dstAddr.deref() += srcVal;
+          dstAddr.deref().add(srcVal);
         }
         if freeData {
           rBuffer.localFree(remBufferPtr);
