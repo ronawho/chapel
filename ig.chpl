@@ -35,7 +35,7 @@ proc main() {
   var tmp: [UpdatesDom] int = -1;
 
   startTimer();
-  forall (t, r) in zip (tmp, Rindex) with (var agg = new AtomicDstAggregator(int)) {
+  forall (t, r) in zip (tmp, Rindex) with (var agg = new AtomicAddDstAggregator(int)) {
     agg.add(A[r], 1);
   }
   stopTimer("AGG");
