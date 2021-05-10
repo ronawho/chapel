@@ -5,13 +5,18 @@ UPCXX_EXTRAS_GIT_COMMIT ?= develop
 UPCXX_BLDDIR     ?= $(HARNESS_WORKDIR)/upcxx
 UPCXX_INSTDIR    ?= $(HARNESS_WORKDIR)/upcxx-inst
 UPCXX_TMPDIR     ?= $(HARNESS_WORKDIR)/upcxx-tmp
-UPCXX_CONDUIT    ?= $(NETWORK) # Default to same conduit as the enclosing harness run
+UPCXX_CONDUIT    ?= $(NETWORK)# Default to same conduit as the enclosing harness run
 UPCXX_EXTRA_FLAGS ?=# extra flags to add to both compilers for lib and tests, may be set by pushbuild/end-user
 UPCXX_EXTRA_TEST_FLAGS ?=# extra flags to add to tests (but not lib), may be set by pushbuild/end-user
 UPCXX_TEST_FLAGS  ?=# per-test flags reserved for use by harness.conf
 UPCXX_CONFIGURE_EXTRA ?=# extra flags to add to UPC++ configure command line
 UPCXX_MAKE_J     ?= -j4 # concurrency of GNU Make steps
 UPCXX_FC         ?= $(shell which gfortran)
+
+# ensure all child invocations see the same conduit defined by UPCXX_CONDUIT,
+# even if the enclosing environment contains conflicting values
+export UPCXX_NETWORK := $(UPCXX_CONDUIT)
+export UPCXX_GASNET_CONDUIT := $(UPCXX_CONDUIT)
 
 # Options for providing GASNET:
 # 1. set UPCXX_GASNET to an existing build path to use.
@@ -133,6 +138,7 @@ UPCXX_URL      ?= https://bitbucket.org/berkeleylab/upcxx/get/$(UPCXX_GIT_COMMIT
 #UPCXX_EXTRAS_URL  ?= https://upc-bugs.lbl.gov/nightly/unlisted/berkeleylab-upcxx-extras-$(UPCXX_EXTRAS_GIT_COMMIT).tar.gz
 UPCXX_EXTRAS_URL  ?= https://bitbucket.org/berkeleylab/upcxx-extras/get/$(UPCXX_EXTRAS_GIT_COMMIT)$(upcxx_dl_suffix)
 
+VERSION_FILE=$(HARNESS_LOGDIR)/git_$(PRODUCT)
 upcxx-download: force
 	rm -Rf $(DESTDIR) $(UPCXX_TMPDIR) && mkdir $(UPCXX_TMPDIR)
 	@if test -n "$(GIT_REPO)" ; then \
@@ -156,18 +162,28 @@ upcxx-download: force
 	 rm -f $(UPCXX_TMPDIR)/$$UPCXX_ARCHIVE
 	mv $(UPCXX_TMPDIR)/* $(DESTDIR) # archive's root dir will vary
 	rmdir $(UPCXX_TMPDIR)
+	@echo "$(PRODUCT) version: `cat $(VERSION_FILE) 2>/dev/null`"
+	@if grep -q '^#define' $(DESTDIR)/src/git_version.h 2>/dev/null ; then \
+	  ver=`grep '^#define' $(DESTDIR)/src/git_version.h | cut -f3 -d' '` ; \
+	  if test -n "$$ver" ; then \
+	    echo "$$ver" > $(VERSION_FILE) ; \
+	    echo "$(PRODUCT) describe: $$ver" ; \
+	  fi; \
+	fi
 # Three ways to unpack the archive:
 #  Option 1: "unzip" - .zip w/ unzip
 #   This is the favored approach because it gives us the hash and uses a widely available utility.
-upcxx-unpack-unzip: force; $(UNZIP) -z $(UPCXX_ARCHIVE) && $(UNZIP) -q $(UPCXX_ARCHIVE)
+upcxx-unpack-unzip: force; $(UNZIP) -qz $(UPCXX_ARCHIVE) > $(VERSION_FILE) && $(UNZIP) -q $(UPCXX_ARCHIVE)
 #  Option 2: "p7zip" - .zip w/ 7za (from p7zip package)
 #   This also gives us the hash, but uses a less widely available utility.
 #   However, it is sometimes necessary because many unzip installations contain a bug w.r.t. symlinks
-upcxx-unpack-p7zip: force; $(P7ZIP) x -bd $(UPCXX_ARCHIVE)
+upcxx-unpack-p7zip: force
+	$(P7ZIP) x -bd $(UPCXX_ARCHIVE) 2>&1 | tee -a $(VERSION_FILE).p7z $(PIPEEXIT)
+	@-grep 'Comment = ' $(VERSION_FILE).p7z | cut -f3 -d' ' > $(VERSION_FILE)
 #  Option 3: "tgz" - tar + gzip
 #   This is the most portable, but cannot extract the hash unless git is available
 upcxx-unpack-tgz:   force
-	-$(GZCAT) $(UPCXX_ARCHIVE) | $(GIT) get-tar-commit-id ; exit 0
+	@-$(GZCAT) $(UPCXX_ARCHIVE) | $(GIT) get-tar-commit-id > $(VERSION_FILE) ; exit 0
 	$(GZCAT) $(UPCXX_ARCHIVE) | $(TAR) xf -
 ####
 .PHONY: upcxx-download upcxx-unpack-unzip upcxx-unpack-p7zip upcxx-unpack-tgz
@@ -218,9 +234,9 @@ launcher-mpi:
 _upcxx: force
 	-rm -Rf upcxx-built upcxx-install launcher launcher-mpi $(LOGFILE)
 	echo ======== UPCXX download ======== | tee $(LOGFILE) $(PIPEEXIT)
-	( set -x ; $(MAKE) upcxx-download URL=$(UPCXX_URL) GIT_REPO=$(UPCXX_GIT_REPO) GIT_COMMIT=$(UPCXX_GIT_COMMIT) DESTDIR=$(UPCXX_BLDDIR) ) 2>&1 | tee -a $(LOGFILE) $(PIPEEXIT)
+	( set -x ; $(MAKE) upcxx-download PRODUCT=upcxx URL=$(UPCXX_URL) GIT_REPO=$(UPCXX_GIT_REPO) GIT_COMMIT=$(UPCXX_GIT_COMMIT) DESTDIR=$(UPCXX_BLDDIR) ) 2>&1 | tee -a $(LOGFILE) $(PIPEEXIT)
 	echo ======== UPCXX EXTRAS download ======== | tee -a $(LOGFILE) $(PIPEEXIT)
-	( set -x ; $(MAKE) upcxx-download URL=$(UPCXX_EXTRAS_URL) GIT_REPO=$(UPCXX_EXTRAS_GIT_REPO) GIT_COMMIT=$(UPCXX_EXTRAS_GIT_COMMIT) DESTDIR=$(UPCXX_BLDDIR)/extras ) 2>&1 | tee -a $(LOGFILE) ; exit 0 # deliberately ignore failures
+	( set -x ; $(MAKE) upcxx-download PRODUCT=upcxx_extras URL=$(UPCXX_EXTRAS_URL) GIT_REPO=$(UPCXX_EXTRAS_GIT_REPO) GIT_COMMIT=$(UPCXX_EXTRAS_GIT_COMMIT) DESTDIR=$(UPCXX_BLDDIR)/extras ) 2>&1 | tee -a $(LOGFILE) ; exit 0 # deliberately ignore failures
 	@echo UPCXX_GASNET=$(UPCXX_GASNET) UPCXX_BLDDIR=$(UPCXX_BLDDIR) $(TO_LOG)
 	@echo CONFIGURE_GASNET=$(CONFIGURE_GASNET) CONFIGURE_FRAGMENTS=$(CONFIGURE_FRAGMENTS) $(TO_LOG)
 	@if test -n "$(UPCXX_EXTERNAL_GASNET)" ; then \
@@ -243,7 +259,7 @@ _upcxx: force
 	     gasnet=$(CONFIGURE_GASNET); \
 	   fi ; \
 	   cd $(UPCXX_BLDDIR) && $(CONFIGURE_ENV) && \
-	     ./configure --prefix=$(UPCXX_INSTDIR) --with-gasnet=$$gasnet \
+	     $(UPCXX_BASH) ./configure --prefix=$(UPCXX_INSTDIR) --with-gasnet=$$gasnet \
 	                 --disable-auto-conduit-detect --with-default-network=$(UPCXX_CONDUIT) \
 	                 --enable-single=$(GASNET_CODEMODE) $(UPCXX_CONFIGURE_EXTRA) || exit 1; \
 	) $(TO_LOG)
@@ -274,6 +290,21 @@ wrap_test: upcxx-install
 	@set -x ; $(DO_ENV) && \
 	$(UPCXX_INSTDIR)/bin/upcxx -o $(TEST_EXE) $(TEST_PATH) $(UPCXX_EXTRA_TEST_FLAGS) $(UPCXX_TEST_FLAGS)
 
+# Build a single test using the dev-tests target in the UPC++ Makefile (only valid for in-repo tests)
+make_test: upcxx-install
+	@set -x ; $(DO_ENV) && \
+	$(MAKE) -C $(UPCXX_BLDDIR) $(UPCXX_MAKE_J) dev-tests-$(GASNET_CODEMODE) NETWORKS=$(UPCXX_CONDUIT) \
+	           TESTS=^test-$(TEST_EXE) EXTRAFLAGS="$(UPCXX_EXTRA_TEST_FLAGS) $(UPCXX_TEST_FLAGS)"
+	@mv $(UPCXX_BLDDIR)/test-$(TEST_EXE)-$(GASNET_CODEMODE)-$(UPCXX_CONDUIT) $(TEST_EXE)
+
+IGNORE_TESTS_PAT=neg-.+|getenv|promise_multiple_results|promise_reused|quiescence_failure|issue105
+check-testsuite:
+	$(MAKE) -C $(UPCXX_BLDDIR) $(UPCXX_MAKE_J) dev-tests-$(GASNET_CODEMODE) UPCXX_DRY_RUN=1 NETWORKS=$(UPCXX_CONDUIT) > check-testsuite.log
+	@$(PERL) -ne 'BEGIN { open F, "harness.conf" or die $$!; while (<F>) { $$tests{$$1}=1 if (m/^TestName:\s*(\S+)/); }; }' \
+	        -e 'if (m/^Compiling test-(.+)-(opt|debug)/) { if(not ($$tests{$$1} || $$1 =~ m/^($(IGNORE_TESTS_PAT))-(seq|par)/)) { print "$$1\n"; $$err=1; } }' \
+		-e 'END { if ($$err) { print "ERROR: Tests above missing from harness.conf\n"; } else { print "SUCCESS\n"; } }' \
+		< check-testsuite.log
+	@echo '#!/bin/sh' > $@ ; chmod +x $@
 
 VPATH = \
 	$(UPCXX_BLDDIR)/test \
@@ -284,8 +315,10 @@ VPATH = \
 	$(UPCXX_BLDDIR)/bench \
 	$(UPCXX_BLDDIR)/extras/extensions/allocator \
 	$(UPCXX_BLDDIR)/extras/extensions/padded_cuda_allocator \
-	$(UPCXX_BLDDIR)/extras/tutorials/2019-12/examples \
-	$(UPCXX_BLDDIR)/extras/tutorials/2019-12/solutions
+	$(UPCXX_BLDDIR)/extras/examples/rpc_ff_quiescence \
+	$(UPCXX_BLDDIR)/extras/examples/vector_accumulate \
+	$(UPCXX_BLDDIR)/extras/tutorials/2020-11/examples \
+	$(UPCXX_BLDDIR)/extras/tutorials/2020-11/solutions
 
 # Pattern rule builds tests, using logic dependent on their location
 %-seq %-par :: %.cpp force
@@ -296,6 +329,8 @@ VPATH = \
 	  $(MAKE) inst_test TEST_PATH=$< TEST_EXE=$@ ; \
 	elif test "$$UPCXX_TESTMODE" = "wrap" ; then set -x ; \
 	  $(MAKE) wrap_test TEST_PATH=$< TEST_EXE=$@ ; \
+	elif test "$$UPCXX_TESTMODE" = "make" ; then set -x ; \
+	  $(MAKE) make_test TEST_EXE=$@ ; \
 	else \
 	  echo "Unrecognized UPCXX_TESTMODE=$$UPCXX_TESTMODE" ; exit 100; \
 	fi 
@@ -306,7 +341,6 @@ guppie-%-seq guppie-%-par :: $(UPCXX_BLDDIR)/extras/examples/gups/upcxx upcxx-in
 	              *-par) export UPCXX_THREADMODE=par ;; esac; \
 	 set -x ; env $(MAKE_TEST_ENV) $(MAKE) -C $< \
 	             UPCXX_INSTALL=$(UPCXX_INSTDIR) \
-	             UPCXX_NETWORK=$(UPCXX_CONDUIT) \
 	             clean guppie-$*
 	mv $</guppie-$* $@
 
@@ -316,7 +350,6 @@ DA-%-seq DA-%-par :: $(UPCXX_BLDDIR)/extras/extensions/dist_array upcxx-install 
 	              *-par) export UPCXX_THREADMODE=par ;; esac; \
 	 set -x ; env $(MAKE_TEST_ENV) $(MAKE) -C $< \
 	             UPCXX_INSTALL=$(UPCXX_INSTDIR) \
-	             UPCXX_NETWORK=$(UPCXX_CONDUIT) \
 	             clean bin/DA-$*
 	-ln -sf $</examples . # for examples/input file
 	mv $</bin/DA-$* $@
@@ -327,9 +360,17 @@ jac3d% :: $(UPCXX_BLDDIR)/extras/examples/jac3d upcxx-install force
 	              *-par) export UPCXX_THREADMODE=par ;; esac; \
 	 set -x ; env $(MAKE_TEST_ENV) $(MAKE) -C $< \
 	             UPCXX_INSTALL=$(UPCXX_INSTDIR) \
-	             UPCXX_NETWORK=$(UPCXX_CONDUIT) \
 	             clean jac3d
 	mv $</jac3d $@
+
+# upcxx-examples cannon
+canno%-seq canno%-par :: $(UPCXX_BLDDIR)/extras/examples/cannon upcxx-install force
+	@case "$@" in *-seq) export UPCXX_THREADMODE=seq ;; \
+	              *-par) export UPCXX_THREADMODE=par ;; esac; \
+	 set -x ; env $(MAKE_TEST_ENV) $(MAKE) -C $< \
+	             UPCXX_INSTALL=$(UPCXX_INSTDIR) \
+	             clean canno$*
+	mv $</canno$* $@
 
 # upcxx-examples extend-add
 extend-add_%-seq extend-add_%-par :: $(UPCXX_BLDDIR)/extras/examples/extend-add upcxx-install force
@@ -340,7 +381,6 @@ extend-add_%-seq extend-add_%-par :: $(UPCXX_BLDDIR)/extras/examples/extend-add 
 	 SCALAPACK_LIBS=$${SCALAPACK_LIBS:--L$$SCALAPACK_HOME/lib -lscalapack -Wl,--rpath=$$SCALAPACK_HOME/lib} ; \
 	 UPCXX_EXTENDADD_EXTRA=$${UPCXX_EXTENDADD_EXTRA:--Wno-unknown-pragmas} ; \
 	 env $(MAKE_TEST_ENV) $(MAKE) -C $< UPCXX_INSTALL=$(UPCXX_INSTDIR) \
-	               UPCXX_NETWORK=$(UPCXX_CONDUIT) \
                        SCALAPACK_LIBS="$$SCALAPACK_LIBS" \
                        OPTIMIZATION="$(OPT) $$UPCXX_EXTENDADD_EXTRA" \
                        clean extend-add_$*
@@ -350,9 +390,7 @@ extend-add_%-seq extend-add_%-par :: $(UPCXX_BLDDIR)/extras/examples/extend-add 
 upc-%-seq upc-%-par :: $(UPCXX_BLDDIR)/test/interop upcxx-install force
 	@case "$@" in *-seq) export UPCXX_THREADMODE=seq ;; \
 	              *-par) export UPCXX_THREADMODE=par ;; esac; \
-	 set -x ; env $(MAKE_TEST_ENV) $(MAKE) -C $< OPTLVL= UPCC='$(UPCC)' \
-	             UPCXX_GASNET_CONDUIT=$(UPCXX_CONDUIT) \
-	             UPCXX_NETWORK=$(UPCXX_CONDUIT) \
+	 set -x ; env CFLAGS= $(MAKE_TEST_ENV) $(MAKE) -C $< OPTLVL= UPCC='$(UPCC)' \
 	             UPCXX=$(UPCXX_INSTDIR)/bin/upcxx \
 	             clean $*
 	mv $</$* $@
@@ -363,7 +401,6 @@ cuda_vecadd% :: $(UPCXX_BLDDIR)/example/cuda_vecadd/Makefile upcxx-install force
 	              *-par) export UPCXX_THREADMODE=par ;; esac; \
 	 set -x ; env $(MAKE_TEST_ENV) $(MAKE) -C $(<D) \
 	             UPCXX_INSTALL=$(UPCXX_INSTDIR) \
-	             UPCXX_NETWORK=$(UPCXX_CONDUIT) \
 	             clean cuda_vecadd
 	mv $(<D)/cuda_vecadd $@
 
@@ -385,7 +422,7 @@ cmake-%: upcxx-install
 	rm -f cmake/UPCXXConfig*
 	cd cmake && ( set -x ; \
 	export UPCXX_THREADMODE=$* UPCXX_CODEMODE=$(UPCXX_CODEMODE) UPCXX_VERBOSE=1 \
-	       UPCXX_INSTALL=$(UPCXX_INSTDIR) UPCXX_NETWORK=$(UPCXX_CONDUIT); \
+	       UPCXX_INSTALL=$(UPCXX_INSTDIR) ; \
 	export $(MAKE_TEST_ENV) ; \
 	$(CMAKE) --version ; \
 	$(CMAKE) -DCMAKE_PREFIX_PATH=$(UPCXX_INSTDIR) $(CMAKE_ARGS) . )
@@ -395,12 +432,13 @@ cmake-%: upcxx-install
 SYMPACK_URL?=https://github.com/symPACK/symPACK/archive/master.tar.gz
 SYMPACK_GIT_REPO?=#https://github.com/symPACK/symPACK.git # does not support archive?
 SYMPACK_GIT_COMMIT=master
-SYMPACK_INPUT_URL=https://sparse.tamu.edu/RB/Nasa/nasa2146.tar.gz
+#SYMPACK_INPUT_URL=https://sparse.tamu.edu/RB/Nasa/nasa2146.tar.gz
+SYMPACK_INPUT_URL=https://bitbucket.org/berkeleylab/upcxx-extras/downloads/nasa2146.tar.gz
 SYMPACK_DIR=$(HARNESS_WORKDIR)/sympack
 _sympack:
 	-rm -Rf $(SYMPACK_DIR)
-	( set -x ; $(MAKE) upcxx-download URL=$(SYMPACK_URL) GIT_REPO=$(SYMPACK_GIT_REPO) GIT_COMMIT=$(SYMPACK_GIT_COMMIT) DESTDIR=$(SYMPACK_DIR) ) 2>&1 | tee -a $(LOGFILE) $(PIPEEXIT)
-	( set -x ; $(MAKE) upcxx-download URL=$(SYMPACK_INPUT_URL) GIT_REPO= GIT_COMMIT= DESTDIR=$(SYMPACK_DIR)/input ) 2>&1 | tee -a $(LOGFILE) $(PIPEEXIT)
+	( set -x ; $(MAKE) upcxx-download PRODUCT=sympack URL=$(SYMPACK_URL) GIT_REPO=$(SYMPACK_GIT_REPO) GIT_COMMIT=$(SYMPACK_GIT_COMMIT) DESTDIR=$(SYMPACK_DIR) ) 2>&1 | tee -a $(LOGFILE) $(PIPEEXIT)
+	( set -x ; $(MAKE) upcxx-download PRODUCT=sympack_input URL=$(SYMPACK_INPUT_URL) GIT_REPO= GIT_COMMIT= DESTDIR=$(SYMPACK_DIR)/input ) 2>&1 | tee -a $(LOGFILE) $(PIPEEXIT)
 	cp $(SYMPACK_DIR)/input/nasa2146.rb .
 	@echo '#!/bin/sh' > $@ ; chmod +x $@
 
@@ -411,7 +449,7 @@ sympack-%: upcxx-install force
 	case "$*" in seq) export SYMPACK_THREADS=-DENABLE_THREADS=OFF ;; \
 	             par) export SYMPACK_THREADS=-DENABLE_THREADS=ON ;; esac; \
 	export UPCXX_THREADMODE=$* UPCXX_CODEMODE=$(UPCXX_CODEMODE) UPCXX_VERBOSE=1 \
-	       UPCXX_INSTALL=$(UPCXX_INSTDIR) UPCXX_NETWORK=$(UPCXX_CONDUIT); \
+	       UPCXX_INSTALL=$(UPCXX_INSTDIR) ; \
 	export $(MAKE_TEST_ENV) FC="$(UPCXX_FC)" ; \
 	$(CMAKE) --version ; \
 	$(CMAKE) -DCMAKE_PREFIX_PATH=$(UPCXX_INSTDIR) $(CMAKE_ARGS) $(CMAKE_FC_ARGS) \

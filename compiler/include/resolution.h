@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -67,11 +67,14 @@ bool       isTupleContainingAnyReferences(Type* t);
 void       ensureEnumTypeResolved(EnumType* etype);
 
 void       resolveFnForCall(FnSymbol* fn, CallExpr* call);
+FnSymbol*  tryResolveFunction(FnSymbol* fn);
 
 bool       canInstantiate(Type* actualType, Type* formalType);
 
 Type*      getConcreteParentForGenericFormal(Type* actualType,
                                              Type* formalType);
+Type*      getMoreInstantiatedParentForGenericFormal(Type* actualType,
+                                                     Type* formalType);
 
 bool       isInstantiation(Type* sub, Type* super);
 
@@ -166,10 +169,33 @@ void  setReduceSVars(ShadowVarSymbol*& PRP, ShadowVarSymbol*& PAS,
                      ShadowVarSymbol*& RP, ShadowVarSymbol* AS);
 void setupAndResolveShadowVars(ForallStmt* fs);
 bool preserveShadowVar(Symbol* var);
-void adjustVoidShadowVariables();
+void adjustNothingShadowVariables();
 Expr* lowerPrimReduce(CallExpr* call);
 
 void buildFastFollowerChecksIfNeeded(CallExpr* checkCall);
+
+// constrained generics
+void resolveInterfaceSymbol(InterfaceSymbol* isym);
+void resolveImplementsStmt(ImplementsStmt* istm);
+void resolveConstrainedGenericFun(FnSymbol* fn);
+void resolveConstrainedGenericSymbol(Symbol* sym, bool mustBeCG);
+Expr* resolveCallToAssociatedType(CallExpr* call, ConstrainedType* recv);
+class ConstraintSat { public: ImplementsStmt* istm; IfcConstraint* icon;
+  ConstraintSat(ImplementsStmt* s, IfcConstraint* c): istm(s), icon(c) { } };
+ConstraintSat constraintIsSatisfiedAtCallSite(CallExpr* call,
+                                                IfcConstraint* constraint,
+                                                SymbolMap& substitutions);
+void copyIfcRepsToSubstitutions(FnSymbol* fn, Expr* anchor, int indx,
+                                ImplementsStmt* istm,
+                                SymbolMap& substitutions);
+void recordCGInterimInstantiations(CallExpr* call, ResolutionCandidate* best1,
+                       ResolutionCandidate* best2, ResolutionCandidate* best3);
+void adjustForCGinstantiation(FnSymbol* fn, SymbolMap& substitutions,
+                              bool isInterimInstantiation);
+bool cgActualCanMatch(FnSymbol* fn, Type* formalT, ConstrainedType* actualCT);
+bool cgFormalCanMatch(FnSymbol* fn, Type* formalT);
+void startInterfaceChecking();
+void finishInterfaceChecking();
 
 FnSymbol* instantiateWithoutCall(FnSymbol* fn, SymbolMap& subs);
 FnSymbol* instantiateSignature(FnSymbol* fn, SymbolMap& subs,
@@ -265,8 +291,6 @@ void lvalueCheck(CallExpr* call);
 
 void checkForStoringIntoTuple(CallExpr* call, FnSymbol* resolvedFn);
 
-bool signatureMatch(FnSymbol* fn, FnSymbol* gn);
-
 bool isSubtypeOrInstantiation(Type* sub, Type* super, Expr* ctx);
 bool isCoercibleOrInstantiation(Type* sub, Type* super, Expr* ctx);
 
@@ -307,6 +331,7 @@ void removeCopyFns(Type* t);
 std::set<Type*> getWellKnownTypesSet();
 bool isUnusedClass(Type* t, const std::set<Type*>& wellknown);
 
+void saveGenericSubstitutions();
 void pruneResolvedTree();
 
 void resolveTypeWithInitializer(AggregateType* at, FnSymbol* fn);

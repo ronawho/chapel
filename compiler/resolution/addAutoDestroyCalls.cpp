@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -234,6 +234,7 @@ static Expr* walkBlockStmt(FnSymbol*         fn,
 
     // Collect defer statements to run during cleanup
     } else if (DeferStmt* defer = toDeferStmt(stmt)) {
+      walkBlock(fn, &scope, defer->body(), ignoredVariables, lmm);
       scope.deferAdd(defer);
 
     // AutoDestroy primary locals at start of function epilogue (2)
@@ -262,6 +263,16 @@ static Expr* walkBlockStmt(FnSymbol*         fn,
       if (VarSymbol* v = initsVariable(stmt, fCall))
         if (isAutoDestroyedOrSplitInitedVariable(v))
           scope.addInitialization(v);
+
+      // workaround for issue #1833
+      if (CallExpr* c = toCallExpr(stmt))
+        if (c->isPrimitive(PRIM_SET_MEMBER))
+          if (SymExpr* lhs = toSymExpr(c->get(1)))
+            if (VarSymbol* v = toVarSymbol(lhs->symbol()))
+              if (isAutoDestroyedOrSplitInitedVariable(v))
+                if (v->hasFlag(FLAG_COERCE_TEMP) &&
+                    v->type->symbol->hasFlag(FLAG_TUPLE))
+                  scope.addInitialization(v);
 
       if (fCall != NULL) {
         // Check also for out intent in a called function
@@ -720,7 +731,7 @@ static void gatherIgnoredVariablesForYield(
   }
 }
 
-class ComputeLastSymExpr : public AstVisitorTraverse
+class ComputeLastSymExpr final : public AstVisitorTraverse
 {
   public:
     std::vector<VarSymbol*>& inited;
@@ -729,11 +740,11 @@ class ComputeLastSymExpr : public AstVisitorTraverse
     ComputeLastSymExpr(std::vector<VarSymbol*>& inited,
                        std::map<VarSymbol*, Expr*>& last)
       : inited(inited), last(last) { }
-    virtual bool enterDefExpr(DefExpr* node);
     void noteRecordInit(VarSymbol* v, CallExpr* call);
-    virtual bool enterCallExpr(CallExpr* node);
-    virtual void visitSymExpr(SymExpr* node);
-    virtual void exitForallStmt(ForallStmt* node);
+    bool enterDefExpr(DefExpr* node) override;
+    bool enterCallExpr(CallExpr* node) override;
+    void visitSymExpr(SymExpr* node) override;
+    void exitForallStmt(ForallStmt* node) override;
 };
 
 static Expr* findLastExprInStatement(Expr* e, VarSymbol* v);
@@ -981,7 +992,8 @@ SymExpr* findSourceOfYield(CallExpr* yield) {
   // autoCopy call.
   while (expr != NULL && needle != NULL) {
     if (CallExpr* move = toCallExpr(expr)) {
-      if (move->isPrimitive(PRIM_MOVE) == true) {
+      if (move->isPrimitive(PRIM_MOVE) ||
+          move->isPrimitive(PRIM_ASSIGN)) {
         SymExpr*   lhs    = toSymExpr(move->get(1));
         VarSymbol* lhsVar = toVarSymbol(lhs->symbol());
 

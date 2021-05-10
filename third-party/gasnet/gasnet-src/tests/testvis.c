@@ -18,7 +18,14 @@ uintptr_t segsz = (16*1024*1024);
 static gex_Client_t      myclient;
 static gex_EP_t    myep;
 static gex_TM_t myteam;
+static gex_TM_t team0;
+static gex_Rank_t ranks, jobrank;
 static gex_Segment_t     mysegment;
+
+#ifndef RENUMBER_TEAM
+// can be defined to non-zero to use a renumbered team for communication (bug 4145)
+#define RENUMBER_TEAM 0
+#endif
 
 #include <test.h>
 
@@ -121,7 +128,7 @@ test_memvec_list *rand_memvec_list(void *addr, size_t elemlen, int allowoverlap)
   size_t per = 0;
   if (TEST_RAND_ONEIN(20)) count = 0;
   if (count > 0) per = elemlen / count; 
-  mv = test_malloc(sizeof(test_memvec_list)+count*sizeof(gex_Memvec_t));
+  mv = test_calloc(1,sizeof(test_memvec_list)+count*sizeof(gex_Memvec_t));
   mv->count = count;
   mv->list = (gex_Memvec_t *)(mv+1);
   mv->totalsz = 0;
@@ -187,7 +194,7 @@ test_memvec_list *rand_memvec_list(void *addr, size_t elemlen, int allowoverlap)
 
 
 test_memvec_list *buildcontig_memvec_list(void *addr, size_t elemlen, size_t areasz) {
-  test_memvec_list *mv = test_malloc(sizeof(test_memvec_list)+sizeof(gex_Memvec_t));
+  test_memvec_list *mv = test_calloc(1,sizeof(test_memvec_list)+sizeof(gex_Memvec_t));
   mv->count = 1;
   mv->list = (gex_Memvec_t*)(mv+1);
   mv->totalsz = ((uintptr_t)elemlen)*VEC_SZ;
@@ -318,7 +325,7 @@ test_addr_list *rand_addr_list(void *addr, size_t chunkelem, size_t elemlen, int
   count = TEST_RAND_PICK(TEST_RAND(1, maxchunks),
                          TEST_RAND(1, TEST_RAND(1, TEST_RAND(1, maxchunks))));
   if (TEST_RAND_ONEIN(20)) count = 0;
-  al = test_malloc(sizeof(test_addr_list)+count*sizeof(void *));
+  al = test_calloc(1,sizeof(test_addr_list)+count*sizeof(void *));
   al->count = count;
   al->list = (void **)(al+1);
 
@@ -351,7 +358,7 @@ test_addr_list *rand_addr_list(void *addr, size_t chunkelem, size_t elemlen, int
 }
 
 test_addr_list *buildcontig_addr_list(void *addr, size_t elemlen, size_t areasz) {
-  test_addr_list *al = test_malloc(sizeof(test_addr_list)+sizeof(void *));
+  test_addr_list *al = test_calloc(1,sizeof(test_addr_list)+sizeof(void *));
   al->list = (void **)(al+1);
   al->list[0] = ((VEC_T*)addr) + TEST_RAND(0,areasz-elemlen);
   if (elemlen == 0) {
@@ -507,7 +514,7 @@ test_strided_desc *rand_strided_desc(void *srcaddr, void *dstaddr, void *contiga
   size_t i;
   if (TEST_RAND_ONEIN(10)) dim = 1; /* 1-dim (fully contiguous) */
   sz = sizeof(test_strided_desc)+6*dim*sizeof(size_t);
-  sd = test_malloc(sz);
+  sd = test_calloc(1,sz);
   sd->_descsz = sz;
   sd->srcstrides =    (size_t *)(sd+1);
   sd->dststrides =    ((size_t *)(sd+1))+dim;
@@ -759,7 +766,7 @@ void _verify_xpose_desc(test_xpose_desc const *xd, const char *file, int line) {
 test_xpose_desc *rand_xpose_desc(void *srcaddr, void *dstaddr, void *contigaddr, size_t elemlen) {
   size_t dim = TEST_RAND(2, TEST_RAND(2, max_stridedim));
   size_t sz = sizeof(test_xpose_desc)+10*dim*MAX(sizeof(ptrdiff_t),sizeof(size_t));
-  test_xpose_desc *xd = test_malloc(sz);
+  test_xpose_desc *xd = test_calloc(1,sz);
   xd->_descsz = sz;
   xd->stridelevels = dim;
   size_t vecs_per_elem = TEST_RAND(1,TEST_RAND(1,16));
@@ -1065,11 +1072,11 @@ test_pcheader_t *rand_pcheader(size_t *packetsz) {
     memset(pcheader, (uint8_t)sz, sz);
   } else {
     pcheader->packetsz = sz;
-    pcheader->srcjobrank = mynode;
+    pcheader->srcjobrank = jobrank;
     uint8_t *payload = (uint8_t*)(pcheader+1);
     size_t payloadsz = sz-sizeof(test_pcheader_t);
     for (size_t i=0; i < payloadsz; i++) {
-      payload[i] = PC_VALUE(mynode, i);
+      payload[i] = PC_VALUE(jobrank, i);
     }
   }
   return pcheader;
@@ -1110,8 +1117,7 @@ gex_AM_Entry_t pcverify_reph_entry =
     0, (void *)&pcarrival_cnt, "testvis_pcverify_reph" };
 void pcverify_reph(gex_Token_t token, void *buf, size_t nbytes) {
   gasnett_atomic_increment(&pcarrival_cnt,0);
-  gex_Rank_t nranks = gex_TM_QuerySize(myteam);
-  gex_Rank_t mysender = (mynode + nranks - 1) % nranks;
+  gex_Rank_t mysender = (jobrank + ranks - 1) % ranks;
 
   // check all token properties are legit
   gex_Token_Info_t info;
@@ -1823,7 +1829,7 @@ void doit(int iters, int runtests) {
           assert(ops[i].xdesc);
           verify_xpose_desc_data(ops[i].xdesc, "gasnet_puts_bulk/gasnet_gets_bulk test");
 
-          test_free(ops[i].sdesc);
+          test_free(ops[i].xdesc);
         }
       }
       test_free(events);
@@ -1846,7 +1852,7 @@ int main(int argc, char **argv) {
   int i;
 
   assert_always(VEC_SZ == sizeof(VEC_T));
-  GASNET_Safe(gex_Client_Init(&myclient, &myep, &myteam, "testvis", &argc, &argv, 0));
+  GASNET_Safe(gex_Client_Init(&myclient, &myep, &team0, "testvis", &argc, &argv, 0));
   test_init_early("testvis",0, "[options] (iters) (seed)\n"
             " -v/-i/-s/-x/-n  run vector/indexed/strided/transpositional/non-blocking tests (defaults to all)\n"
             " -d        disable correctness verification checks\n"
@@ -1903,20 +1909,30 @@ int main(int argc, char **argv) {
   if (i < argc) { iters = atoi(argv[i]); i++; }
   if (i < argc) { seedoffset = atoi(argv[i]); i++; }
   if (i < argc) test_usage_early();
-  GASNET_Safe(gex_Segment_Attach(&mysegment, myteam, TEST_SEGSZ_REQUEST));
+  GASNET_Safe(gex_Segment_Attach(&mysegment, team0, TEST_SEGSZ_REQUEST));
+
+  jobrank = gex_TM_QueryRank(team0);
+  ranks = gex_TM_QuerySize(team0);
+
+  #if RENUMBER_TEAM
+    // use a non-primordial team that rotates all the rank numbers by RENUMBER_TEAM
+    gex_TM_Split(&myteam, team0, 0, (jobrank+RENUMBER_TEAM)%ranks, 0, 0, GEX_FLAG_TM_NO_SCRATCH);
+  #else
+    myteam = team0;
+  #endif
 
   areasz = TEST_SEGSZ/NUM_AREAS/VEC_SZ; /* in elem */
   mynode = gex_TM_QueryRank(myteam);
-  myseg = TEST_SEG(mynode);
-  partner = (mynode + 1) % gex_TM_QuerySize(myteam);
-  partnerseg = TEST_SEG(partner);
+  myseg = TEST_SEG(jobrank);
+  partner = (mynode + 1) % ranks;
+  partnerseg = TEST_SEG((partner+ranks-(RENUMBER_TEAM%ranks))%ranks);
   heapseg = (VEC_T *)test_malloc(TEST_SEGSZ);
 
   assert_always(gex_EP_RegisterHandlers(myep, &pcverify_reph_entry, 1) == GASNET_OK);
 
   if (seedoffset == 0) {
     seedoffset = (((unsigned int)TIME()) & 0xFFFF);
-    TEST_BCAST(&seedoffset, 0, &seedoffset, sizeof(&seedoffset));
+    TEST_BCAST(&seedoffset, 0, &seedoffset, sizeof(seedoffset));
   }
   TEST_SRAND(mynode+seedoffset);
   char segstr[64];
@@ -1936,6 +1952,11 @@ int main(int argc, char **argv) {
   if (halfduplex && mynode % 2 == 1) runtests = 0; /* odd nodes passive */
 
   doit(iters, runtests);
+  test_free(heapseg);
+  #if RENUMBER_TEAM
+    gex_Memvec_t junk;
+    gex_TM_Destroy(myteam, &junk, GEX_FLAG_GLOBALLY_QUIESCED);
+  #endif
   MSG("done.");
 
   gasnet_exit(0);

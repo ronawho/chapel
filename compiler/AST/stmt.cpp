@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -48,27 +48,7 @@ Vec<LabelSymbol*> removedIterResumeLabels;
 *                                                                             *
 ************************************** | *************************************/
 
-Stmt::Stmt(AstTag astTag) : Expr(astTag) {
-
-}
-Stmt::~Stmt() {
-
-}
-
-bool Stmt::isStmt() const {
-  return true;
-}
-
-/************************************* | **************************************
-*                                                                             *
-*                                                                             *
-*                                                                             *
-************************************** | *************************************/
-
 VisibilityStmt::VisibilityStmt(AstTag astTag): Stmt(astTag) {
-}
-
-VisibilityStmt::~VisibilityStmt() {
 }
 
 // Specifically for when the module being used or imported is renamed

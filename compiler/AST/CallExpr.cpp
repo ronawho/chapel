@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -143,10 +143,6 @@ static void callExprHelper(CallExpr* call, BaseAST* arg) {
     }
   }
 }
-
-CallExpr::~CallExpr() {
-}
-
 
 bool CallExpr::isEmpty() const {
   return primitive == NULL && baseExpr == NULL;
@@ -456,23 +452,23 @@ FnSymbol* CallExpr::findFnSymbol() {
 }
 
 bool CallExpr::isCast(void) {
-  return isNamedAstr(astr_cast);
+  return isNamedAstr(astrScolon);
 }
 
 Expr* CallExpr::castFrom(void) {
   INT_ASSERT(isCast());
 
-  return get(2);
+  return get(1);
 }
 
 Expr* CallExpr::castTo(void) {
   INT_ASSERT(isCast());
 
-  return get(1);
+  return get(2);
 }
 
 CallExpr* createCast(BaseAST* src, BaseAST* toType) {
-  return new CallExpr(astr_cast, toType, src);
+  return new CallExpr(astrScolon, src, toType);
 }
 
 QualifiedType CallExpr::qualType(void) {

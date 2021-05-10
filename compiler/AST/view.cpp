@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -64,7 +64,7 @@ static void print_on_its_own_line(int indent, const char* msg,
 }
 
 static void
-list_sym(const Symbol* sym, bool type = true) {
+list_sym(const Symbol* sym, bool type = true, bool intents = true) {
   if (const VarSymbol* var = toConstVarSymbol(sym)) {
     if (var->immediate) {
       if (var->immediate->const_kind == NUM_KIND_INT) {
@@ -79,9 +79,12 @@ list_sym(const Symbol* sym, bool type = true) {
   if (isFnSymbol(sym)) {
     printf("fn ");
   } else if (const ArgSymbol* arg = toConstArgSymbol(sym)) {
-    printf("arg intent-%s ", arg->intentDescrString());
+    if (intents)
+      printf("arg intent-%s ", arg->intentDescrString());
   } else if (isTypeSymbol(sym)) {
     printf("type ");
+  } else if (isInterfaceSymbol(sym)) {
+    printf("interface ");
   }
   printf("%s", sym->name);
   printf("[%d]", sym->id);
@@ -142,6 +145,12 @@ static void forallPreamble(const Expr* expr, const BaseAST* parentAst,
   } else if (const ShadowVarSymbol* svar = toConstShadowVarSymbol(parentAst)) {
     if (expr == svar->outerVarSE                          ||
         ( expr == svar->initBlock() && !svar->outerVarSE ) )
+      printf("\n");
+  } else if (const InterfaceSymbol* isym = toConstInterfaceSymbol(parentAst)) {
+    if (expr->list && expr->list->parent == isym)
+      printf("\n");
+  } else if (const ImplementsStmt* istm = toConstImplementsStmt(parentAst)) {
+    if (expr == istm->implBody)
       printf("\n");
   }
 }
@@ -243,17 +252,13 @@ static bool
 list_line(const Expr* expr, const BaseAST* parentAst) {
   if (expr->isStmt())
     return !*block_explanation(expr, parentAst);
-  if (const CondStmt* cond = toConstCondStmt(parentAst)) {
-    if (cond->condExpr == expr)
-      return false;
-  }
-  if (const GotoStmt* gts = toConstGotoStmt(parentAst)) {
-    if (gts->label == expr)
-      return false;
-  }
+  if (const CondStmt* cond = toConstCondStmt(parentAst))
+    return cond->condExpr != expr;
+  if (const GotoStmt* gts = toConstGotoStmt(parentAst))
+    return gts->label != expr;
   if (const Expr* pExpr = toConstExpr(parentAst))
-    if (pExpr->isStmt() && !isUseStmt(pExpr) && !isImportStmt(pExpr))
-      return true;
+    return pExpr->isStmt() &&
+      !isUseStmt(pExpr) && !isImportStmt(pExpr) && !isImplementsStmt(pExpr);
   if (isSymbol(parentAst))
     return true;
   return false;
@@ -310,13 +315,20 @@ list_ast(const BaseAST* ast, const BaseAST* parentAst = NULL, int indent = 0) {
         printf("def ");
       }
     } else if (const SymExpr* e = toConstSymExpr(expr)) {
-      list_sym(e->symbol(), false);
+      list_sym(e->symbol(), false, parentAst == nullptr);
     } else if (const UnresolvedSymExpr* e = toConstUnresolvedSymExpr(expr)) {
       printf("%s ", e->unresolved);
     } else if (isUseStmt(expr)) {
       printf("use ");
     } else if (isImportStmt(expr)) {
       printf("import ");
+    } else if (isImplementsStmt(expr)) {
+      printf("implements stmt ");
+    } else if (isIfcConstraint(expr)) {
+      if (parentAst == NULL || !isImplementsStmt(parentAst))
+        printf("ifc constraint (");
+      else
+        printf("(");
     }
   }
 
@@ -340,7 +352,7 @@ list_ast(const BaseAST* ast, const BaseAST* parentAst = NULL, int indent = 0) {
       toConstCallExpr(parentAst)->isPrimitive(PRIM_BLOCK_C_FOR_LOOP);
     const CallExpr* parent_C_loop = parentIsCLoop ? toConstCallExpr(parentAst) :
       NULL;
-    if (isCallExpr(expr)) {
+    if (isCallExpr(expr) || isIfcConstraint(expr)) {
       printf(") ");
     }
     if (isBlockStmt(ast)) {
@@ -451,6 +463,20 @@ Expr* aidExpr(BaseAST* ast) {
   return NULL;
 }
 
+// inTree(): a workaround for an lldb bug
+bool inTree(BaseAST* ast) {
+  return ast->inTree();
+}
+bool inTree(int id) {
+  if (BaseAST* ast = aid(id)) {
+    return inTree(ast);
+  } else {
+    printf("%s\n", aidNotFoundError("inTree", id));
+    return false;
+  }
+}
+
+
 void viewFlags(int id) {
   if (BaseAST* ast = aidWithError(id, "viewFlags"))
     viewFlags(ast);
@@ -473,6 +499,8 @@ static void view_sym(Symbol* sym, bool number, int mark) {
     printf("arg ");
   } else if (toTypeSymbol(sym)) {
     printf("type ");
+  } else if (isInterfaceSymbol(sym)) {
+    printf("interface ");
   }
   printf("%s", sym->name);
   if (number)
@@ -806,7 +834,7 @@ const char* debugLoc(BaseAST* ast) {
   return debugShortLoc ? shortLoc(ast) : stringLoc(ast);
 }
 
-// helper for printing IDs
+// debugID: helper for printing IDs, opposite to aid()
 int debugID(int id) {
   return id;
 }
@@ -827,11 +855,15 @@ void debugSummary(BaseAST* ast) {
   else
     printf("<debugSummary: NULL>\n");
 }
+// these just print out the argument
 void debugSummary(const char* str) {
   if (str)
     printf("\"%s\"\n", str);
   else
     printf("<debugSummary: NULL string>\n");
+}
+void debugSummary(bool b) {
+  printf("%s\n", b ? "true" : "false");
 }
 
 // find the Parent Symbol
@@ -908,6 +940,7 @@ static const char* summarySymbolKind(Symbol* sym) {
   if (isVarSymbol(sym)) return "var";
   if (isTypeSymbol(sym)) return "type";
   if (isModuleSymbol(sym)) return "module";
+  if (isInterfaceSymbol(sym)) return "interface";
   return sym->astTagAsString();
 }
 static void summarySymbolPrint(Symbol* sym, const char* prefix = NULL,
@@ -994,12 +1027,21 @@ void map_view(SymbolMap& map) {
 //
 
 static void showFnSymbol(FnSymbol* fn) {
-        printf("  %8d  %c%c  %s\n", fn->id,
-               // "g"eneric, "r"esolved, "G"eneric+resolved, " " - neither
-               fn->isResolved() ? (fn->isKnownToBeGeneric() ? 'G' : 'r') :
-                                  (fn->isKnownToBeGeneric() ? 'g' : ' ') ,
-               fn->inTree() ? ' ' : '-',
-               debugLoc(fn));
+  printf("  %8d  %c%c  %s  %s\n", fn->id,
+         // "g"eneric, "r"esolved, "G"eneric+resolved, " " neither
+         fn->isResolved() ? (fn->isKnownToBeGeneric() ? 'G' : 'r') :
+         (fn->isKnownToBeGeneric() ? 'g' : ' ') ,
+         // "-" indicates not in tree
+         fn->inTree() ? ' ' : '-',
+         fn->name, debugLoc(fn));
+}
+
+static void showSymExpr(SymExpr* elm) {
+  Symbol* sym = elm->symbol();
+  if (sym)
+    printf("  %8d  %s[%d]\n", elm->id, sym->name, sym->id);
+  else
+    printf("  %8d  <null symbol>\n", elm->id);
 }
 
 void vec_view(Vec<Symbol*,VEC_INTEGRAL_SIZE>* v) {
@@ -1034,6 +1076,22 @@ void vec_view(Vec<FnSymbol*,VEC_INTEGRAL_SIZE>& v)
   }
 }
 
+void vec_view(Vec<SymExpr*,VEC_INTEGRAL_SIZE>* v) {
+  vec_view(*v);
+}
+
+void vec_view(Vec<SymExpr*,VEC_INTEGRAL_SIZE>& v)
+{
+  printf("Vec<SymExpr> %d elm(s)\n", v.n);
+  for (int i = 0; i < v.n; i++) {
+    SymExpr* elm = v.v[i];
+    if (elm)
+      printf("%3d", i), showSymExpr(elm);
+    else
+      printf("%3d  <null>\n", i);
+  }
+}
+
 void vec_view(std::vector<Symbol*>* syms) {
   vec_view(*syms);
 }
@@ -1059,6 +1117,21 @@ void vec_view(std::vector<FnSymbol*>& syms) {
     FnSymbol* elm = syms[i];
     if (elm)
       printf("%3d", i), showFnSymbol(elm);
+    else
+      printf("%3d  <null>\n", i);
+  }
+}
+
+void vec_view(std::vector<SymExpr*>* syms) {
+  vec_view(*syms);
+}
+
+void vec_view(std::vector<SymExpr*>& syms) {
+  printf("vector<SymExpr> %d elm(s)\n", (int)syms.size());
+  for (int i = 0; i < (int)syms.size(); i++) {
+    SymExpr* elm = syms[i];
+    if (elm)
+      printf("%3d", i), showSymExpr(elm);
     else
       printf("%3d  <null>\n", i);
   }
@@ -1148,10 +1221,44 @@ void set_view(std::set<BlockStmt*>* bss) {
 
 void set_view(std::set<BlockStmt*>& bss) {
   printf("set<BlockStmt> %d elm(s)\n", (int)bss.size());
-  std::set<BlockStmt*>::iterator it = bss.begin();
-  while (it != bss.end()) {
-    debugSummary(*(it++));
+  for (BlockStmt* elm: bss)
+    if (elm) showBlock(elm);
+    else     printf("  <null>\n");
+}
+
+void set_view(std::set<FnSymbol*>* bss) {
+  set_view(*bss);
+}
+
+void set_view(std::set<FnSymbol*>& bss) {
+  printf("set<FnSymbol> %d elm(s)\n", (int)bss.size());
+  for (FnSymbol* elm: bss)
+    if (elm) showFnSymbol(elm);
+    else     printf("  <null>\n");
+}
+
+//
+// typesWithName: print all TypeSymbols with the given name
+//
+
+void typesWithName(const char* name) {
+  typesWithName(name, gTypeSymbols);
+}
+
+void typesWithName(const char* name, Vec<TypeSymbol*>& tyVec) {
+  printf("typesWithName(\"%s\")\n", name);
+  int count = 0, countNonNull = 0;
+  forv_Vec(TypeSymbol, ty, tyVec) {
+    if (ty) {
+      countNonNull++;
+      if (!strcmp(ty->name, name)) {
+        count++;
+        printf("  sym %8d   %s %d  %s\n", ty->id, ty->type->astTagAsString(),
+               ty->type->id, debugLoc(ty));
+      }
+    }
   }
+  printf("  = %d type(s) of %d\n", count, countNonNull);
 }
 
 //

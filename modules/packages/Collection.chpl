@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -190,7 +190,8 @@ module Collection {
   /*
     Syntactic sugar for :proc:`CollectionImpl.add`.
   */
-  inline proc +=(ref c : CollectionImpl(?eltType), elt : eltType) {
+  inline operator CollectionImpl.+=(ref c : CollectionImpl(?eltType),
+                                    elt : eltType) {
     c.add(elt);
   }
 }

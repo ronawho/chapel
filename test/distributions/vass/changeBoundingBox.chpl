@@ -74,7 +74,7 @@ domains/arrays.
 proc Block.changeBoundingBox(newBB) {
   // Comment out this check if desired. NB Block-distributed domains created
   // using 'this' will not be re-distributed upon changeBoundingBox().
-  if _doms.size != 0 then
+  if _doms_containing_dist != 0 then
     halt("changeBoundingBox: the distribution already has declared domain(s)");
 
   // From Block.dsiAssign, with mods.
@@ -82,7 +82,8 @@ proc Block.changeBoundingBox(newBB) {
   coforall locid in targetLocDom do
     on targetLocales(locid) {
       delete locDist(locid);
-      locDist(locid) = new unmanaged LocBlock(rank, idxType, locid, boundingBox,
+      locDist(locid) = new unmanaged LocBlock(rank, idxType, locid,
+                                              boundingBox, boundingBox.dims(),
                                               targetLocDom);
     }
   // NB at this point privatized copies of 'this' on other locales, if any,

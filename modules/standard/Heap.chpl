@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -28,9 +28,10 @@
   * Querying the top element is O(1).
   * Initialization from an array is O(N).
 
-  The heap accepts a comparator to determine how elements are compared. The default 
-  comparator is `defaultComparator` and makes a max-heap. In this case, ``top`` 
-  will return the greatest element in the heap.
+  The heap accepts a :ref:`comparator <comparators>` to determine how
+  elements are compared. The default comparator is `defaultComparator` and makes
+  a max-heap. In this case, ``top`` will return the greatest element in the
+  heap.
 
   If a ``reverseComparator`` is passed to ``init``, 
   ``top`` will return the minimal element.
@@ -336,7 +337,7 @@ module Heap {
     }
 
     /*
-      Iterate over the elements of this heap in in arbitrary order.
+      Iterate over the elements of this heap in an arbitrary order.
     */
     iter these() ref {
       for e in _data {
@@ -391,7 +392,7 @@ module Heap {
     :arg lhs: The heap to assign to.
     :arg rhs: The heap to assign from.
   */
-  proc =(ref lhs: heap(?t, ?), ref rhs: heap(t, ?)) {
+  operator heap.=(ref lhs: heap(?t, ?), ref rhs: heap(t, ?)) {
     lhs.comparator = rhs.comparator;
     lhs._data = rhs._data;
   }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -51,6 +51,10 @@
    :proc:`file.absPath`
    :proc:`expandVars`
    :proc:`joinPath`
+   :proc:`replaceBasename`
+   :proc:`replaceDirname`
+   :proc:`replaceExt`
+   :proc:`splitExt`
    :proc:`splitPath`
 
    Path Properties
@@ -70,14 +74,30 @@ use SysError, IO;
 use Sys, SysBasic;
 use CPtr;
 
-/* Represents generally the current directory. This starts as the directory
-   where the program is being executed from.
+/* 
+   Represents generally the current directory. This starts as the directory
+   where the program is being executed from. On all the platforms that Chapel
+   supports this parameter is set to ".".
 */
-const curDir = ".";
-/* Represents generally the parent directory. */
-const parentDir = "..";
-/* Denotes the separator between a directory and its child. */
-const pathSep = "/";
+param curDir;
+
+/* 
+   Represents generally the parent directory. On all the platforms that Chapel
+   supports this parameter is set to "..".
+*/
+param parentDir;
+
+/* 
+   Denotes the separator between a directory and its child.  On all the
+   platforms that Chapel supports this parameter is set to "/"
+*/
+param pathSep;
+
+// these can be set within a param `if`, in case we start to support platforms
+// where these are not the right values (e.g. Windows)
+curDir = ".";
+parentDir = "..";
+pathSep = "/";
 
 /*
    Localizes and unescapes string to create a bytes to be used for obtaining a
@@ -93,7 +113,7 @@ private inline proc unescape(str: string) {
 
   .. code-block:: Chapel
   
-    normPath(joinPath(here.cwd(), name))
+    normPath(joinPath(here.cwd(), path))
   
   See :proc:`normPath()`, :proc:`joinPath()`, :proc:`~FileSystem.locale.cwd()`
   for details.
@@ -104,20 +124,27 @@ private inline proc unescape(str: string) {
     reliance on :proc:`~FileSystem.locale.cwd()`. Another task on the current
     locale may change the current working directory at any time.
 
-  :arg name: The path whose absolute path is desired.
-  :type name: `string`
+  :arg path: The path whose absolute path is desired.
+  :type path: `string`
 
   :return: A normalized, absolutized version of the path specified.
   :rtype: `string`
 
   :throws SystemError: Upon failure to get the current working directory.
 */
-proc absPath(name: string): string throws {
+proc absPath(path: string): string throws {
   use FileSystem;
 
-  if !isAbsPath(name) then
-    return normPath(joinPath(try here.cwd(), name));
-  return normPath(name);
+  if !isAbsPath(path) then
+    return normPath(joinPath(try here.cwd(), path));
+  return normPath(path);
+}
+
+pragma "no doc"
+pragma "last resort"
+proc absPath(name: string): string throws {
+  compilerWarning("Path.absPath: Argument 'name' is deprecated - use 'path' instead");
+  return absPath(path=name);
 }
 
 /*
@@ -148,21 +175,28 @@ proc file.absPath(): string throws {
   return try Path.absPath(this.path);
 }
 
-/* Returns the basename of the file name provided.  For instance:
+/* Returns the file name portion of the path provided.  For instance:
 
    .. code-block:: Chapel
 
       writeln(basename("/foo/bar/baz")); // Prints "baz"
       writeln(basename("/foo/bar/")); // Prints "", because of the empty string
 
-   Note that this is different from the Unix basename function.
+   Note that this is different from the Unix ``basename`` function.
 
-   :arg name: A string file name.  Note that this string does not have to be
+   :arg path: A string file name.  Note that this string does not have to be
               a valid file name, as the file itself will not be affected.
-   :type name: `string`
+   :type path: `string`
 */
+proc basename(path: string): string {
+   return splitPath(path)[1];
+}
+
+pragma "no doc"
+pragma "last resort"
 proc basename(name: string): string {
-   return splitPath(name)[1];
+  compilerWarning("Path.basename: Argument 'name' is deprecated - use 'path' instead");
+  return basename(path=name);
 }
 
 /* Determines and returns the longest common path prefix of
@@ -314,20 +348,30 @@ proc commonPath(paths: []): string {
   return result;
 }
 
-/* Returns the parent directory of the file name provided.  For instance:
+/* Returns the parent directory portion of the path provided.  For instance:
 
    .. code-block:: Chapel
 
       writeln(dirname("/foo/bar/baz")); // Prints "/foo/bar"
       writeln(dirname("/foo/bar/")); // Also prints "/foo/bar"
 
-   :arg name: A string file name.  Note that this string does not have to be
+   Note that this is different from the Unix ``dirname`` function.
+
+   :arg path: A string file name.  Note that this string does not have to be
               a valid file name, as the file itself will not be affected.
-   :type name: `string`
+   :type path: `string`
 */
-proc dirname(name: string): string {
-  return splitPath(name)[0];
+proc dirname(path: string): string {
+  return splitPath(path)[0];
 }
+
+pragma "no doc"
+pragma "last resort"
+proc dirname(name: string): string {
+  compilerWarning("Path.dirname: Argument 'name' is deprecated - use 'path' instead");
+  return dirname(path=name);
+}
+
 
 /* Expands any environment variables in the path of the form ``$<name>`` or
    ``${<name>}`` into their values.  If ``<name>`` does not exist, they are left
@@ -438,23 +482,30 @@ proc file.getParentName(): string throws {
       This is currently only implemented in a Unix environment.  It will not
       behave correctly in a non-Unix environment.
 
-   :arg name: The path to be checked.
-   :type name: `string`
+   :arg path: The path to be checked.
+   :type path: `string`
 
    :return: `true` if `name` is an absolute path, `false` otherwise.
    :rtype: `bool`
 */
 
-proc isAbsPath(name: string): bool {
-  if name.isEmpty() {
+proc isAbsPath(path: string): bool {
+  if path.isEmpty() {
     return false;
   }
-  var str: string = name[0];
+  var str: string = path[0];
   if (str == '/') {
     return true;
   } else {
     return false;
   }
+}
+
+pragma "no doc"
+pragma "last resort"
+proc isAbsPath(name: string): bool {
+  compilerWarning("Path.isAbsPath: Argument 'name' is deprecated - use 'path' instead");
+  return isAbsPath(path=name);
 }
 
 /* Build up path components as described in joinPath(). */
@@ -509,14 +560,21 @@ private proc joinPath(paths: [] string): string {
 }
 
 // Normalize leading slash count to a value between 0 and 2.
-private proc normalizeLeadingSlashCount(name: string): int {
-  var result = if name.startsWith(pathSep) then 1 else 0;
+private proc normalizeLeadingSlashCount(path: string): int {
+  var result = if path.startsWith(pathSep) then 1 else 0;
 
   // Two leading slashes has a special meaning in POSIX.
-  if name.startsWith(pathSep * 2) && !name.startsWith(pathSep * 3) then
+  if path.startsWith(pathSep * 2) && !path.startsWith(pathSep * 3) then
     result = 2;
 
   return result;
+}
+
+pragma "no doc"
+pragma "last resort"
+private proc normalizeLeadingSlashCount(name: string): int {
+  compilerWarning("Path.normalizeLeadingSlashCount: Argument 'name' is deprecated - use 'path' instead");
+  return normalizeLeadingSlashCount(path=name);
 }
 
 /*
@@ -533,24 +591,24 @@ private proc normalizeLeadingSlashCount(name: string): int {
     Unlike its Python counterpart, this function does not (currently) change
     slashes to backslashes on Windows.
 
-  :arg name: A potential path to collapse, possibly destroying the meaning of
+  :arg path: A potential path to collapse, possibly destroying the meaning of
              the path if symbolic links were included.
-  :type name: `string`
+  :type path: `string`
 
-  :return: The collapsed version of `name`.
+  :return: The collapsed version of `path`.
   :rtype: `string`
 */
-proc normPath(name: string): string {
+proc normPath(path: string): string {
   
   // Python 3.7 implementation:
   // https://github.com/python/cpython/blob/3.7/Lib/posixpath.py
 
-  if name == "" then
+  if path == "" then
     return curDir;
 
-  const leadingSlashes = normalizeLeadingSlashCount(name);
+  const leadingSlashes = normalizeLeadingSlashCount(path);
 
-  var comps = name.split(pathSep);
+  var comps = path.split(pathSep);
   var outComps = new list(string);
 
   for comp in comps {
@@ -574,24 +632,31 @@ proc normPath(name: string): string {
   return result;
 }
 
-/* Given a path ``name``, attempts to determine the canonical path referenced.
+pragma "no doc"
+pragma "last resort"
+proc normPath(name: string): string {
+  compilerWarning("Path.normPath: Argument 'name' is deprecated - use 'path' instead");
+  return normPath(path=name);
+}
+
+/* Given a path ``path``, attempts to determine the canonical path referenced.
    This resolves and removes any :data:`curDir` and :data:`parentDir` uses
    present, as well as any symbolic links.  Returns the result.
 
-   :arg name: A path to resolve.  If the path does not refer to a valid file
+   :arg path: A path to resolve.  If the path does not refer to a valid file
               or directory, an error will occur.
-   :type name: `string`
+   :type path: `string`
 
    :return: A canonical version of the argument.
    :rtype: `string`
    :throws SystemError: If one occurs.
 */
-proc realPath(name: string): string throws {
+proc realPath(path: string): string throws {
   extern proc chpl_fs_realpath(path: c_string, ref shortened: c_string): syserr;
 
   var res: c_string;
-  var err = chpl_fs_realpath(unescape(name).c_str(), res);
-  if err then try ioerror(err, "realPath", name);
+  var err = chpl_fs_realpath(unescape(path).c_str(), res);
+  if err then try ioerror(err, "realPath", path);
   const ret = createStringWithNewBuffer(res, policy=decodePolicy.escape);
   // res was qio_malloc'd by chpl_fs_realpath, so free it here
   chpl_free_c_string(res);
@@ -599,17 +664,10 @@ proc realPath(name: string): string throws {
 }
 
 pragma "no doc"
-proc realPath(out error: syserr, name: string): string {
-  compilerWarning("This version of realPath() is deprecated; " +
-                  "please switch to a throwing version");
-  try {
-    return realPath(name);
-  } catch e: SystemError {
-    error = e.err;
-  } catch {
-    error = EINVAL;
-  }
-  return "";
+pragma "last resort"
+proc realPath(name: string): string throws {
+  compilerWarning("Path.realPath: Argument 'name' is deprecated - use 'path' instead");
+  return realPath(path=name);
 }
 
 /* Determines the canonical path referenced by the :type:`~IO.file` record
@@ -683,41 +741,48 @@ proc commonPrefixLength(const a1: [] string, const a2: [] string): int {
     reliance on :proc:`~FileSystem.locale.cwd()`. Another task on the current
     locale may change the current working directory at any time.
 
-  :arg name: A path which the caller would like to access.
-  :type name: `string`
+  :arg path: A path which the caller would like to access.
+  :type path: `string`
 
-  :arg start: The location from which access to name is desired. If no value
+  :arg start: The location from which access to path is desired. If no value
     is provided, defaults to :const:`curDir`.
   :type start: `string`
 
-  :return: The relative path to `name` from the current directory.
+  :return: The relative path to `path` from the current directory.
   :rtype: `string`
 
   :throws SystemError: Upon failure to get the current working directory.
 */
-proc relPath(name: string, start:string=curDir): string throws {
+proc relPath(path: string, start:string=curDir): string throws {
   const realstart = if start == "" then curDir else start;
 
   // NOTE: Reliance on locale.cwd() can't be avoided.
   const startComps = absPath(realstart).split(pathSep, -1, true);
-  const nameComps = absPath(name).split(pathSep, -1, true);
+  const pathComps = absPath(path).split(pathSep, -1, true);
 
-  const prefixLen = commonPrefixLength(startComps, nameComps);
+  const prefixLen = commonPrefixLength(startComps, pathComps);
 
   // Append up-levels until we reach the point where the paths diverge.
   var outComps = new list(string);
   for i in 1..(startComps.size - prefixLen) do
     outComps.append(parentDir);
 
-  // Append the portion of name following the common prefix.
-  if !nameComps.isEmpty() then
-    for x in nameComps[prefixLen..<nameComps.size] do
+  // Append the portion of path following the common prefix.
+  if !pathComps.isEmpty() then
+    for x in pathComps[prefixLen..<pathComps.size] do
       outComps.append(x);
 
   if outComps.isEmpty() then
     return curDir;
 
   return joinPath(outComps.toArray());
+}
+
+pragma "no doc"
+pragma "last resort"
+proc relPath(name: string, start:string=curDir): string throws {
+  compilerWarning("Path.relPath: Argument 'name' is deprecated - use 'path' instead");
+  return relPath(path=name,start);
 }
 
 /*
@@ -748,7 +813,127 @@ proc file.relPath(start:string=curDir): string throws {
   return Path.relPath(this.path, start);
 }
 
-/* Split name into a tuple that is equivalent to (:proc:`dirname`,
+/*
+  Returns a new path with basename in `path` replaced with `newBasename`.
+  If `path` had no basename then `newBasename` is added to the path or if
+  the `newBasename` is an empty string then basename is removed from `path`.
+
+  :arg path: A path which the caller would like to access.
+  :type path: `string`
+
+  :arg newBasename: A basename to replace the current one
+  :type newBasename: `string`
+
+  :returns: a new path after replacing the basename.
+  :rtype: `string`
+*/
+proc replaceBasename(path: string, newBasename: string): string {
+    const (dirname, basename) = splitPath(path);
+    return joinPath(dirname, newBasename);
+}
+
+/*
+  Returns a new path with the dirname in `path` replaced with `newDirname`.
+  If path had no dirname `newDirname` is added to the `path` or if the
+  `newDirname` is an empty string then dirname is removed from the `path`.
+
+  :arg path: A path which the caller would like to access.
+  :type path: `string`
+
+  :arg newDirname: dirname to replace the current one
+  :type newDirname: `string`
+
+  :returns: The new path after replacing dirname.
+  :rtype: `string`
+*/
+proc replaceDirname(path: string, newDirname: string): string {
+    const (dirname, basename) = splitPath(path);
+    return joinPath(newDirname, basename);
+}
+
+/*
+  Returns a new path with extension in `path` replaced with `newExt`.
+  If `path` had no extension `newExt` is added to the path or if
+  `newExt` is an empty string then extension is removed from the `path`.
+  Extension has to be of form `.name`,`name` or it can be an empty
+  string and shouldn't contain spaces.
+
+  :arg path: A path which the caller would like to access.
+  :type path: `string`
+
+  :arg newExt: extension to replace the current one
+  :type newExt: `string`
+
+  :returns: The new path after replacing extension if a valid `newExt`
+            is provided.
+  :rtype: `string`
+
+  :throws IllegalArgumentError: Upon failure to provide a valid `newExt`
+                                or if the `path` had no basename.
+*/
+proc replaceExt(path: string, newExt: string): string throws {
+    const (extLessPath, ext) = splitExt(path);
+    const (dirname, basename) = splitPath(extLessPath);
+
+    // Check for empty basename as extension can't be appended
+    if  basename.isEmpty() {
+      throw new owned IllegalArgumentError(path, "has an empty basename");
+    }
+    // check is extension contains spearator.
+    else if newExt.find(pathSep) != -1 {
+      throw new owned IllegalArgumentError(newExt, "extension can't contain path separators");
+    }
+    // if extension is not blank then check it shouldn't end with ''.' and isn't just '.'
+    else if newExt == "." || newExt.endsWith(".") {
+      throw new owned IllegalArgumentError(newExt, "extension can't end with '.'");
+    }
+    // remove leading '.' if any for uniform support to both
+    const strippedExt = newExt.strip(".", leading=true);
+    // check for presence of spaces in strippedExt
+    for c in strippedExt {
+      if c.isSpace() {
+        throw new owned IllegalArgumentError(newExt, "extension can't contain spaces");
+      }
+    }
+    var updatedExt = strippedExt;
+    if !strippedExt.isEmpty(){
+      updatedExt = "."+strippedExt;
+    }
+    return replaceBasename(path, basename + updatedExt);
+}
+
+/*
+  Splits the given path into its root and extension.
+  Leading periods in the path are ignored.
+
+  :arg path: A string file name, not necessarily valid.
+  :type path: `string`
+
+  :returns: A tuple of the form ``(root, ext)``.
+  :rtype: `(string, string)`
+
+*/
+
+proc splitExt(path:string): (string, string) {
+  var lastIdx = path.rfind(".");
+  var lastSep = path.rfind("/");
+  if(lastIdx == -1 || lastSep > lastIdx) {
+    return (path, "");
+  }
+  var idx = lastIdx - 1;
+  while(true) {
+    if(idx < 0 || path[idx] == "/") {
+      return (path, "");
+    }
+    else if(path[idx] == ".") {
+      idx -= 1;
+    }
+    else break;
+  }
+  return (path[..(lastIdx - 1)], path[lastIdx..]);
+}
+
+/* Split path into a tuple that is equivalent to (:proc:`dirname`,
    :proc:`basename`).  The second part of the tuple will never contain a slash.
    Examples:
 
@@ -773,36 +958,43 @@ proc file.relPath(start:string=curDir): string throws {
       writeln(dirnameVar + "/" + basenameVar); // Prints "foo/bar"
       writeln(joinPath(dirnameVar, basenameVar)); // Prints "foo/bar"
 
-   :arg name: Path to be split.
+   :arg path: Path to be split.
    :type name: `string`
 */
- proc splitPath(name: string): (string, string) {
-   var rLoc, lLoc, prev: byteIndex = name.rfind(pathSep);
+ proc splitPath(path: string): (string, string) {
+   var rLoc, lLoc, prev: byteIndex = path.rfind(pathSep);
    if (prev != -1) {
      do {
        prev = lLoc;
-       lLoc = name.rfind(pathSep, 0:byteIndex..prev-1);
+       lLoc = path.rfind(pathSep, 0:byteIndex..prev-1);
      } while (lLoc + 1 == prev && lLoc > 0);
 
      if (prev == 0) {
        // This happens when the only instance of pathSep in the string is
        // the first character
-       return (name[prev..rLoc], name[rLoc+1..]);
+       return (path[prev..rLoc], path[rLoc+1..]);
      } else if (lLoc == 0 && prev == 1) {
        // This happens when there is a line of pathSep instances at the
        // start of the string
-       return (name[..rLoc], name[rLoc+1..]);
+       return (path[..rLoc], path[rLoc+1..]);
      } else if (prev != rLoc) {
        // If prev wasn't the first character, then we want to skip all those
        // duplicate pathSeps
-       return (name[..prev-1], name[rLoc+1..]);
+       return (path[..prev-1], path[rLoc+1..]);
      } else {
        // The last instance of pathSep in the string was on its own, so just
        // snip it out.
-       return (name[..rLoc-1], name[rLoc+1..]);
+       return (path[..rLoc-1], path[rLoc+1..]);
      }
    } else {
-     return ("", name);
+     return ("", path);
    }
+ }
+
+pragma "no doc"
+pragma "last resort"
+ proc splitPath(name: string): (string, string) {
+  compilerWarning("Path.splitPath: Argument 'name' is deprecated - use 'path' instead");
+  return splitPath(path=name);
  }
 }

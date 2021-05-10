@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 """Verify the setchplenv.* script correctly set the environment for using chpl,
 et al.
@@ -157,7 +157,7 @@ class SetChplEnvTests(unittest.TestCase):
             self.assertEqual('none', get_var('CHPL_COMM'))
             self.assertEqual('fifo', get_var('CHPL_TASKS'))
             self.assertEqual('none', get_var('CHPL_GMP'))
-            self.assertEqual('none', get_var('CHPL_REGEXP'))
+            self.assertEqual('none', get_var('CHPL_RE2'))
             self.assertEqual('none', get_var('CHPL_LLVM'))
             self.assertEqual('cstdlib', get_var('CHPL_MEM'))
 

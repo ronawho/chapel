@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -3655,7 +3655,7 @@ module HDF5 {
       }
 
       otherwise {
-        halt("Unhandled type in getHDF5Type: ", eltType:string);
+        compilerError("Unhandled type in getHDF5Type: " + eltType:string);
       }
     }
     return hdf5Type;

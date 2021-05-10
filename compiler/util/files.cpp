@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -71,8 +71,6 @@ std::vector<const char*>   libFiles;
 
 // directory for intermediates; tmpdir or saveCDir
 static const char* intDirName        = NULL;
-
-static const int   MAX_CHARS_PER_PID = 32;
 
 static void addPath(const char* pathVar, std::vector<const char*>* pathvec) {
   char* dirString = strdup(pathVar);
@@ -161,15 +159,7 @@ static const char* getTempDir() {
 
 const char* makeTempDir(const char* dirPrefix) {
   const char* tmpdirprefix = astr(getTempDir(), "/", dirPrefix);
-  const char* tmpdirsuffix = ".deleteme";
-
-  pid_t mypid = getpid();
-#ifdef DEBUGTMPDIR
-  mypid = 0;
-#endif
-
-  char mypidstr[MAX_CHARS_PER_PID];
-  snprintf(mypidstr, MAX_CHARS_PER_PID, "-%d", (int)mypid);
+  const char* tmpdirsuffix = ".deleteme-XXXXXX";
 
   struct passwd* passwdinfo = getpwuid(geteuid());
   const char* userid;
@@ -181,12 +171,12 @@ const char* makeTempDir(const char* dirPrefix) {
   char* myuserid = strdup(userid);
   removeSpacesBackslashesFromString(myuserid);
 
-  const char* tmpDir = astr(tmpdirprefix, myuserid, mypidstr, tmpdirsuffix);
-  ensureDirExists(tmpDir, "making temporary directory");
+  const char* tmpDir = astr(tmpdirprefix, myuserid, tmpdirsuffix);
+  const char* dirRes = mkdtemp((char*) tmpDir);
 
   free(myuserid); myuserid = NULL;
 
-  return tmpDir;
+  return dirRes;
 }
 
 static void ensureTmpDirExists() {
@@ -253,6 +243,15 @@ void deleteTmpDir() {
     }
     deleteDir(tmpdirname);
     tmpdirname = NULL;
+  }
+  if (doctmpdirname != NULL) {
+    if (strlen(doctmpdirname) < 1 ||
+        strchr(doctmpdirname, '*') != NULL ||
+        strcmp(doctmpdirname, "//") == 0) {
+      INT_FATAL("doc tmp directory name looks fishy");
+    }
+    deleteDir(doctmpdirname);
+    doctmpdirname = NULL;
   }
 #endif
 
@@ -431,15 +430,15 @@ void addSourceFiles(int numNewFilenames, const char* filename[]) {
     if (!isRecognizedSource(filename[i])) {
       USR_FATAL("file '%s' does not have a recognized suffix", filename[i]);
     }
-    // WE SHOULDN"T TRY TO OPEN .h files, just .c and .chpl and .o
+    // WE SHOULDN'T TRY TO OPEN .h files, just .c and .chpl and .o
     if (!isCHeader(filename[i])) {
       FILE* testfile = openInputFile(filename[i]);
-      if (fscanf(testfile, "%c", &achar) != 1) {
-        USR_FATAL("source file '%s' is either empty or a directory",
-                  filename[i]);
+      if (testfile) {
+        if (fscanf(testfile, "%c", &achar) != 1)
+          USR_FATAL("source file '%s' is either empty or a directory",
+                    filename[i]);
+        closeInputFile(testfile);
       }
-
-      closeInputFile(testfile);
     }
 
     //
@@ -547,15 +546,13 @@ const char* createDebuggerFile(const char* debugger, int argc, char* argv[]) {
   return dbgfilename;
 }
 
-std::string runPrintChplEnv(std::map<std::string, const char*> varMap) {
+std::string runPrintChplEnv(const std::map<std::string, const char*>& varMap) {
   // Run printchplenv script, passing currently known CHPL_vars as well
-  std::string command = "";
+  std::string command;
 
-  // Pass known variables in varMap into printchplenv by appending to command
-  for (std::map<std::string, const char*>::iterator ii=varMap.begin(); ii!=varMap.end(); ++ii)
-  {
-    command += ii->first + "=" + std::string(ii->second) + " ";
-  }
+  // Pass known variables in varMap into printchplenv by prepending to command
+  for (auto& ii : varMap)
+    command += ii.first + "=" + ii.second + " ";
 
   // Toss stderr away until printchplenv supports a '--suppresswarnings' flag
   command += std::string(CHPL_HOME) + "/util/printchplenv --all --internal --no-tidy --simple 2> /dev/null";
@@ -563,11 +560,11 @@ std::string runPrintChplEnv(std::map<std::string, const char*> varMap) {
   return runCommand(command);
 }
 
-std::string getVenvDir() {
-  // Runs `util/chplenv/chpl_home_utils.py --venv` and removes the newline
+std::string getChplDepsApp() {
+  // Runs `util/chplenv/chpl_home_utils.py --chpldeps` and removes the newline
 
-  std::string command = "CHPL_HOME=" + std::string(CHPL_HOME) + " python ";
-  command += std::string(CHPL_HOME) + "/util/chplenv/chpl_home_utils.py --venv 2> /dev/null";
+  std::string command = "CHPL_HOME=" + std::string(CHPL_HOME) + " python3 ";
+  command += std::string(CHPL_HOME) + "/util/chplenv/chpl_home_utils.py --chpldeps 2> /dev/null";
 
   std::string venvDir = runCommand(command);
   venvDir.erase(venvDir.find_last_not_of("\n\r")+1);
@@ -675,8 +672,7 @@ void genIncludeCommandLineHeaders(FILE* outfile) {
   }
 }
 
-std::string genMakefileEnvCache(void);
-std::string genMakefileEnvCache(void) {
+static std::string genMakefileEnvCache() {
   std::string result;
   std::map<std::string, const char*>::iterator env;
 
@@ -799,7 +795,7 @@ void codegen_makefile(fileinfo* mainfile, const char** tmpbinname,
     const char* loc = "$(CHPL_MAKE_HOME)/runtime/etc/src";
     fprintf(makefile.fptr, "COMP_GEN_MLI_EXTRA_INCLUDES = -I%s\n", loc);
   }
-  
+
   // Build a string out of include directories, for convenience.
   std::string includedirs;
   for_vector(const char, dirName, incDirs) {
@@ -881,10 +877,10 @@ void codegen_makefile(fileinfo* mainfile, const char** tmpbinname,
     fprintf(makefile.fptr, "\t%s \\\n", splitFiles[i]);
   }
   fprintf(makefile.fptr, "\n");
-  
+
   genCFiles(makefile.fptr);
   genObjFiles(makefile.fptr);
-  
+
   // List libraries/locations needed to compile this deliverable.
   fprintf(makefile.fptr, "\nLIBS =");
   for_vector(const char, dirName, libDirs) {
@@ -1115,12 +1111,14 @@ static int sys_getcwd(char** path_out)
  * sys_getcwd() if you need error reports.
  */
 const char* getCwd() {
-  const char* result = getcwd(NULL, PATH_MAX);
-  if (result) {
-    return result;
-  } else {
+  char* ret = nullptr;;
+  int rc;
+
+  rc = sys_getcwd(&ret);
+  if (rc == 0)
+    return ret;
+  else
     return "";
-  }
 }
 
 

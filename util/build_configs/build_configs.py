@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 """CLI for building multiple Chapel configurations."""
@@ -102,7 +102,7 @@ known_dimensions = [
     ( 'network_atomics',    'CHPL_NETWORK_ATOMICS', ),
     ( 'gmp',                'CHPL_GMP', ),
     ( 'hwloc',              'CHPL_HWLOC', ),
-    ( 'regexp',             'CHPL_REGEXP', ),
+    ( 're2',                'CHPL_RE2', ),
     ( 'llvm',               'CHPL_LLVM', ),
     ( 'auxfs',              'CHPL_AUX_FILESYS', ),
     ( 'lib_pic',            'CHPL_LIB_PIC', ),
@@ -563,7 +563,8 @@ def check_output(command, chpl_home, env, stdin=None, file=None):
         stdout=stdout,
         stderr=stderr,
         cwd=chpl_home,
-        env=env
+        env=env,
+        encoding='utf-8'
     )
     out, err = p.communicate(input=stdin)
     retcode = p.returncode

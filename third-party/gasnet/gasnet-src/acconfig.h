@@ -218,6 +218,12 @@
 /* --with-max-threads value (if given) */
 #undef GASNETI_MAX_THREADS_CONFIGURE
 
+/* --with-maxeps value (if given) */
+#undef GASNETI_MAXEPS_CONFIGURE
+
+/* memory kinds support */
+#undef GASNETI_MK_CLASS_CUDA_UVA_ENABLED
+
 /* has clock_gettime() */
 #undef HAVE_CLOCK_GETTIME
 
@@ -242,8 +248,17 @@
 /* has Portable Linux Processor Affinity */
 #undef HAVE_PLPA
 
+/* Portable Hardware Locality (hwloc) library and command-line utils */
+#undef GASNETI_HAVE_HWLOC_LIB
+#undef GASNETI_HAVE_HWLOC_UTILS
+#undef GASNETI_HWLOC_BIND_PATH
+#undef GASNETI_HWLOC_CALC_PATH
+
 /* have ptmalloc's mallopt() options */
 #undef HAVE_PTMALLOC
+
+/* has posix_memalign() */
+#undef HAVE_POSIX_MEMALIGN
 
 /* have declarations/definitions */
 #undef HAVE_SETENV_DECL
@@ -281,9 +296,6 @@
 
 /* hugetlbfs support enabled */
 #undef GASNETI_USE_HUGETLBFS
-
-/* BLCR support, path and features */
-#undef GASNETI_BLCR_ENABLED
 
 /* support for backtracing */
 #undef HAVE_EXECINFO_H
@@ -338,9 +350,6 @@
 
 /* has x86 EBX register (not reserved for GOT) */
 #undef GASNETI_HAVE_X86_EBX
-
-/* has support (toolchain and cpu) for ia64 cmp8xchg16 instruction */
-#undef GASNETI_HAVE_IA64_CMP8XCHG16
 
 /* has support (toolchain and cpu) for x86_64 cmpxchg16b instruction */
 #undef GASNETI_HAVE_X86_CMPXCHG16B
@@ -399,6 +408,9 @@
 #undef GASNETI_CACHE_LINE_BYTES
 #undef GASNETI_CACHE_LINE_SHIFT
 
+/* minimum alignment of "tm0" */
+#undef GASNETI_TM0_ALIGN
+
 /* udp-conduit default custom spawn command */
 #undef GASNET_CSPAWN_CMD
 
@@ -434,6 +446,7 @@
 #undef GASNET_DEBUGMALLOC
 #undef GASNET_SRCLINES
 #undef GASNET_DEBUG_VERBOSE
+#undef GASNETI_VALGRIND
 
 /* GASNet segment definition */
 #undef GASNET_SEGMENT_FAST
@@ -448,7 +461,7 @@
 #undef GASNETC_USE_SOCKETPAIR
 
 /* GASNet aries-conduit settings */
-#undef GASNETC_GNI_MAX_MEDIUM
+#undef GASNETC_GNI_MAX_MEDIUM_DFLT
 #undef GASNETC_GNI_MULTI_DOMAIN
 #undef GASNETC_GNI_UDREG
 
@@ -464,12 +477,15 @@
 #undef HAVE_IBV_TRANSPORT_TYPE
 #undef GASNETC_IBV_MAX_MEDIUM
 #undef GASNETC_IBV_ODP
+#undef GASNETC_IBV_ODP_MLNX
+#undef GASNETC_IBV_ODP_CORE
 #undef GASNETC_IBV_ODP_DISABLED
 #undef GASNETC_IBV_RCV_THREAD
 #undef GASNETC_IBV_CONN_THREAD
-#undef GASNETC_IBV_MAX_HCAS
+#undef GASNETC_IBV_MAX_HCAS_CONFIGURE
 #undef GASNETC_IBV_PHYSMEM_MAX_CONFIGURE
 #undef GASNETC_IBV_PHYSMEM_PROBE_CONFIGURE
+#undef GASNETC_IBV_PORTS_CONFIGURE
 
 /* GASNet bug1389 detection/work-around */
 #undef GASNETI_BUG1389_WORKAROUND

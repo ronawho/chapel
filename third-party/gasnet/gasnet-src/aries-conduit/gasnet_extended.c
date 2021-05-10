@@ -138,7 +138,7 @@ gasnete_get_bulk_inner(void *dest, gex_TM_t tm, gex_Rank_t rank, void *src, size
   gasnetc_post_descriptor_t *gpd;
   size_t chunksz;
 
-  gasneti_EP_t ep = gasneti_import_tm(tm)->_ep;
+  gasneti_EP_t ep = gasneti_e_tm_to_i_ep(tm);
   chunksz = gasneti_in_local_fullsegment(ep, dest, nbytes) ? GC_MAXRDMA_IN : GC_MAXRDMA_OUT;
 
   if (nbytes > 2*chunksz) {
@@ -252,7 +252,7 @@ gasnete_put_inner(gex_TM_t tm, gex_Rank_t rank, void *dest, void *src, size_t nb
   gasnetc_post_descriptor_t *gpd;
   size_t chunksz;
 
-  gasneti_EP_t ep = gasneti_import_tm(tm)->_ep;
+  gasneti_EP_t ep = gasneti_e_tm_to_i_ep(tm);
   chunksz = gasneti_in_local_fullsegment(ep, src, nbytes) ? GC_MAXRDMA_IN : GC_MAXRDMA_OUT;
 
   gasneti_suspend_spinpollers();
@@ -316,7 +316,7 @@ gasnete_put_bulk_inner(gex_TM_t tm, gex_Rank_t rank, void *dest, void *src, size
   gasnetc_post_descriptor_t *gpd;
   size_t chunksz;
 
-  gasneti_EP_t ep = gasneti_import_tm(tm)->_ep;
+  gasneti_EP_t ep = gasneti_e_tm_to_i_ep(tm);
   chunksz = gasneti_in_local_fullsegment(ep, src, nbytes) ? GC_MAXRDMA_IN : GC_MAXRDMA_OUT;
 
   gasneti_suspend_spinpollers();
@@ -700,7 +700,7 @@ static void gasnete_gdbarrier_init(gasnete_coll_team_t team);
     gasnete_coll_default_barrier_type = GASNETE_COLL_BARRIER_GNIDISSEM;  \
 } while (0)
 
-#define GASNETE_BARRIER_INIT(TEAM, TYPE, NODES, SUPERNODES) do { \
+#define GASNETE_BARRIER_INIT(TEAM, TYPE) do { \
     if ((TYPE) == GASNETE_COLL_BARRIER_GNIDISSEM &&              \
         (TEAM) == GASNET_TEAM_ALL) {                             \
       gasnete_gdbarrier_init(TEAM);                              \
@@ -1141,6 +1141,15 @@ static int gasnete_gdbarrier_result(gasnete_coll_team_t team, int *id) {
 
 void gasnete_gdbarrier_kick_team_all(void) {
   gasnete_gdbarrier_kick(GASNET_TEAM_ALL);
+}
+
+static void gasnete_gdbarrier_fini(gasnete_coll_team_t team) {
+  gasnete_coll_gdbarrier_t *data = team->barrier_data;
+#if GASNETI_PSHM_BARRIER_HIER
+  if (data->barrier_pshm) gasnete_pshmbarrier_fini_inner(data->barrier_pshm);
+#endif
+  gasneti_free(data->barrier_peers);
+  gasneti_free_aligned(data);
 }
 
 static void gasnete_gdbarrier_init(gasnete_coll_team_t team) {

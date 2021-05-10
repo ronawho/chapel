@@ -144,9 +144,7 @@ void test_threadinfo(int threadid, int numthreads) {
     PTHREAD_LOCALBARRIER(num_threads);
     test_threadinfo(idx, num_threads);
     PTHREAD_LOCALBARRIER(num_threads);
-  #if GASNETI_ARCH_ALTIX
-    /* Don't pin threads because system is either shared or using cgroups */
-  #elif GASNETI_ARCH_IBMPE
+  #if GASNETI_ARCH_IBMPE
     /* Don't pin threads because system s/w will have already done so */
   #else
     if (gasnett_getenv_yesno_withdefault("GASNET_TEST_SET_AFFINITY",1)) {
@@ -720,15 +718,15 @@ void doit5(int partner, int *partnerseg) {
 
         for (j=0; j < elems*2; j++) {
           int ok;
-          ok = localpos[j] == val;
           if (sz < 8) ok = !memcmp(&(localpos[j]), &val, sz);
+          else        ok = localpos[j] == val;
           if (!ok) {
               MSG("*** ERROR - FAILED OUT-OF-SEG PUT_NB/OVERWRITE TEST!!! sz=%i j=%i (got=%016" PRIx64 " expected=%016" PRIx64 ")", (sz), j,
                   localpos[j], val);
               success = 0;
           }
-          ok = segpos[j] == val;
           if (sz < 8) ok = !memcmp(&(segpos[j]), &val, sz);
+          else        ok = segpos[j] == val;
           if (!ok) {
               MSG("*** ERROR - FAILED IN-SEG PUT_NB/OVERWRITE TEST!!! sz=%i j=%i (got=%016" PRIx64 " expected=%016" PRIx64 ")", (sz), j,
                   segpos[j], val);
@@ -788,15 +786,15 @@ void doit5(int partner, int *partnerseg) {
 
         for (j=0; j < elems*2; j++) {
           int ok;
-          ok = localpos[j] == val;
           if (sz < 8) ok = !memcmp(&(localpos[j]), &val, sz);
+          else        ok = localpos[j] == val;
           if (!ok) {
               MSG("*** ERROR - FAILED OUT-OF-SEG PUT_NBI/OVERWRITE TEST!!! sz=%i j=%i (got=%016" PRIx64 " expected=%016" PRIx64 ")", (sz), j,
                   localpos[j], val);
               success = 0;
           }
-          ok = segpos[j] == val;
           if (sz < 8) ok = !memcmp(&(segpos[j]), &val, sz);
+          else        ok = segpos[j] == val;
           if (!ok) {
               MSG("*** ERROR - FAILED IN-SEG PUT_NBI/OVERWRITE TEST!!! sz=%i j=%i (got=%016" PRIx64 " expected=%016" PRIx64 ")", (sz), j,
                   segpos[j], val);

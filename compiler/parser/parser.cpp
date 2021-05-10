@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -54,6 +54,8 @@ bool                 parsed                        = false;
 
 static bool          sFirstFile                    = true;
 static bool          sHandlingInternalModulesNow   = false;
+
+static const char* stdGenModulesPath;
 
 static void          countTokensInCmdLineFiles();
 
@@ -189,15 +191,16 @@ void setupModulePaths() {
   //
   // Set up the search path for modulesRoot/standard
   //
-  sStdModPath.add(astr(CHPL_HOME,
-                      "/",
-                      modulesRoot,
-                      "/standard/gen/",
-                      CHPL_TARGET_PLATFORM,
-                      "-",
-                      CHPL_TARGET_ARCH,
-                      "-",
-                      CHPL_TARGET_COMPILER));
+  stdGenModulesPath = astr(CHPL_HOME,
+                           "/",
+                           modulesRoot,
+                           "/standard/gen/",
+                           CHPL_TARGET_PLATFORM,
+                           "-",
+                           CHPL_TARGET_ARCH,
+                           "-",
+                           CHPL_TARGET_COMPILER);
+  sStdModPath.add(stdGenModulesPath);
 
   sStdModPath.add(astr(CHPL_HOME, "/", modulesRoot, "/standard"));
 
@@ -285,7 +288,10 @@ static void parseInternalModules() {
     }
 
     // parse SysCTypes right away to provide well-known types.
-    parseMod("SysCTypes", false);
+    ModuleSymbol* sysctypes = parseMod("SysCTypes", false);
+    if (sysctypes == NULL && fMinimalModules == false) {
+      USR_FATAL("Could not find module 'SysCTypes', which should be defined by '%s/SysCTypes.chpl'", stdGenModulesPath);
+    }
 
     parseDependentModules(true);
 
@@ -322,7 +328,27 @@ static void parseCommandLineFiles() {
   }
 
   while ((inputFileName = nthFilename(fileNum++))) {
-    if (isChplSource(inputFileName)) {
+    if (isChplSource(inputFileName))
+    {
+      /*
+      Selection of 16 is did so as to provide
+      enough space for generating files like .tmp.obj
+      whose length is 8 so selection of double the required
+      */
+      const size_t reductionMaxLength = 16;
+      /*
+      Ensure that all the files parsed don't exceed
+      (NAME_MAX - reductionMaxLength) e.g. 239 bytes on
+      unix and linux system.
+      */
+      const size_t maxFileName = NAME_MAX - reductionMaxLength;
+      if (strlen(inputFileName) > maxFileName)
+      {
+        // error message to print placeholders for fileName and maxLength
+        const char *errorMessage = "%s, filename is longer than maximum allowed length of %d\n";
+        // throwr error will concatenated messages
+        USR_FATAL(errorMessage, inputFileName, maxFileName);
+      }
       parseFile(inputFileName, MOD_USER, true, false);
     }
   }

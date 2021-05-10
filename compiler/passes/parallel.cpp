@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -315,16 +315,12 @@ static bool needsAutoCopyAutoDestroyForArg(ArgSymbol* formal, Expr* arg,
   // coforall - since each task needs its own copy.
   // MPF - should this logic also apply to arguments to coforall fns
   // that had the 'in' task intent?
-  if (fn->hasFlag(FLAG_BEGIN) ||
-      isString(baseType))
+  if ((isRecord(baseType) && fn->hasFlag(FLAG_BEGIN)) ||
+      (isRecord(baseType) && var->hasFlag(FLAG_COFORALL_INDEX_VAR)))
   {
-    if ((isRecord(baseType) && fn->hasFlag(FLAG_BEGIN)) ||
-        (isRecord(baseType) && var->hasFlag(FLAG_COFORALL_INDEX_VAR)))
+    if (!formal->isRef())
     {
-      if (!formal->isRef())
-      {
-        return true;
-      }
+      return true;
     }
   }
 
@@ -1533,6 +1529,9 @@ Type* getOrMakeRefTypeDuringCodegen(Type* type) {
   // eventually want it when we complete the qualified refs work.
   //
   // if (type->symbol->hasFlag(FLAG_REF)) return type;
+
+  INT_ASSERT(type != dtUnknown);
+
   refType = type->refType;
   if( ! refType ) {
     SET_LINENO(type->symbol);

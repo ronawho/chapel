@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -22,6 +22,7 @@
 #include "AstVisitorTraverse.h"
 #include "CForLoop.h"
 #include "ForLoop.h"
+#include "forallOptimizations.h"
 #include "ForallStmt.h"
 #include "iterator.h"
 #include "passes.h"
@@ -327,7 +328,7 @@ static void expandForall(ExpandVisitor* EV, ForallStmt* fs);
 
 /////////// ExpandVisitor visitor ///////////
 
-class ExpandVisitor : public AstVisitorTraverse {
+class ExpandVisitor final : public AstVisitorTraverse {
 public:
   ForallStmt* const forall;
   SymbolMap& svar2clonevar;
@@ -335,9 +336,9 @@ public:
 
   ExpandVisitor(ForallStmt* fs, SymbolMap& map);
   ExpandVisitor(ExpandVisitor* parentEV, SymbolMap& map);
-  ~ExpandVisitor();
+ ~ExpandVisitor() override;
 
-  virtual bool enterCallExpr(CallExpr* node) {
+  bool enterCallExpr(CallExpr* node) override {
     if (node->isPrimitive(PRIM_YIELD)) {
       expandYield(this, node);
     }
@@ -353,7 +354,7 @@ public:
     return false;
   }
 
-  virtual bool enterForallStmt(ForallStmt* node) {
+  bool enterForallStmt(ForallStmt* node) override {
 
     if (forall->hasVectorizationHazard()) {
       node->setHasVectorizationHazard(true);
@@ -364,13 +365,13 @@ public:
     return false;
   }
 
-  virtual bool enterCForLoop(CForLoop* node) {
+  bool enterCForLoop(CForLoop* node) override {
     if (forall->hasVectorizationHazard()) {
       node->setHasVectorizationHazard(true);
     }
     return true;
   }
-  virtual bool enterForLoop(ForLoop* node) {
+  bool enterForLoop(ForLoop* node) override {
     if (forall->hasVectorizationHazard()) {
       node->setHasVectorizationHazard(true);
     }
@@ -493,6 +494,9 @@ static VarSymbol* createCurrTPV(ShadowVarSymbol* TPV) {
   currTPV->qual = TPV->qual;
   if (TPV->hasFlag(FLAG_CONST))   currTPV->addFlag(FLAG_CONST);
   if (TPV->hasFlag(FLAG_REF_VAR)) currTPV->addFlag(FLAG_REF_VAR);
+  if (TPV->hasFlag(FLAG_COMPILER_ADDED_AGGREGATOR)) {
+    currTPV->addFlag(FLAG_COMPILER_ADDED_AGGREGATOR);
+  }
   return currTPV;
 }
 
@@ -702,7 +706,7 @@ static ArgSymbol* newExtraFormal(ShadowVarSymbol* svar, int ix,
       // If _build_tuple_always_allow_ref's actual has a non-ref type,
       // even if it is an ArgSymbol with a ref intent, the corresponding
       // component of the resulting tuple will be non-ref, which will break
-      // SSCA2 and test/parallel/forall/vass/intents-all-int.chpl.
+      // SSCA2 and test/parallel/forall/vass/other/intents-all-int.chpl.
       // Todo: fix resolution of _build_tuple_always_allow_ref.
       // Or, create a _build_tuple specifically when it is known
       // which formals/components should be by ref.
@@ -1138,6 +1142,10 @@ static void handleRecursiveIter(ForallStmt* fs,
 {
   SET_LINENO(parIterCall);
 
+  // aggregation uses task-private variables, we can't have them with a
+  // recursive iterator
+  removeAggregationFromRecursiveForall(fs);
+
   // Check for non-ref intents.
   SymbolMap sv2ov;
   bool gotNonRefs = false;
@@ -1292,7 +1300,7 @@ static Symbol* inlineRetArgFunction(CallExpr* defCall, FnSymbol* defFn,
     INT_ASSERT(fn->hasFlag(FLAG_AUTO_DESTROY_FN));
     retAssign = toCallExpr(prev->prev);
     prev->remove();
-  }    
+  }
 
   INT_ASSERT(retAssign && retAssign->isPrimitive(PRIM_ASSIGN));
 

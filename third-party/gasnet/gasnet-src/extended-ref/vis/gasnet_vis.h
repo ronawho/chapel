@@ -147,10 +147,10 @@ size_t gasnete_strided_datasize(size_t _elemsz, size_t const *_count, size_t _st
              (char *)gasneti_extern_malloc(gasneti_format_memveclist_bufsz(srccount));         \
       gasneti_format_memveclist(_dstlist_str, (dstcount), (dstlist));                          \
       gasneti_format_memveclist(_srclist_str, (srccount), (srclist));                          \
-      gasneti_fatalerror("Source and destination memvec lists disagree on total size at %s:\n" \
+      gasneti_fatalerror("Source and destination memvec lists disagree on total size:\n"       \
                          "  srclist: %s\n"                                                     \
                          "  dstlist: %s\n",                                                    \
-                         gasneti_current_loc, _dstlist_str, _srclist_str);                     \
+                         _dstlist_str, _srclist_str);                                          \
       /* gasneti_extern_free(_dstlist_str); -- dead code */                                    \
       /* gasneti_extern_free(_srclist_str); -- dead code */                                    \
     }                                                                                          \
@@ -159,11 +159,11 @@ size_t gasnete_strided_datasize(size_t _elemsz, size_t const *_count, size_t _st
       char * _dstlist_str =                                                                    \
              (char *)gasneti_extern_malloc(gasneti_format_memveclist_bufsz(dstcount));         \
       gasneti_format_memveclist(_dstlist_str, (dstcount), (dstlist));                          \
-      gasneti_fatalerror("Destination memvec list has overlapping elements at %s:\n"           \
+      gasneti_fatalerror("Destination memvec list has overlapping elements:\n"                 \
                          "  dstlist: %s\n"                                                     \
                          "(note this test is currently conservative "                          \
                          "and may fail to detect some illegal cases)",                         \
-                         gasneti_current_loc, _dstlist_str);                                   \
+                         _dstlist_str);                                                        \
       /* gasneti_extern_free(_dstlist_str); -- dead code */                                    \
     }                                                                                          \
   } while (0)
@@ -183,9 +183,8 @@ size_t gasnete_strided_datasize(size_t _elemsz, size_t const *_count, size_t _st
 
   #define gasnete_addrlist_checksizematch(dstcount, dstlen, srccount, srclen) do {        \
     if_pf ((dstcount)*(dstlen) != (srccount)*(srclen)) {                                  \
-      gasneti_fatalerror("Total data size mismatch at: %s\n"                              \
+      gasneti_fatalerror("Total data size mismatch:\n"                                    \
        "dstcount(%" PRIuSZ ")*dstlen(%" PRIuSZ ") != srccount(%" PRIuSZ ")*srclen(%" PRIuSZ ")", \
-                         gasneti_current_loc,                                             \
                          dstcount, dstlen, srccount, srclen);                             \
     }                                                                                     \
   } while (0)
@@ -200,20 +199,20 @@ size_t gasnete_strided_datasize(size_t _elemsz, size_t const *_count, size_t _st
     if_pt (!gasnete_strided_empty(__count[0], __count+1, __stridelevels)) {                             \
       gasneti_assert(__dststrides); gasneti_assert(__srcstrides);                                       \
       if_pf (__stridelevels > 0 && __dststrides[0] < __count[0])                                        \
-          gasneti_fatalerror("dststrides[0](%" PRIuSZ ") < count[0](%" PRIuSZ ") at: %s",               \
-                        __dststrides[0],__count[0], gasneti_current_loc);                               \
+          gasneti_fatalerror("dststrides[0](%" PRIuSZ ") < count[0](%" PRIuSZ ")",                      \
+                        __dststrides[0],__count[0]);                                                    \
       if_pf (__stridelevels > 0 && __srcstrides[0] < __count[0])                                        \
-          gasneti_fatalerror("srcstrides[0](%" PRIuSZ ") < count[0](%" PRIuSZ ") at: %s",               \
-                        __srcstrides[0],__count[0], gasneti_current_loc);                               \
+          gasneti_fatalerror("srcstrides[0](%" PRIuSZ ") < count[0](%" PRIuSZ ")",                      \
+                        __srcstrides[0],__count[0]);                                                    \
       for (size_t _i = 1; _i < __stridelevels; _i++) {                                                  \
         if_pf (__dststrides[_i] < (__count[_i] * __dststrides[_i-1]))                                   \
           gasneti_fatalerror("dststrides[%" PRIuSZ "](%" PRIuSZ ") < "                                  \
-                  "(count[%" PRIuSZ "](%" PRIuSZ ") * dststrides[%" PRIuSZ "](%" PRIuSZ ")) at: %s",    \
-                     _i,__dststrides[_i], _i,__count[_i], _i-1,__dststrides[_i-1], gasneti_current_loc); \
+                  "(count[%" PRIuSZ "](%" PRIuSZ ") * dststrides[%" PRIuSZ "](%" PRIuSZ "))",           \
+                     _i,__dststrides[_i], _i,__count[_i], _i-1,__dststrides[_i-1]);                     \
         if_pf (__srcstrides[_i] < (__count[_i] * __srcstrides[_i-1]))                                   \
           gasneti_fatalerror("srcstrides[%" PRIuSZ "](%" PRIuSZ ") < "                                  \
-                  "(count[%" PRIuSZ "](%" PRIuSZ ") * srcstrides[%" PRIuSZ "](%" PRIuSZ ")) at: %s",    \
-                     _i,__srcstrides[_i], _i,__count[_i], _i-1,__srcstrides[_i-1], gasneti_current_loc); \
+                  "(count[%" PRIuSZ "](%" PRIuSZ ") * srcstrides[%" PRIuSZ "](%" PRIuSZ "))",           \
+                     _i,__srcstrides[_i], _i,__count[_i], _i-1,__srcstrides[_i-1]);                     \
       }                                                                                                 \
     }                                                                                                   \
   } while (0)
@@ -248,7 +247,6 @@ int _gasnete_vis_havepc(const void * const _ti) {
   gasnete_vis_pcinfo_t const * const _vis_ti = ((gasnete_vis_pcinfo_t const * const *)_ti)[2];
   return _vis_ti && _vis_ti->_handler;
 }
-// TODO-EX: comment out GASNETI_MYTHREAD_GET_OR_LOOKUP defn once we remove this sole use
 #define GASNETE_VIS_HAVEPC() _gasnete_vis_havepc(GASNETI_MYTHREAD_GET_OR_LOOKUP)
 #define _GASNETE_VIS_PCWRAP(tm,rank,flags,fnbase,syncmode,opargs) (                      \
     GASNETE_VIS_HAVEPC() ?                                                               \
@@ -341,6 +339,7 @@ extern gex_Event_t gasnete_VIS_pcwrapNB      (_GASNETE_VIS_PCWRAP_ARGS) GASNETI_
   gasnete_boundscheck_memveclist(_tm, _dstrank, _dstcount, _dstlist); \
   _GASNETE_VECTOR_COMMON(degencontigop, PUTV_DEGENERATE)
 #define _GASNETE_VECTOR_COMMON(degencontigop,degentoken)                   \
+  GASNETI_CHECK_INJECT();                                                  \
   gasnete_memveclist_checksizematch(_dstcount, _dstlist, _srccount, _srclist); \
   if_pf (_dstcount == 0 || _srccount == 0) {  /* no-op */                  \
     GASNETI_TRACE_EVENT(C, degentoken);                                    \
@@ -472,6 +471,7 @@ int _gex_VIS_VectorGetNBI(
   gasnete_boundscheck_addrlist(_tm, _dstrank, _dstcount, _dstlist, _dstlen); \
   _GASNETE_INDEXED_COMMON(degencontigop, PUTI_DEGENERATE)
 #define _GASNETE_INDEXED_COMMON(degencontigop,degentoken)                  \
+  GASNETI_CHECK_INJECT();                                                  \
   gasnete_addrlist_checksizematch(_dstcount, _dstlen, _srccount, _srclen); \
   if_pf (_dstcount*_dstlen == 0) {  /* no-op */                            \
     gasneti_assert_uint(_srccount*_srclen ,==, 0);                         \
@@ -606,6 +606,7 @@ int _gex_VIS_IndexedGetNBI(
   gex_Event_t _lc_dummy;                            \
   _GASNETE_STRIDED_COMMON(degencontigop, PUTS_DEGENERATE)
 #define _GASNETE_STRIDED_COMMON(degencontigop,degentoken)  \
+  GASNETI_CHECK_INJECT();                                  \
   if_pf (_elemsz == 0) {                                   \
     GASNETI_TRACE_EVENT(C, degentoken);                    \
     return 0;                                              \

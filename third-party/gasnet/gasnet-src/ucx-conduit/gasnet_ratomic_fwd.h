@@ -1,7 +1,7 @@
 /*   $Source: bitbucket.org:berkeleylab/gasnet.git/ucx-conduit/gasnet_ratomic_fwd.h $
  * Description: GASNet Remote Atomics API Header (forward decls)
  * Copyright 2017, The Regents of the University of California
- * Copyright 2019, Mellanox Technologies LTD. All rights reserved.
+ * Copyright 2019-2020, Mellanox Technologies LTD. All rights reserved.
  * Terms of use are as specified in license.txt
  */
 
@@ -33,9 +33,10 @@
 // only in the absence of conduit-specific atomics.
 //
 // (###) Conduits cloning the file *must* remove (or comment-out) this define!
-//#if GASNETE_BUILD_AMRATOMIC
-//  #define GASNETE_RATOMIC_AMONLY 1
-//#endif
+#if !defined(GASNET_SEGMENT_FAST) && !defined(GASNET_SEGMENT_LARGE)
+  #define GASNETE_RATOMIC_AMONLY 1
+#endif
+
 
 // 1b. GASNETE_AMRATOMIC_USE_RMA_gex_dt_*
 //
@@ -84,8 +85,6 @@
 // with atomics performed by the local CPU.
 // ****
 
-#define GASNETI_AD_CREATE_HOOK gasnete_ucxratomic_create_hook
-
 // 2a. GASNETE_RATOMIC_ALWAYS_TOOLS_SAFE_gex_dt_*
 //
 // Assert that all atomics implementations possible in the current build
@@ -105,11 +104,35 @@
 // HOWEVER, that is almost never a safe determination to make, since
 // Tools may use mutexes, etc.   TL;DR: use 0 for offloadable types.
 //
+#if defined(GASNET_SEGMENT_FAST) || defined(GASNET_SEGMENT_LARGE)
 #define GASNETE_RATOMIC_ALWAYS_TOOLS_SAFE_gex_dt_I32 0
 #define GASNETE_RATOMIC_ALWAYS_TOOLS_SAFE_gex_dt_U32 0
 #define GASNETE_RATOMIC_ALWAYS_TOOLS_SAFE_gex_dt_I64 0
 #define GASNETE_RATOMIC_ALWAYS_TOOLS_SAFE_gex_dt_U64 0
 #define GASNETE_RATOMIC_ALWAYS_TOOLS_SAFE_gex_dt_FLT 1
 #define GASNETE_RATOMIC_ALWAYS_TOOLS_SAFE_gex_dt_DBL 1
+#else
+#define GASNETE_RATOMIC_ALWAYS_TOOLS_SAFE_gex_dt_I32 1
+#define GASNETE_RATOMIC_ALWAYS_TOOLS_SAFE_gex_dt_U32 1
+#define GASNETE_RATOMIC_ALWAYS_TOOLS_SAFE_gex_dt_I64 1
+#define GASNETE_RATOMIC_ALWAYS_TOOLS_SAFE_gex_dt_U64 1
+#define GASNETE_RATOMIC_ALWAYS_TOOLS_SAFE_gex_dt_FLT 1
+#define GASNETE_RATOMIC_ALWAYS_TOOLS_SAFE_gex_dt_DBL 1
+#endif
+
+// 3. Hooks for conduit-specific extension to create and destroy
+//
+// These hooks are analogous to the following:
+//     GASNETC_CLIENT_EXTRA_DECLS
+//     GASNETC_CLIENT_INIT_HOOK
+//     GASNETC_CLIENT_FINI_HOOK
+//     GASNETC_SIZEOF_CLIENT_T
+// which are documented in template-conduit/gasnet_core_fwd.h
+
+#define GASNETC_AD_EXTRA_DECLS \
+  extern void gasnete_ucxratomic_init_hook(gasneti_AD_t);
+#define GASNETC_AD_INIT_HOOK(i_ad) gasnete_ucxratomic_init_hook(i_ad)
+//#define GASNETC_AD_FINI_HOOK(i_ad) (###)
+//#define GASNETC_SIZEOF_AD_T() (###)
 
 #endif // _GASNET_RATOMIC_FWD_H

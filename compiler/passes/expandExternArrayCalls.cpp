@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
@@ -92,7 +92,7 @@ void expandExternArrayCalls() {
           SET_LINENO(formal);
           formal->typeExpr->replace(
               new BlockStmt(
-                new UnresolvedSymExpr("c_void_ptr")));
+                new UnresolvedSymExpr("chpl__c_void_ptr")));
         }
       }
       current_formal++;

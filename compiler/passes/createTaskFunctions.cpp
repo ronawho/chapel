@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -48,73 +48,59 @@ Symbol*           markUnspecified = NULL;
 *   4) a call to update the endCount when the block completes                 *
 *                                                                             *
 * The byrefVars property is then a list of pairs { marker, variable } where   *
-* marker is one of 6 constant ArgSymbols that encode the intent.              *
+* the marker is one of the 6 ArgSymbols defined below - tiMarkBlank through   *
+* tiMarkRef - which encode the intent.                                        *
 *                                                                             *
-* 2017/05/18: The challenge is to prevent these ArgSymbols from being purged  *
-* by the cleanAST() phase at the end of each pass.  There is no  well defined *
-* way to do this currently.                                                   *
-*                                                                             *
-* The approach that is used here is to wrap the ArgSymbols in a dummy         *
-* function and insert this function in to the tree.                           *
-*                                                                             *
-* It is inserted in to rootModule to avoid cluttering the scope for the       *
-* module "theProgram".  This in turn implies that it must be pre-normalized   *
-* to avoid triggering the AST checks for --verify.                            *
-*                                                                             *
-* This dummy function is never resolved and is purged at the end of the       *
-* function resolution pass.                                                   *
+* Future work: switch to dedicated representation for task intents.           *
 *                                                                             *
 ************************************** | *************************************/
 
 static ArgSymbol* tiMarkBlank     = NULL;
 static ArgSymbol* tiMarkIn        = NULL;
-static ArgSymbol* tiMarkConstDflt = NULL;
+static ArgSymbol* tiMarkConstDft  = NULL;
 static ArgSymbol* tiMarkConstIn   = NULL;
 static ArgSymbol* tiMarkConstRef  = NULL;
 static ArgSymbol* tiMarkRef       = NULL;
 
 void initForTaskIntents() {
-  FnSymbol* tiMarkHost = NULL;
-
   markPruned      = gVoid;
   markUnspecified = gNil;
 
-  tiMarkBlank     = new ArgSymbol(INTENT_BLANK,
-                                  "tiMarkBlank",
-                                  dtNothing);
+  tiMarkBlank    = new ArgSymbol(INTENT_BLANK,    "tiMarkBlank",   dtNothing);
+  tiMarkIn       = new ArgSymbol(INTENT_IN,       "tiMarkIn",      dtNothing);
+  tiMarkConstDft = new ArgSymbol(INTENT_CONST,    "tiMarkConstDft",dtNothing);
+  tiMarkConstIn  = new ArgSymbol(INTENT_CONST_IN, "tiMarkConstIn", dtNothing);
+  tiMarkConstRef = new ArgSymbol(INTENT_CONST_REF,"tiMarkConstRef",dtNothing);
+  tiMarkRef      = new ArgSymbol(INTENT_REF,      "tiMarkRef",     dtNothing);
 
-  tiMarkIn        = new ArgSymbol(INTENT_IN,
-                                  "tiMarkIn",
-                                  dtNothing);
+  // An ArgSymbol is expected to have its defPoint under an FnSymbol.
+  // Somehow we get away with placing these ones directly in rootBlock,
+  // which eliminates the need to have a dummy FnSymbol to host them.
+  // Ideally, replace these with dedicated representation.
+  rootBlock->insertAtTail(new DefExpr(tiMarkBlank));
+  rootBlock->insertAtTail(new DefExpr(tiMarkIn));
+  rootBlock->insertAtTail(new DefExpr(tiMarkConstDft));
+  rootBlock->insertAtTail(new DefExpr(tiMarkConstIn));
+  rootBlock->insertAtTail(new DefExpr(tiMarkConstRef));
+  rootBlock->insertAtTail(new DefExpr(tiMarkRef));
+}
 
-  tiMarkConstDflt = new ArgSymbol(INTENT_CONST,
-                                  "tiMarkConstDflt",
-                                  dtNothing);
+bool isTiMark(Symbol* sym) {
+  return sym == tiMarkBlank    ||
+         sym == tiMarkIn       ||
+         sym == tiMarkConstDft ||
+         sym == tiMarkConstIn  ||
+         sym == tiMarkConstRef ||
+         sym == tiMarkRef;
+}
 
-  tiMarkConstIn   = new ArgSymbol(INTENT_CONST_IN,
-                                  "tiMarkConstIn",
-                                  dtNothing);
-
-  tiMarkConstRef  = new ArgSymbol(INTENT_CONST_REF,
-                                  "tiMarkConstRef",
-                                  dtNothing);
-
-  tiMarkRef       = new ArgSymbol(INTENT_REF,
-                                  "tiMarkRef",
-                                  dtNothing);
-
-  tiMarkHost = new FnSymbol("tiMarkHost");
-
-  tiMarkHost->insertFormalAtTail(tiMarkBlank);
-  tiMarkHost->insertFormalAtTail(tiMarkIn);
-  tiMarkHost->insertFormalAtTail(tiMarkConstDflt);
-  tiMarkHost->insertFormalAtTail(tiMarkConstIn);
-  tiMarkHost->insertFormalAtTail(tiMarkConstRef);
-  tiMarkHost->insertFormalAtTail(tiMarkRef);
-
-  tiMarkHost->insertAtTail(new CallExpr(PRIM_RETURN, gVoid));
-
-  rootModule->block->insertAtTail(new DefExpr(tiMarkHost));
+void removeTiMarks() {
+  tiMarkBlank->defPoint->remove();
+  tiMarkIn->defPoint->remove();
+  tiMarkConstDft->defPoint->remove();
+  tiMarkConstIn->defPoint->remove();
+  tiMarkConstRef->defPoint->remove();
+  tiMarkRef->defPoint->remove();
 }
 
 // Return the tiMark symbol for the given ForallIntentTag.
@@ -122,7 +108,7 @@ void initForTaskIntents() {
 ArgSymbol* tiMarkForForallIntent(ShadowVarSymbol* svar) {
   switch (svar->intent) {
     case TFI_DEFAULT:     return tiMarkBlank;
-    case TFI_CONST:       return tiMarkConstDflt;
+    case TFI_CONST:       return tiMarkConstDft;
     case TFI_IN:          return tiMarkIn;
     case TFI_CONST_IN:    return tiMarkConstIn;
     case TFI_REF:         return tiMarkRef;
@@ -422,10 +408,11 @@ static bool isCorrespCoforallIndex(FnSymbol* fn, Symbol* sym)
 //
 static bool considerAsOuterVar(Symbol* sym, FnSymbol* fn) {
   if (sym->defPoint->parentSymbol == fn         || // defined in 'fn'
+      sym->defPoint->parentSymbol == rootModule || // a system symbol
       sym->isParameter()                        || // includes isImmediate()
       sym->hasFlag(FLAG_INSTANTIATED_PARAM)     || // a param, too (during resolution)
-      sym->defPoint->parentSymbol == rootModule || // a system symbol
       sym->hasFlag(FLAG_TEMP)                   || // a temp
+      sym->hasFlag(FLAG_LOCALE_PRIVATE)         || // special handling
 
       // NB 'type' formals do not have INTENT_TYPE
       sym->hasFlag(FLAG_TYPE_VARIABLE)     // 'type' aliases or formals
@@ -444,28 +431,27 @@ static bool considerAsOuterVar(Symbol* sym, FnSymbol* fn) {
 
 
 // Is 'sym' a non-const variable (including formals) defined outside of 'fn'?
-// This is a modification of isOuterVar() from flattenFunctions.cpp.
-//
-static bool
-isOuterVar(Symbol* sym, FnSymbol* fn) {
+static bool isOuterVarTaskFn(Symbol* sym, FnSymbol* fn) {
+  INT_ASSERT(! isModuleSymbol(sym));
+
+  // hit some common cases up front
   Symbol* symParent = sym->defPoint->parentSymbol;
-  Symbol* parent = fn->defPoint->parentSymbol;
+  if (symParent == fn)  // sym is declared within fn
+    return false;
+  if (isModuleSymbol(symParent)             ||   // sym is a global
+      symParent == fn->defPoint->parentSymbol)   // sym is adjacent to fn
+    return true;
 
+  // General case: for 'sym' to be non-outer,
+  // its chain of parentSymbol links must cross 'fn'.
+  Symbol* symGrandParent = symParent;
   while (true) {
-    if (!isFnSymbol(parent) && !isModuleSymbol(parent))
-      return false;
-    if (symParent == parent)
-      return true;
-    if (!parent->defPoint)
-      // Only happens when parent==rootModule (right?). This means symParent
-      // is not in any of the lexically-enclosing functions/modules, so
-      // it's gotta be within 'fn'.
-      return false;
+    symGrandParent = symGrandParent->defPoint->parentSymbol;
 
-    // continue to the enclosing scope
-    INT_ASSERT(parent->defPoint->parentSymbol &&
-               parent->defPoint->parentSymbol != parent); // ensure termination
-    parent = parent->defPoint->parentSymbol;
+    if (symGrandParent == fn)
+      return false;
+    if (isModuleSymbol(symGrandParent))
+      return true; // terminate search, as modules are not nested in functions
   }
 }
 
@@ -477,7 +463,7 @@ findOuterVars(FnSymbol* fn, SymbolMap& uses) {
   for_vector(SymExpr, symExpr, SEs) {
       Symbol* sym = symExpr->symbol();
 
-      if (considerAsOuterVar(sym, fn) && isOuterVar(sym, fn))
+      if (considerAsOuterVar(sym, fn) && isOuterVarTaskFn(sym, fn))
           uses.put(sym, markUnspecified);
   }
 }
@@ -589,61 +575,62 @@ addVarsToFormalsActuals(FnSymbol* fn, SymbolMap& vars,
                         CallExpr* call, bool isCoforall)
 {
   Expr *redRef1 = NULL, *redRef2 = NULL;
-  form_Map(SymbolMapElem, e, vars) {
-      Symbol* sym = e->key;
-      if (e->value != markPruned) {
-        SET_LINENO(sym);
-        ArgSymbol* newFormal = NULL;
-        Symbol*    newActual = NULL;
-        Symbol*    symReplace = NULL;
 
-        // If we see a TypeSymbol here, it came from a reduce intent.
-        // (See the above comment about 'vars'.)
-        if (TypeSymbol* reduceType = toTypeSymbol(e->value)) {
-          bool gotError = false;
-          // For cobegin, these will report the error for each task.
-          // So maybe make it no-cont to avoid duplication?
-          if (!isReduceOp(reduceType->type)) {
-            USR_FATAL_CONT(call, "%s is not a valid reduction for a reduce intent", reduceType->name);
-            gotError = true;
-          }
-          if (!isCoforall) {
-            USR_FATAL_CONT(call, "reduce intents are not available for 'begin' and are not implemented for 'cobegin'");
-            gotError = true;
-          }
-          if (gotError) continue; // skip addReduceIntentSupport() etc.
+  for (auto elem: sortedSymbolMapElts(vars)) {
+    Symbol* sym   = elem.key;
+    if (elem.value != markPruned) {
+      SET_LINENO(sym);
+      ArgSymbol* newFormal = NULL;
+      Symbol*    newActual = NULL;
+      Symbol*    symReplace = NULL;
 
-          addReduceIntentSupport(fn, call, reduceType, sym,
-                                 newFormal, newActual, symReplace,
-                                 isCoforall, redRef1, redRef2);
-        } else {
-          IntentTag argTag = INTENT_BLANK;
-          if (ArgSymbol* tiMarker = toArgSymbol(e->value))
-            argTag = tiMarker->intent;
-          else
-            INT_ASSERT(e->value == markUnspecified);
-
-          newFormal = new ArgSymbol(argTag, sym->name, sym->type);
-          if (sym->hasFlag(FLAG_COFORALL_INDEX_VAR))
-            newFormal->addFlag(FLAG_COFORALL_INDEX_VAR);
-
-          if (ArgSymbol* symArg = toArgSymbol(sym))
-            if (symArg->hasFlag(FLAG_MARKED_GENERIC))
-              newFormal->addFlag(FLAG_MARKED_GENERIC);
-          newActual = e->key;
-          symReplace = newFormal;
-          // MPF 2017-03-09
-          // I don't think this check should be here; it depends
-          // on the type and in my experiments type is usually dtUnknown
-          // at this point.
-          if (!newActual->isConstant() && newFormal->isConstant())
-            newFormal->addFlag(FLAG_CONST_DUE_TO_TASK_FORALL_INTENT);
+      // If we see a TypeSymbol here, it came from a reduce intent.
+      // (See the above comment about 'vars'.)
+      if (TypeSymbol* reduceType = toTypeSymbol(elem.value)) {
+        bool gotError = false;
+        // For cobegin, these will report the error for each task.
+        // So maybe make it no-cont to avoid duplication?
+        if (!isReduceOp(reduceType->type)) {
+          USR_FATAL_CONT(call, "%s is not a valid reduction for a reduce intent", reduceType->name);
+          gotError = true;
         }
+        if (!isCoforall) {
+          USR_FATAL_CONT(call, "reduce intents are not available for 'begin' and are not implemented for 'cobegin'");
+          gotError = true;
+        }
+        if (gotError) continue; // skip addReduceIntentSupport() etc.
 
-        call->insertAtTail(newActual);
-        fn->insertFormalAtTail(newFormal);
-        e->value = symReplace;  // aka vars->put(sym, symReplace);
+        addReduceIntentSupport(fn, call, reduceType, sym,
+                               newFormal, newActual, symReplace,
+                               isCoforall, redRef1, redRef2);
+      } else {
+        IntentTag argTag = INTENT_BLANK;
+        if (ArgSymbol* tiMarker = toArgSymbol(elem.value))
+          argTag = tiMarker->intent;
+        else
+          INT_ASSERT(elem.value == markUnspecified);
+
+        newFormal = new ArgSymbol(argTag, sym->name, sym->type);
+        if (sym->hasFlag(FLAG_COFORALL_INDEX_VAR))
+          newFormal->addFlag(FLAG_COFORALL_INDEX_VAR);
+
+        if (ArgSymbol* symArg = toArgSymbol(sym))
+          if (symArg->hasFlag(FLAG_MARKED_GENERIC))
+            newFormal->addFlag(FLAG_MARKED_GENERIC);
+        newActual = elem.key;
+        symReplace = newFormal;
+        // MPF 2017-03-09
+        // I don't think this check should be here; it depends
+        // on the type and in my experiments type is usually dtUnknown
+        // at this point.
+        if (!newActual->isConstant() && newFormal->isConstant())
+          newFormal->addFlag(FLAG_CONST_DUE_TO_TASK_FORALL_INTENT);
       }
+
+      call->insertAtTail(newActual);
+      fn->insertFormalAtTail(newFormal);
+      vars.put(elem.key, symReplace);
+    }
   }
   cleanupRedRefs(redRef1, redRef2);
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -24,7 +24,7 @@ private use Map;
 use Path;
 use MasonUtils;
 use MasonHelp;
-use Regexp;
+use Regex;
 
 /* Entry point for mason system commands */
 proc masonSystem(args: [] string) {

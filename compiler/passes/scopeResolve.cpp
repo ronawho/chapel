@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -315,6 +315,7 @@ static void scopeResolve(ForallStmt*         forall,
       scopeResolveExpr(sdef->init, stmtScope);
   }
 
+  // same as scopeResolve(loopBody, stmtScope)
   scopeResolve(loopBody->body, bodyScope);
 }
 
@@ -398,6 +399,39 @@ static void scopeResolve(TypeSymbol*         typeSym,
   }
 }
 
+static void scopeResolve(InterfaceSymbol*    isym,
+                         const ResolveScope* parent) {
+  ResolveScope* scope = new ResolveScope(isym, parent);
+
+  for_alist(def, isym->ifcFormals)
+    scope->extend(toDefExpr(def)->sym);
+
+  scopeResolve(isym->ifcBody, scope);
+}
+
+static void scopeResolveCondStmt(CondStmt* cond, ResolveScope* scope) {
+  CallExpr* ifvar = toCallExpr(skip_cond_test(cond->condExpr));
+  if (ifvar != NULL && ! ifvar->isPrimitive(PRIM_IF_VAR))
+    ifvar = NULL;
+
+  if (ifvar == NULL) {
+    scopeResolveExpr(cond->condExpr, scope);
+  } else {
+    // call(PRIM_IF_VAR, DefExpr, RHS expr)
+    scopeResolveExpr(ifvar->get(2), scope);
+  }
+
+  //scopeResolve(cond->thenStmt, scope), with ifvar add-on
+  ResolveScope* thenScope = new ResolveScope(cond->thenStmt, scope);
+  if (ifvar != NULL)
+    thenScope->extend(toDefExpr(ifvar->get(1))->sym);
+  scopeResolve(cond->thenStmt->body, thenScope);
+
+  if (cond->elseStmt != NULL) {
+    scopeResolve(cond->elseStmt, scope);
+  }
+}
+
 static void scopeResolve(IfExpr* ife, ResolveScope* scope) {
   scopeResolve(ife->getThenStmt(), scope);
   scopeResolve(ife->getElseStmt(), scope);
@@ -468,6 +502,9 @@ static void scopeResolve(const AList& alist, ResolveScope* scope) {
 
         } else if (TypeSymbol* typeSym = toTypeSymbol(sym))   {
           scopeResolve(typeSym, scope);
+
+        } else if (InterfaceSymbol* isym = toInterfaceSymbol(sym)) {
+          scopeResolve(isym, scope);
         }
       }
 
@@ -484,13 +521,7 @@ static void scopeResolve(const AList& alist, ResolveScope* scope) {
       }
 
     } else if (CondStmt* cond = toCondStmt(stmt))  {
-      scopeResolveExpr(cond->condExpr, scope);
-
-      scopeResolve(cond->thenStmt, scope);
-
-      if (cond->elseStmt != NULL) {
-        scopeResolve(cond->elseStmt, scope);
-      }
+      scopeResolveCondStmt(cond, scope);
 
     } else if (TryStmt* tryStmt = toTryStmt(stmt)) {
       scopeResolve(tryStmt->_body, scope);
@@ -828,7 +859,18 @@ static void resolveUnresolvedSymExpr(UnresolvedSymExpr* usymExpr,
 
   // sjd: stopgap to avoid shadowing variables or functions by methods
   } else if (fn->isMethod() == true) {
-    updateMethod(usymExpr);
+    BlockStmt* block = usymExpr->getScopeBlock();
+    FnSymbol* containingFn = usymExpr->getFunction();
+    bool convert = true;
+    if (block != NULL && containingFn != NULL) {
+      if (block == containingFn->lifetimeConstraints) {
+        // This is in a lifetime constraint clause.  Don't make this a method
+        // call
+        convert = false;
+      }
+    }
+    if (convert)
+      updateMethod(usymExpr);
 
   // handle function call without parentheses
   } else if (fn->hasFlag(FLAG_NO_PARENS) == true) {
@@ -900,6 +942,14 @@ static void updateMethod(UnresolvedSymExpr* usymExpr,
         if (symExpr == NULL || symExpr->symbol() != method->_this) {
           const char* name = usymExpr->unresolved;
           Type*       type = method->_this->type;
+
+          if ((method->name == astrInit || method->name == astrInitEquals) &&
+              isAstrOpName(name)) {
+            break;
+          }
+
+          if (isAstrOpName(name))
+            break;
 
           if (isAggr == true || isMethodName(name, type) == true) {
             if (isFunctionNameWithExplicitScope(expr) == false) {
@@ -1485,7 +1535,7 @@ static void adjustTypeMethodsOnClasses() {
 
     ArgSymbol* thisArg = toArgSymbol(fn->_this);
     Type*      thisType = thisArg->type;
-    if (! isClass(thisType)) continue; // handle only undecorated classes
+    if (! isClassLikeOrManaged(thisType)) continue;
 
     if (BlockStmt* typeBlock = thisArg->typeExpr) {
       // Remove the type block, ensuring that its information is preserved.
@@ -2427,7 +2477,7 @@ bool Symbol::isVisible(BaseAST* scope) const {
 
 BaseAST* getScope(BaseAST* ast) {
   if (Expr* expr = toExpr(ast)) {
-    Expr*     parent = expr->parentExpr;
+   if (Expr* parent = expr->parentExpr) {
     BlockStmt* block = toBlockStmt(parent);
 
     // SCOPELESS and TYPE blocks do not define scopes
@@ -2452,14 +2502,17 @@ BaseAST* getScope(BaseAST* ast) {
 
     } else if (parent) {
       return getScope(parent);
-
-    } else if (FnSymbol* fn = toFnSymbol(expr->parentSymbol)) {
+    }
+   } else {
+    if (FnSymbol* fn = toFnSymbol(expr->parentSymbol)) {
       return fn;
 
     } else if (TypeSymbol* ts = toTypeSymbol(expr->parentSymbol)) {
       if (isEnumType(ts->type) || isAggregateType(ts->type)) {
         return ts;
       }
+    } else if (InterfaceSymbol* isym = toInterfaceSymbol(expr->parentSymbol)) {
+      return isym;
     }
 
     if (expr->parentSymbol == rootModule)
@@ -2467,6 +2520,7 @@ BaseAST* getScope(BaseAST* ast) {
 
     else
       return getScope(expr->parentSymbol->defPoint);
+   }
 
   } else if (Symbol* sym = toSymbol(ast)) {
     if (sym == rootModule)
@@ -2795,13 +2849,8 @@ static bool readNamedArgument(CallExpr* call, const char* name,
 
 static bool symbolInBuiltinModule(Symbol* sym) {
   ModuleSymbol* mod = sym->getModule();
-  if (mod->modTag == MOD_STANDARD &&
-      (!strcmp(mod->name, "Builtins") ||
-       !strcmp(mod->name, "Types") ||
-       !strcmp(mod->name, "Math"))) {
-    return true;
-  }
-  return false;
+  return (mod->modTag == MOD_STANDARD &&
+          mod->hasFlag(FLAG_MODULE_INCLUDED_BY_DEFAULT));
 }
 
 

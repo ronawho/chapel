@@ -119,7 +119,7 @@ GASNETT_BEGIN_EXTERNC
 #define test_makeMsg(baseformatargs, msgpred, isfatal, msgeval)     \
   BUG3343_WORKAROUND(                                               \
   ( _test_makeErrMsg baseformatargs ,                               \
-    ( (msgpred) ? (void)(msgeval) : (void)(_test_squashmsg = 1) ) , \
+    ( (msgpred) ? (void)(msgeval) : (_test_squashmsg = 1, (void)0) ) , \
     _test_doErrMsg##isfatal ) )
 
 #ifdef _INCLUDED_GASNET_H
@@ -233,15 +233,8 @@ static void _test_makeErrMsg(const char *format, ...)) {
 //  + "RANDn" uses multiple calls to rand().
 #if defined(_TEST_USE_LCG64)
   // Keep setting
-#elif (RAND_MAX < 255) || \
-      PLATFORM_COMPILER_OPEN64 || PLATFORM_COMPILER_CLANG
-  // SHOULD NOT use "RANDn" in the following cases:
-  // + Any platform with RAND_MAX < 255 (though C99 requires 32K+)
-  // + Open64 to work-around bug 3738
-  // + Clang to work-around bug 3630
-  #define _TEST_USE_LCG64 1
 #else
-  // Current default is LCG64
+  // Current default is LCG64, which provides cross-platform reproducibility
   #define _TEST_USE_LCG64 1
 #endif
 
@@ -770,7 +763,7 @@ static gex_TM_t _test_tm0;
       static volatile int phase = 0;
       const int myphase = phase;
       gasnett_mutex_lock(&(barrier[myphase].mutex));
-      barrier_count++;
+      barrier_count = 1 + barrier_count; // C++20 deprecates ++ and += on volatile
       if (barrier_count < local_pthread_count) {
 	/* CAUTION: changing the "do-while" to a "while" triggers a bug in the SunStudio 2006-08
          * compiler for x86_64.  See https://gasnet-bugs.lbl.gov/bugzilla/show_bug.cgi?id=1858
@@ -1044,11 +1037,11 @@ static size_t test_num_am_handlers = 0;
                 gex_TM_t          tm,
                 uintptr_t         length)
   {
-      check_zeroret(gex_Segment_Attach(segment_p, tm, length));
+      GASNET_Safe(gex_Segment_Attach(segment_p, tm, length));
       BARRIER();
       for (gex_Rank_t i=0; i < TEST_PROCS; i++) {
-        void *_addr;  uintptr_t _size;
-        check_zeroret(gex_Segment_QueryBound(tm, i, &_addr, NULL, &_size));
+        uintptr_t _size;
+        gex_Event_Wait( gex_EP_QueryBoundSegmentNB(tm, i, NULL, NULL, &_size, 0) );
         assert_always(_size >= TEST_SEGSZ);
         assert_always(((uintptr_t)_size) % PAGESZ == 0);
       }
@@ -1059,8 +1052,11 @@ static size_t test_num_am_handlers = 0;
   #define gex_Segment_Attach _test_Segment_Attach
 
   static void* _test_seg(gex_Rank_t rank) {
-    void *addr;
-    check_zeroret(gex_Segment_QueryBound(_test_tm0, rank, &addr, NULL, NULL));
+    void *addr = NULL;
+    gex_Flags_t imm = (rank == TEST_MYPROC) ? GEX_FLAG_IMMEDIATE : 0;
+    gex_Event_t ev =  gex_EP_QueryBoundSegmentNB(_test_tm0, rank, &addr, NULL, NULL, imm);
+    if (!imm) gex_Event_Wait(ev);
+    else assert (ev == GEX_EVENT_INVALID);
     return addr;
   }
   #define TEST_SEG(rank)        _test_seg(rank)
@@ -1074,7 +1070,10 @@ static void *TEST_SEG_TM(gex_TM_t tm, gex_Rank_t rank) {
   return TEST_SEG(gex_TM_TranslateRankToJobrank(tm, rank));
 #else
   void *result;
-  check_zeroret(gex_Segment_QueryBound(tm, rank, &result, NULL, NULL));
+  gex_Flags_t imm = (rank == gex_TM_QueryRank(tm)) ? GEX_FLAG_IMMEDIATE : 0;
+  gex_Event_t ev = gex_EP_QueryBoundSegmentNB(tm, rank, &result, NULL, NULL, imm);
+  if (!imm) gex_Event_Wait(ev);
+  else assert (ev == GEX_EVENT_INVALID);
   return result;
 #endif
 }
@@ -1328,11 +1327,14 @@ static void _test_init(const char *testname, int reports_performance, int early,
   GASNETT_TRACE_FREEZESOURCELINE();                                                \
   GASNETT_TRACE_UNFREEZESOURCELINE();                                              \
   if (GASNETT_TRACE_ENABLED)                                                       \
-    GASNETT_TRACE_PRINTF("TEST_TRACING_MACROS: GASNETT_TRACE_PRINTF()");           \
-  GASNETT_TRACE_PRINTF_FORCE("TEST_TRACING_MACROS: GASNETT_TRACE_PRINTF_FORCE()"); \
+    GASNETT_TRACE_PRINTF("TEST_TRACING_MACROS: GASNETT_TRACE_PRINTF(%i)",42);      \
+  GASNETT_TRACE_PRINTF_FORCE("TEST_TRACING_MACROS: GASNETT_TRACE_PRINTF_FORCE(%i)",42); \
   GASNETT_TRACE_SETMASK(GASNETT_TRACE_GETMASK());                                  \
   GASNETT_STATS_SETMASK(GASNETT_STATS_GETMASK());                                  \
   GASNETT_TRACE_SET_TRACELOCAL(GASNETT_TRACE_GET_TRACELOCAL());                    \
+  GASNETT_STATS_PRINTF("TEST_TRACING_MACROS: GASNETT_STATS_PRINTF(%i)",42);        \
+  GASNETT_STATS_PRINTF_FORCE("TEST_TRACING_MACROS: GASNETT_STATS_PRINTF_FORCE(%i)",42); \
+  GASNETT_STATS_DUMP(/*reset=*/1);                                                 \
 } while (0)
 
 GASNETT_END_EXTERNC

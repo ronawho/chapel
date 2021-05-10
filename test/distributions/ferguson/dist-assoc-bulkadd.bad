@@ -1,7 +1,5 @@
-dist-assoc-bulkadd.chpl:7: error: unresolved call 'unmanaged UserMapAssocDom(true,real(64),DefaultMapper).rank'
-$CHPL_HOME/modules/internal/DefaultRectangular.chpl:974: note: this candidate did not match: LocRADCache.rank
-$CHPL_HOME/modules/internal/ChapelArray.chpl:1673: note: because method call receiver with type unmanaged UserMapAssocDom(true,real(64),DefaultMapper)
-$CHPL_HOME/modules/internal/DefaultRectangular.chpl:974: note: is passed to formal 'this: LocRADCache'
-$CHPL_HOME/modules/internal/ArrayViewSlice.chpl:146: note: candidates are: ArrayViewSliceArr.rankparam 
-$CHPL_HOME/modules/internal/ArrayViewRankChange.chpl:508: note:                 ArrayViewRankChangeArr.rankparam 
-note: and 18 other candidates, use --print-all-candidates to see them
+dist-assoc-bulkadd.chpl:7: error: unresolved call 'UserMapAssocDom(true,real(64),DefaultMapper).bulkAdd([domain(1,int(64),false)] real(64))'
+$CHPL_HOME/modules/internal/ChapelArray.chpl:1671: note: this candidate did not match: ref _domain.bulkAdd(inds: [] _value.idxType, dataSorted = false, isUnique = false, preserveInds = true, addOn = nilLocale)
+$CHPL_HOME/modules/internal/ChapelArray.chpl:1671: note: because where clause evaluated to false
+dist-assoc-bulkadd.chpl:7: note: other candidates are:
+$CHPL_HOME/modules/internal/ChapelArray.chpl:1760: note:   ref _domain.bulkAdd(inds: [] _value.rank*_value.idxType, dataSorted = false, isUnique = false, preserveInds = true, addOn = nilLocale)

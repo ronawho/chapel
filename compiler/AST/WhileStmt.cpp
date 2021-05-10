@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -36,20 +36,11 @@ WhileStmt::WhileStmt(VarSymbol* var, BlockStmt* body) :
   mCondExpr = (var != 0) ? new SymExpr(var) : 0;
 }
 
-WhileStmt::~WhileStmt()
+void WhileStmt::copyInnerShare(const WhileStmt& ref,
+                               SymbolMap*       map)
 {
-
-}
-
-void WhileStmt::copyShare(const WhileStmt& ref,
-                          SymbolMap*       mapRef,
-                          bool             internal)
-{
-  SymbolMap  localMap;
-  SymbolMap* map       = (mapRef != 0) ? mapRef : &localMap;
   Expr*      condExpr  = ref.condExprGet();
 
-  astloc            = ref.astloc;
   blockTag          = ref.blockTag;
 
   mBreakLabel       = ref.mBreakLabel;
@@ -61,9 +52,6 @@ void WhileStmt::copyShare(const WhileStmt& ref,
 
   for_alist(expr, ref.body)
     insertAtTail(expr->copy(map, true));
-
-  if (internal == false)
-    update_symbols(this, map);
 }
 
 void WhileStmt::verify()

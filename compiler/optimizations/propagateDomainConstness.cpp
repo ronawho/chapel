@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -38,10 +38,12 @@ static VarSymbol *addFieldAccess(Symbol *receiver, const char *fieldName,
                                  Expr *insBefore, Expr *&insAfter,
                                  bool asRef);
 static Expr *getNextExprOrCreateNoop(Expr *baseExpr, bool &createdNoop);
-static void setDefinedConstForDomainSymbol(Symbol *domainSym, Expr *nextExpr,
-                                           Expr *anchor, Symbol *isConst);
 static void setDefinedConstForDomainField(Symbol *thisSym, Symbol *fieldSym,
                                           Expr *nextExpr, Symbol *isConst);
+static void setDefinedConstForDomainSymbol(Symbol *domainSym,
+                                           Expr *insBeforeMarker,
+                                           Expr *&insAfterMarker,
+                                           Symbol *isConst);
 
 // tries to determine if the DefExpr looks like a constant domain definition,
 // and changes pertinent arguments in the CallExprs as necessary
@@ -90,7 +92,6 @@ void setDefinedConstForPrimSetMemberIfApplicable(CallExpr *call) {
   if (createdNoop) {
     nextExpr->remove();
   }
-
 }
 
 // go through all PRIM_SET_MEMBER in an initializer, and adjust them if needed
@@ -111,9 +112,6 @@ void setDefinedConstForFieldsInInitializer(FnSymbol *fn) {
 void removeInitOrAutoCopyPostResolution(CallExpr *call) {
   Expr *parentExpr = call->parentExpr;
 
-  bool createdNoop;
-  Expr *nextExpr = getNextExprOrCreateNoop(parentExpr, createdNoop);
-
   Symbol *argSym = NULL;
   Type *argType = NULL;
   if (SymExpr *se = toSymExpr(call->get(1))) {
@@ -122,6 +120,9 @@ void removeInitOrAutoCopyPostResolution(CallExpr *call) {
   }
   INT_ASSERT(argSym);
   INT_ASSERT(argType);
+
+  if (argSym->hasFlag(FLAG_INSERT_AUTO_DESTROY))
+    argSym->removeFlag(FLAG_INSERT_AUTO_DESTROY);
 
   call->replace(call->get(1)->remove());
 
@@ -134,6 +135,10 @@ void removeInitOrAutoCopyPostResolution(CallExpr *call) {
   INT_ASSERT(isConst->type == dtBool);
 
   if (argType->symbol->hasFlag(FLAG_DOMAIN)) {
+
+    bool createdNoop;
+    Expr *nextExpr = getNextExprOrCreateNoop(parentExpr, createdNoop);
+
     Symbol *lhs = NULL;
     if (CallExpr *parentCall = toCallExpr(parentExpr)) {
       if (parentCall->isPrimitive(PRIM_MOVE)) {
@@ -145,8 +150,7 @@ void removeInitOrAutoCopyPostResolution(CallExpr *call) {
     INT_ASSERT(lhs);
 
     if (!isShadowVarSymbol(lhs)) {
-      Expr *anchor = nextExpr;
-      setDefinedConstForDomainSymbol(lhs, nextExpr, anchor, isConst);
+      setDefinedConstForDomainSymbol(lhs, nextExpr, isConst);
 
       if (createdNoop) {
         nextExpr->remove();
@@ -181,7 +185,7 @@ static Expr* getNextExprOrCreateNoop(Expr *baseExpr, bool &createdNoop) {
 
   return nextExpr;
 }
-                
+
 static void setDefinedConstForDefExprWithIfExprs(Expr* e) {
   if (CallExpr *initCall = toCallExpr(e)) {
     if (initCall->isNamed("chpl__buildDomainExpr")) {
@@ -209,7 +213,7 @@ static VarSymbol *addFieldAccess(Symbol *receiver, const char *fieldName,
 
   Symbol *fieldSym = aggType->getField(fieldName);
   Type *fieldType = asRef ? fieldSym->type->getRefType() : fieldSym->type;
-  
+
   VarSymbol *fieldRef = newTemp(fieldName, fieldType);
   fieldRef->addFlag(FLAG_UNSAFE);  // this is a short-lived temp
   insBefore->insertBefore(new DefExpr(fieldRef));
@@ -225,26 +229,49 @@ static VarSymbol *addFieldAccess(Symbol *receiver, const char *fieldName,
   return fieldRef;
 }
 
-static void setDefinedConstForDomainSymbol(Symbol *domainSym, Expr *nextExpr,
-                                           Expr *anchor, Symbol *isConst) {
+static void setDefinedConstForDomainSymbol(Symbol *domainSym,
+                                           Expr *insBeforeMarker,
+                                           Expr *&insAfterMarker,
+                                           Symbol *isConst) {
+
   VarSymbol *domInstance = addFieldAccess(domainSym, "_instance",
-                                          nextExpr, anchor, /*asRef=*/ true);
+                                          insBeforeMarker, insAfterMarker,
+                                          /*asRef=*/ true);
 
   VarSymbol *refToDefinedConst = addFieldAccess(domInstance, "definedConst",
-                                                nextExpr, anchor,
-                                                true);
+                                                insBeforeMarker, insAfterMarker,
+                                                /*asRef=*/ true);
 
+  // TODO: this would be clearer with PRIM_ASSIGN since the LHS is a ref
   CallExpr *setDefinedConst = new CallExpr(PRIM_MOVE, refToDefinedConst,
                                            isConst);
 
-  anchor->insertAfter(setDefinedConst);
+  insAfterMarker->insertAfter(setDefinedConst);
+  insAfterMarker = insAfterMarker->next;
+}
+
+void setDefinedConstForDomainSymbol(Symbol *domainSym, Expr *nextExpr,
+                                    Symbol *isConst) {
+  CallExpr *noop = new CallExpr(PRIM_NOOP);
+  nextExpr->insertBefore(noop);
+
+  Expr *insBeforeMarker = noop;
+  Expr *insAfterMarker = noop;
+
+  setDefinedConstForDomainSymbol(domainSym, insBeforeMarker, insAfterMarker,
+                                 isConst);
+
+  noop->remove();
 }
 
 static void setDefinedConstForDomainField(Symbol *thisSym, Symbol *fieldSym,
                                           Expr *nextExpr, Symbol *isConst) {
-    Expr *anchor = nextExpr;
+    Expr *insBeforeMarker = nextExpr;
+    Expr *insAfterMarker = nextExpr;
     VarSymbol *domSym = addFieldAccess(thisSym, fieldSym->name,
-                                       nextExpr, anchor, /*asRef=*/false);
-    setDefinedConstForDomainSymbol(domSym, nextExpr, anchor, isConst);
+                                       insBeforeMarker, insAfterMarker,
+                                       /* asRef = */false);
+    setDefinedConstForDomainSymbol(domSym, insBeforeMarker, insAfterMarker,
+                                   isConst);
 }
 

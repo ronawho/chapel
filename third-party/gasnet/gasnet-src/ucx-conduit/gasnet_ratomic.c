@@ -1,6 +1,6 @@
 /*   $Source: bitbucket.org:berkeleylab/gasnet.git/ucx-conduit/gasnet_ratomic.c $
  * Description: GASNet Remote Atomics API Header (forward decls)
- * Copyright 2019, Mellanox Technologies, Inc. All rights reserved.
+ * Copyright 2019-2020, Mellanox Technologies, Inc. All rights reserved.
  * Terms of use are as specified in license.txt
  */
 
@@ -55,7 +55,7 @@ ucp_atomic_fetch_op_t amo_fetch_op_map_gex_dt_I32(gasneti_op_idx_t op_idx) {
 }
 
 GASNETI_INLINE(amo_post_op_map_gex_dt_I32)
-ucp_atomic_fetch_op_t amo_post_op_map_gex_dt_I32(gasneti_op_idx_t op_idx) {
+ucp_atomic_post_op_t amo_post_op_map_gex_dt_I32(gasneti_op_idx_t op_idx) {
   switch (op_idx) {
     case gasneti_op_idx_ADD:    return UCP_ATOMIC_POST_OP_ADD;
     case gasneti_op_idx_SUB:    return UCP_ATOMIC_POST_OP_ADD;
@@ -210,7 +210,7 @@ int gasnete_ratomic_fetch_nbi(const int length, void *result_p,
 GASNETI_INLINE(gasnete_ratomic_post_inner)
 int gasnete_ratomic_post_inner(const int length,
                                 gasneti_TM_t i_tm, gex_Rank_t tgt_rank,
-                                void *tgt_addr, ucp_atomic_fetch_op_t op,
+                                void *tgt_addr, ucp_atomic_post_op_t op,
                                 uint64_t operand, gasnetc_atomic_val_t *cnt,
                                 gasnetc_cbfunc_t cbfunc, gex_Flags_t flags)
 {
@@ -251,7 +251,7 @@ int gasnete_ratomic_post_inner(const int length,
 GASNETI_INLINE(gasnete_ratomic_post_nb)
 gex_Event_t gasnete_ratomic_post_nb(const int length,
                                     gasneti_TM_t i_tm, gex_Rank_t tgt_rank,
-                                    void *tgt_addr, ucp_atomic_fetch_op_t op,
+                                    void *tgt_addr, ucp_atomic_post_op_t op,
                                     uint64_t operand,
                                     gex_Flags_t flags GASNETI_THREAD_FARG)
 {
@@ -269,7 +269,7 @@ gex_Event_t gasnete_ratomic_post_nb(const int length,
 GASNETI_INLINE(gasnete_ratomic_post_nbi)
 int gasnete_ratomic_post_nbi(const int length,
                              gasneti_TM_t i_tm, gex_Rank_t tgt_rank,
-                             void *tgt_addr, ucp_atomic_fetch_op_t op,
+                             void *tgt_addr, ucp_atomic_post_op_t op,
                              uint64_t operand,
                              gex_Flags_t flags GASNETI_THREAD_FARG)
 {
@@ -569,18 +569,17 @@ GASNETE_DT_INT_APPLY(GASNETE_UCXRATOMIC_TBL)
 #define GASNETE_UCXRATOMIC_BADOPS_gex_dt_I64 (GASNETE_UCXRATOMIC_NO_MULT | GASNETE_UCXRATOMIC_NO_MINMAX)
 #define GASNETE_UCXRATOMIC_BADOPS_gex_dt_U64 (GASNETE_UCXRATOMIC_NO_MULT | GASNETE_UCXRATOMIC_NO_MINMAX)
 
-void gasnete_ucxratomic_create_hook(
-        gasneti_AD_t               real_ad,
-        gasneti_TM_t               real_tm,
-        gex_DT_t                   dt,
-        gex_OP_t                   ops,
-        gex_Flags_t                flags)
+void gasnete_ucxratomic_init_hook(gasneti_AD_t real_ad)
 {
+    gex_DT_t dt = real_ad->_dt;
+    gex_OP_t ops = real_ad->_ops;
+
 #define GASNETE_UCXRATOMIC_TBL_CASE(dtcode) \
     case dtcode##_dtype:                    \
         if (ops & GASNETE_UCXRATOMIC_BADOPS##dtcode) goto use_am; \
         real_ad->_fn_tbl = (gasnete_ratomic_fn_tbl_t) &gasnete_ucxratomic##dtcode##_fn_tbl; \
         real_ad->_tools_safe = 0; \
+        GASNETI_TRACE_PRINTF(O,("gex_AD_Create(dt=%d, ops=0x%x) -> UCX", (int)dt, (unsigned int)ops)); \
         return;
   switch(dt) {
       GASNETE_DT_INT_APPLY(GASNETE_UCXRATOMIC_TBL_CASE)
@@ -589,6 +588,6 @@ void gasnete_ucxratomic_create_hook(
 #undef GASNETE_UCXRATOMIC_TBL_CASE
 
 use_am:
-  gasnete_amratomic_create_hook(real_ad, real_tm, dt, ops, flags);
+  gasnete_amratomic_init_hook(real_ad);
   return;
 }

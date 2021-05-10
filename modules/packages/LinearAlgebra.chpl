@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -163,7 +163,7 @@ arrays) will work with any other Chapel library that works with arrays.
 **Domain offsets**
 
 All functions that return arrays will inherit their domains from the input
-array if possible.  Otherwise they will return arrays with 1-based indices.
+array if possible.  Otherwise they will return arrays with 0-based indices.
 
 **Row vs Column vectors**
 
@@ -225,10 +225,10 @@ class LinearAlgebraError : Error {
 // Matrix and Vector Initializers
 //
 
-/* Return a vector (1D array) over domain ``{1..length}``*/
+/* Return a vector (1D array) over domain ``{0..<length}``*/
 proc Vector(length, type eltType=real) {
   if (length <= 0) then halt("Vector length must be > 0");
-  return Vector(1..length, eltType);
+  return Vector(0..<length, eltType);
 }
 
 
@@ -268,29 +268,29 @@ proc Vector(x: ?t, Scalars...?n, type eltType) where isNumericType(t) {
       compilerError("Vector() expected numeric arguments");
 
   // First element is x, and remaining elements are Scalars
-  var V: [1..n+1] eltType;
+  var V: [0..n] eltType;
 
-  V[1] = x: eltType;
+  V[0] = x: eltType;
 
-  forall i in 2..n+1 {
-    V[i] = Scalars[i-2]: eltType;
+  forall i in 1..n {
+    V[i] = Scalars[i-1]: eltType;
   }
 
   return V;
 }
 
 
-/* Return a square matrix (2D array) over domain ``{1..rows, 1..rows}``*/
+/* Return a square matrix (2D array) over domain ``{0..<rows, 0..<rows}``*/
 proc Matrix(rows, type eltType=real) where isIntegral(rows) {
   if rows <= 0 then halt("Matrix dimensions must be > 0");
-  return Matrix(1..rows, 1..rows, eltType);
+  return Matrix(0..<rows, 0..<rows, eltType);
 }
 
 
-/* Return a matrix (2D array) over domain ``{1..rows, 1..cols}``*/
+/* Return a matrix (2D array) over domain ``{0..<rows, 0..<cols}``*/
 proc Matrix(rows, cols, type eltType=real) where isIntegral(rows) && isIntegral(cols) {
   if rows <= 0 || cols <= 0 then halt("Matrix dimensions must be > 0");
-  return Matrix(1..rows, 1..cols, eltType);
+  return Matrix(0..<rows, 0..<cols, eltType);
 }
 
 
@@ -383,14 +383,14 @@ proc Matrix(const Arrays: ?t ...?n, type eltType) where isArrayType(t) && t.rank
 
   if Arrays(0).domain.rank != 1 then compilerError("Matrix() expected 1D arrays");
 
-  const dim2 = 1..Arrays(0).domain.dim(0).size,
-        dim1 = 1..n;
+  const dim2 = 0..<Arrays(0).domain.dim(0).size,
+        dim1 = 0..<n;
 
   var M: [{dim1, dim2}] eltType;
 
   forall i in dim1 do {
-    if Arrays(i-1).size != Arrays(0).size then halt("Matrix() expected arrays of equal length");
-    M[i, ..] = Arrays(i-1)[..]: eltType;
+    if Arrays(i).size != Arrays(0).size then halt("Matrix() expected arrays of equal length");
+    M[i, ..] = Arrays(i): eltType;
   }
 
   return M;
@@ -404,17 +404,17 @@ private proc _eyeDiagonal(ref A: [?Dom] ?eltType) {
   for i in Dom.dim(idx) do A[i, i] = 1: eltType;
 }
 
-/* Return a square identity matrix over domain ``{1..m, 1..m}`` */
+/* Return a square identity matrix over domain ``{0..<m, 0..<m}`` */
 proc eye(m: integral, type eltType=real) {
-  var A: [{1..m, 1..m}] eltType;
+  var A: [{0..<m, 0..<m}] eltType;
   _eyeDiagonal(A);
   return A;
 }
 
 
-/* Return an identity matrix over domain ``{1..m, 1..n}`` */
+/* Return an identity matrix over domain ``{0..<m, 0..<n}`` */
 proc eye(m: integral, n: integral, type eltType=real) {
-  var A: [{1..m, 1..n}] eltType;
+  var A: [{0..<m, 0..<n}] eltType;
   _eyeDiagonal(A);
   return A;
 }
@@ -433,7 +433,7 @@ proc eye(Dom: domain(2), type eltType=real) {
 //
 
 
-/* Sets the value of a diagonal in a matrix. If the matrix is sparse,
+/* Sets the value of a diagonal in a matrix in-place. If the matrix is sparse,
     indices on the diagonal will be added to its domain
 
     ``k > 0``, represents an upper diagonal starting
@@ -442,18 +442,22 @@ proc eye(Dom: domain(2), type eltType=real) {
     from the ``-k``th row. ``k`` is 0-indexed.
 */
 proc setDiag (ref X: [?D] ?eltType, in k: int = 0, val: eltType = 0)
-              where isDenseMatrix(X) {
+              where isDenseMatrix(X)
+{
+  // Switch indexing to 0-based if necessary
+  ref Xref = X.reindex(0..<D.shape(0), 0..<D.shape(1));
+
   var start, end = 0;
   if (k >= 0) { // upper or main diagonal
-    start = 1;
+    start = 0;
     end = D.shape(0) - k;
   }
   else { // lower diagonal
-    start = 1 - k;
+    start = -k;
     end = D.shape(0);
   }
-  forall row in {start..end} {
-    X(row, row+k) = val;
+  forall row in start..<end {
+    Xref[row, row+k] = val;
   }
 }
 
@@ -655,8 +659,8 @@ private proc _matmatMult(A: [?Adom] ?eltType, B: [?Bdom] eltType)
 }
 
 pragma "no doc"
-/* 
-   Returns ``true`` if the domain is distributed 
+/*
+   Returns ``true`` if the domain is distributed
 
    This is currently public only for unit testing purposes.
 */
@@ -785,16 +789,16 @@ proc _matmatMult(A: [?Adom] ?eltType, B: [?Bdom] eltType)
   var C: [Adom.dim(0), Bdom.dim(1)] eltType;
 
   if hasNonStridedIndices(Adom) {
-    if hasNonStridedIndices(Bdom) then 
+    if hasNonStridedIndices(Bdom) then
       _matmatMultHelper(A, B, C);
     else
       _matmatMultHelper(A,
                         B.reindex(0..#Bdom.shape(0), 0..#Bdom.shape(1)),
                         C.reindex(0..#Adom.shape(0), 0..#Bdom.shape(1)));
   } else {
-    if hasNonStridedIndices(Bdom) then 
-      _matmatMultHelper(A.reindex(0..#Adom.shape(0), 0..#Adom.shape(1)), 
-                        B, 
+    if hasNonStridedIndices(Bdom) then
+      _matmatMultHelper(A.reindex(0..#Adom.shape(0), 0..#Adom.shape(1)),
+                        B,
                         C.reindex(0..#Adom.shape(0), 0..#Bdom.shape(1)));
     else
       _matmatMultHelper(A.reindex(0..#Adom.shape(0), 0..#Adom.shape(1)),
@@ -808,9 +812,9 @@ pragma "no doc"
 /* Helper for Generic matrix-matrix multiplication */
 proc _matmatMultHelper(ref AMat: [?Adom] ?eltType,
                        ref BMat : [?Bdom] eltType,
-                       ref CMat : [] eltType) 
+                       ref CMat : [] eltType)
 {
-  // TODO - Add logic to calculate blockSize 
+  // TODO - Add logic to calculate blockSize
   // based on eltType and L1 cache size
   const blockSize = 32;
   const bVecRange = 0..#blockSize;
@@ -861,7 +865,7 @@ proc _matmatMultHelper(ref AMat: [?Adom] ?eltType,
 pragma "no doc"
 private inline proc hasNonStridedIndices(Adom : domain(2)) {
   return (if Adom.stridable
-          then Adom.dim(0).stride == 1 && Adom.dim(1).stride == 1 
+          then Adom.dim(0).stride == 1 && Adom.dim(1).stride == 1
           else true);
 }
 
@@ -874,7 +878,7 @@ private inline proc hasNonStridedIndices(Adom : domain(2)) {
       This procedure depends on the :mod:`LAPACK` module, and will generate a
       compiler error if ``lapackImpl`` is ``off``.
 */
-proc inv (ref A: [?Adom] ?eltType, overwrite=false) where usingLAPACK {
+proc inv(ref A: [?Adom] ?eltType, overwrite=false) where usingLAPACK {
   if isDistributed(A) then
     compilerError("inv does not support distributed vectors/matrices");
 
@@ -886,7 +890,7 @@ proc inv (ref A: [?Adom] ?eltType, overwrite=false) where usingLAPACK {
     halt("Matrix inverse only supports square matrices");
 
   const n = Adom.shape(0);
-  var ipiv : [1..n] c_int;
+  var ipiv : [0..<n] c_int;
 
   if (!overwrite) {
     var A_clone = A;
@@ -953,15 +957,15 @@ proc cross(A: [?Adom] ?eltType, B: [?Bdom] eltType) {
 
   var C = Vector(Adom, eltType);
 
-  // Reindex to ensure 1-based indices
-  const A1Dom = {1..Adom.size};
+  // Reindex to ensure 0-based indices
+  const A1Dom = {0..<Adom.size};
   ref A1 = A.reindex(A1Dom),
       B1 = B.reindex(A1Dom),
       C1 = C.reindex(A1Dom);
 
-  C1[1] = A1[2]*B1[3] - A1[3]*B1[2];
-  C1[2] = A1[3]*B1[1] - A1[1]*B1[3];
-  C1[3] = A1[1]*B1[2] - A1[2]*B1[1];
+  C1[0] = A1[1]*B1[2] - A1[2]*B1[1];
+  C1[1] = A1[2]*B1[0] - A1[0]*B1[2];
+  C1[2] = A1[0]*B1[1] - A1[1]*B1[0];
 
   return C;
 }
@@ -993,10 +997,10 @@ private proc _diag_vec(A:[?Adom] ?eltType) {
   const diagSize = min(m, n);
 
   var diagonal : [0..#diagSize] eltType;
-  forall (i, j, diagInd) in zip (Adom.dim(0)#diagSize, 
-                                 Adom.dim(1)#diagSize, 
+  forall (i, j, diagInd) in zip (Adom.dim(0)#diagSize,
+                                 Adom.dim(1)#diagSize,
                                  0..) do
-    diagonal[diagInd] = A[i,j]; 
+    diagonal[diagInd] = A[i,j];
 
   return diagonal;
 }
@@ -1012,7 +1016,7 @@ private proc _diag_vec(A:[?Adom] ?eltType, k) {
     var diagonal = Vector(0..#length, eltType);
     const offset = Adom.dim(1).stride * k;
 
-    forall (i, j, diagInd) in zip(Adom.dim(0)#length, 
+    forall (i, j, diagInd) in zip(Adom.dim(0)#length,
                                   Adom.dim(1)#length,
                                   0..) do
       diagonal[diagInd] = A[i, j+offset];
@@ -1243,21 +1247,22 @@ proc trace(A: [?D] ?eltType) {
   return trace;
 }
 
-private proc _lu (in A: [?Adom] ?eltType) {
+/* LU helper function */
+private proc _lu(in A: [?Adom] ?eltType) {
   const n = Adom.shape(0);
-  const LUDom = {1..n, 1..n};
+  const dim = 0..<n;
+  const LUDom = {dim, dim};
 
   // TODO: Reduce memory usage
   var L, U, LU: [LUDom] eltType;
 
-  var ipiv: [{1..n}] int = [i in {1..n}] i;
+  var ipiv: [dim] int = dim;
 
   var numSwap: int = 0;
 
-  for i in 1..n {
-
+  for i in dim {
     var max = A[i,i], swaprow = i;
-    for row in (i+1)..n {
+    for row in (i+1)..<n {
       if (abs(A[row,i]) > abs(max)) {
         max = A[row,i];
         swaprow = row;
@@ -1267,28 +1272,28 @@ private proc _lu (in A: [?Adom] ?eltType) {
       A[i,..] <=> A[swaprow,..];
       L[i,..] <=> L[swaprow,..];
       ipiv[i] <=> ipiv[swaprow];
-      numSwap+=1;
+      numSwap += 1;
     }
 
-    forall k in i..n {
-      var sum = + reduce (L[i,..] * U[..,k]);
+    forall k in i..<n {
+      const sum = + reduce (L[i,..] * U[..,k]);
       U[i,k] = A[i,k] - sum;
     }
 
     L[i,i] = 1;
 
-    forall k in (i+1)..n {
-      var sum = + reduce (L[k,..] * U[..,i]);
+    forall k in (i+1)..<n {
+      const sum = + reduce (L[k,..] * U[..,i]);
       L[k,i] = (A[k,i] - sum) / U[i,i];
     }
   }
 
   LU = L + U;
-  forall i in 1..n {
+  forall i in dim {
     LU(i,i) = U(i,i);
   }
 
-  return (LU,ipiv,numSwap);
+  return (LU, ipiv, numSwap);
 }
 
 /*
@@ -1302,7 +1307,7 @@ private proc _lu (in A: [?Adom] ?eltType) {
   `ipiv` contains the pivot indices such that row i of `A`
   was interchanged with row `ipiv(i)`.
 */
-proc lu (A: [?Adom] ?eltType) {
+proc lu(A: [?Adom] ?eltType) {
   if Adom.rank != 2 then
     halt("Wrong rank for LU factorization");
 
@@ -1315,30 +1320,31 @@ proc lu (A: [?Adom] ?eltType) {
 
 /* Return a new array as the permuted form of `A` according to
     permutation array `ipiv`.*/
-private proc permute (ipiv: [] int, A: [?Adom] ?eltType, transpose=false) {
+private proc permute(ipiv: [] int, A: [?Adom] ?eltType, transpose=false) {
   const n = Adom.shape(0);
+  const dim = 0..<n;
   var B: [Adom] eltType;
 
   if Adom.rank == 1 {
     if transpose {
-      forall (i,pi) in zip(1..n, ipiv) {
+      forall (i,pi) in zip(dim, ipiv) {
         B[i] = A[pi];
       }
     }
     else {
-      forall (i,pi) in zip(1..n, ipiv) {
+      forall (i,pi) in zip(dim, ipiv) {
         B[pi] = A[i];
       }
     }
   }
   else if Adom.rank == 2 {
     if transpose {
-      forall (i,pi) in zip(1..n, ipiv) {
+      forall (i,pi) in zip(dim, ipiv) {
         B[i, ..] = A[pi, ..];
       }
     }
     else {
-      forall (i,pi) in zip(1..n, ipiv) {
+      forall (i,pi) in zip(dim, ipiv) {
         B[pi, ..] = A[i, ..];
       }
     }
@@ -1356,7 +1362,7 @@ private proc permute (ipiv: [] int, A: [?Adom] ?eltType, transpose=false) {
       determinant manually.
 */
 
-proc det (A: [?Adom] ?eltType) {
+proc det(A: [?Adom] ?eltType) {
   if Adom.rank != 2 then
     halt("Wrong rank for computing determinant");
 
@@ -1458,17 +1464,18 @@ proc _norm(x: [?D], param p: normType) where x.rank == 2 {
     will assume the diagonal elements as `1` and will not be referenced
     within this procedure.
 */
-proc solve_tril (const ref L: [?Ldom] ?eltType, const ref b: [?bdom] eltType,
-                  unit_diag = true) {
+proc solve_tril(const ref L: [?Ldom] ?eltType, const ref b: [?bdom] eltType,
+                  unit_diag = true)
+{
   const n = Ldom.shape(0);
   var y = b;
 
-  for i in 1..n {
+  for i in 0..<n {
     const sol = if unit_diag then y(i) else y(i) / L(i,i);
     y(i) = sol;
 
-    if (i < n) {
-      forall j in (i+1)..n {
+    if (i < n - 1) {
+      forall j in (i+1)..<n {
         y(j) -= L(j,i) * sol;
       }
     }
@@ -1480,16 +1487,16 @@ proc solve_tril (const ref L: [?Ldom] ?eltType, const ref b: [?bdom] eltType,
 /* Return the solution ``x`` to the linear system `` U * x = b ``
     where ``U`` is an upper triangular matrix.
 */
-proc solve_triu (const ref U: [?Udom] ?eltType, const ref b: [?bdom] eltType) {
+proc solve_triu(const ref U: [?Udom] ?eltType, const ref b: [?bdom] eltType) {
   const n = Udom.shape(0);
   var y = b;
 
-  for i in 1..n by -1 {
+  for i in 0..<n by -1 {
     const sol = y(i) / U(i,i);
     y(i) = sol;
 
-    if (i > 1) {
-      forall j in 1..(i-1) by -1 {
+    if (i > 0) {
+      forall j in 0..<i by -1 {
         y(j) -= U(j,i) * sol;
       }
     }
@@ -1500,7 +1507,7 @@ proc solve_triu (const ref U: [?Udom] ?eltType, const ref b: [?bdom] eltType) {
 
 /* Return the solution ``x`` to the linear system ``A * x = b``.
 */
-proc solve (A: [?Adom] ?eltType, b: [?bdom] eltType) {
+proc solve(A: [?Adom] ?eltType, b: [?bdom] eltType) {
   var (LU, ipiv) = lu(A);
   b = permute (ipiv, b, true);
   var z = solve_tril(LU, b);
@@ -1512,7 +1519,7 @@ proc solve (A: [?Adom] ?eltType, b: [?bdom] eltType) {
    Compute a vector ``x`` such that the 2-norm ``|b - A x|`` is minimized.
 
    ``cond`` is the cut-off threshold such that singular values will be
-   considered 0.0. If ``cond < 0.0`` (defaults to ``-1.0``), the treshold will
+   considered 0.0. If ``cond < 0.0`` (defaults to ``-1.0``), the threshold will
    be set to ``max((...A.shape)) * epsilon``, where ``epsilon`` is the machine
    precision for ``A.eltType``.
 
@@ -1534,10 +1541,11 @@ proc solve (A: [?Adom] ?eltType, b: [?bdom] eltType) {
      This procedure depends on the :mod:`LAPACK` module, and will generate a
      compiler error if ``lapackImpl`` is ``none``.
 */
-proc leastSquares(A: [] ?t, b: [] t, cond = -1.0) throws 
+proc leastSquares(A: [] ?t, b: [] t, cond = -1.0) throws
   where usingLAPACK && isLAPACKType(t)
 {
   use SysCTypes;
+  use IO; // for string.format
   import LAPACK;
   require LAPACK.header;
 
@@ -1633,8 +1641,13 @@ proc cholesky(A: [] ?t, lower = true)
 
   var copy = A;
   const uploStr = if lower then "L" else "U";
-  LAPACK.potrf(lapack_memory_order.row_major, uploStr, copy);
-
+  var hasError = LAPACK.potrf(lapack_memory_order.row_major, uploStr, copy);
+  if(hasError > 0){
+    if(isComplexType(t)) then
+      halt("Matrix passed must be hermitian positive definite ");
+    if(isRealType(t)) then
+      halt("Matrix passed must be symmetric positive definite");
+  }
   // tril and triu make/return an extra copy.  Should we zero the unused
   // triangle of the array manually instead to avoid the copy?
   return if lower then tril(copy) else triu(copy);
@@ -1781,7 +1794,7 @@ proc eig(A: [] ?t, param left = false, param right = false)
 
   proc convertToCplx(wr: [] t, wi: [] t) {
     const n = wi.size;
-    var eigVals: [1..n] complex(numBits(t)*2);
+    var eigVals: [0..<n] complex(numBits(t)*2);
     forall (rv, re, im) in zip(eigVals, wr, wi) {
       rv = (re, im): complex(numBits(t)*2);
     }
@@ -1790,10 +1803,11 @@ proc eig(A: [] ?t, param left = false, param right = false)
 
   proc flattenCplxEigenVecs(wi: [] t, vec: [] t) {
     const n = wi.size;
-    var cplx: [1..n, 1..n] complex(numBits(t)*2);
+    const dim = 0..<n;
+    var cplx: [dim, dim] complex(numBits(t)*2);
 
     var skipNext = false;
-    for j in 1..n {
+    for j in dim {
       if skipNext {
         skipNext = false;
         continue;
@@ -1817,15 +1831,17 @@ proc eig(A: [] ?t, param left = false, param right = false)
   }
 
   const n = A.domain.dim(0).size;
+  const dim = 0..<n;
+  const dom = {0..<n, 0..<n};
   if !isSquare(A) then
     halt("Matrix passed to eigvals must be square");
   var copy = A;
-  var wr: [1..n] t;
-  var wi: if t == complex then nothing else [1..n] t;
-  var eigVals: if t == complex then [1..n] t else [1..n] complex(numBits(t)*2);
+  var wr: [dim] t;
+  var wi: if t == complex then nothing else [dim] t;
+  var eigVals: if t == complex then [dim] t else [dim] complex(numBits(t)*2);
 
   if !left && !right {
-    var vl, vr: [1..1, 1..n] t;
+    var vl, vr: [0..0, dim] t;
     if t == complex {
       LAPACK.geev(lapack_memory_order.row_major, 'N', 'N', copy, wr, vl, vr);
       eigVals = wr;
@@ -1835,9 +1851,9 @@ proc eig(A: [] ?t, param left = false, param right = false)
     }
     return eigVals;
   } else if left && !right {
-    var vl: [1..n, 1..n] t;
-    var vr: [1..1, 1..n] t;
-    var vlcplx: if t == complex then [1..n, 1..n] t else [1..n, 1..n] complex(numBits(t)*2);
+    var vl: [dom] t;
+    var vr: [0..0, dim] t;
+    var vlcplx: if t == complex then [dom] t else [dom] complex(numBits(t)*2);
     if t == complex {
       LAPACK.geev(lapack_memory_order.row_major, 'V', 'N', copy, wr, vl, vr);
       eigVals = wr;
@@ -1849,9 +1865,9 @@ proc eig(A: [] ?t, param left = false, param right = false)
     }
     return (eigVals, vlcplx);
   } else if right && !left {
-    var vl: [1..1, 1..n] t;
-    var vr: [1..n, 1..n] t;
-    var vrcplx: if t == complex then [1..n, 1..n] t else [1..n, 1..n] complex(numBits(t)*2);
+    var vl: [0..0, dim] t;
+    var vr: [dom] t;
+    var vrcplx: if t == complex then [dom] t else [dom] complex(numBits(t)*2);
     if t == complex {
       LAPACK.geev(lapack_memory_order.row_major, 'N', 'V', copy, wr, vl, vr);
       eigVals = wr;
@@ -1864,10 +1880,10 @@ proc eig(A: [] ?t, param left = false, param right = false)
     return (eigVals, vrcplx);
   } else {
     // left && right
-    var vl: [1..n, 1..n] t;
-    var vr: [1..n, 1..n] t;
-    var vlcplx: if t == complex then [1..n, 1..n] t else [1..n, 1..n] complex(numBits(t)*2);
-    var vrcplx: if t == complex then [1..n, 1..n] t else [1..n, 1..n] complex(numBits(t)*2);
+    var vl: [dom] t;
+    var vr: [dom] t;
+    var vlcplx: if t == complex then [dom] t else [dom] complex(numBits(t)*2);
+    var vrcplx: if t == complex then [dom] t else [dom] complex(numBits(t)*2);
     if t == complex {
       LAPACK.geev(lapack_memory_order.row_major, 'V', 'V', copy, wr, vl, vr);
       eigVals = wr;
@@ -1944,15 +1960,15 @@ proc svd(A: [?Adom] ?t) throws
   // Results
 
   // Stores singular values, sorted
-  var s: [1..min((...A.shape))] realType;
+  var s: [0..<min((...A.shape))] realType;
   // Unitary matrix, U
-  var u: [1..m, 1..m] t;
+  var u: [0..<m, 0..<m] t;
   // Unitary matrix V^T (or V^H)
-  var vt: [1..n, 1..n] t;
+  var vt: [0..<n, 0..<n] t;
 
   // if return code 'info' > 0, then this stores unconverged superdiagonal
   // elements of upper bidiagonal matrix 'B' whose diagonal is in 's'.
-  var superb: [1..min((...A.shape))-1] realType;
+  var superb: [0..<min((...A.shape))-1] realType;
 
   // TODO: Support option for gesdd (trading memory usage for speed)
   const info = LAPACK.gesvd(lapack_memory_order.row_major, 'A', 'A', Acopy, s, u, vt, superb);
@@ -1964,7 +1980,6 @@ proc svd(A: [?Adom] ?t) throws
     var msg = 'SVD received an illegal argument in LAPACK.gesvd() argument position: ' + info:string;
     throw new owned LinearAlgebraError(msg);
   }
-
 
   return (u, s, vt);
 }
@@ -2029,18 +2044,18 @@ proc kron(A: [?ADom] ?eltType, B: [?BDom] eltType) {
   const (rowA, colA) = A.shape;
   const (rowB, colB) = B.shape;
 
-  const A1Dom = {1..rowA, 1..colA},
-        B1Dom = {1..rowB, 1..colB};
+  const A1Dom = {0..<rowA, 0..<colA},
+        B1Dom = {0..<rowB, 0..<colB};
 
-  // Reindex to ensure 1-based indices
+  // Reindex to ensure 0-based indices
   ref A1 = A.reindex(A1Dom),
       B1 = B.reindex(B1Dom);
 
   var C = Matrix(rowA*rowB, colA*colB, eltType=eltType);
 
   forall (i, j) in A1Dom {
-    const stR = (i-1)*rowB,
-          stC = (j-1)*colB;
+    const stR = i*rowB,
+          stC = j*colB;
     for (k, l) in B1Dom {
       C[stR+k, stC+l] = A1[i, j]*B1[k, l];
     }
@@ -2132,7 +2147,6 @@ private proc epsilon(type t) param : real {
   return 0.0;
 }
 
-
 /* Linear Algebra Sparse Submodule
 
 A high-level interface to linear algebra operations and procedures for sparse
@@ -2174,9 +2188,9 @@ A common usage of this interface might look like this:
   // var A: [D] int;
 
   // Add indices to the sparse domain along the diagonal
+  D += (0,0);
   D += (1,1);
   D += (2,2);
-  D += (3,3);
 
   // Set all nonzero indices to the value of 1
   A = 1;
@@ -2196,18 +2210,18 @@ module Sparse {
   private use LinearAlgebra;
 
   /* Return an empty CSR domain over parent domain:
-     ``{1..rows, 1..rows}``
+     ``{0..<rows, 0..<rows}``
    */
   proc CSRDomain(rows) where isIntegral(rows) {
     if rows <= 0 then halt("Matrix dimensions must be > 0");
-    return CSRDomain(1..rows, 1..rows);
+    return CSRDomain(0..<rows, 0..<rows);
   }
 
 
-  /* Return an empty CSR domain  over parent domain: ``{1..rows, 1..cols}``*/
+  /* Return an empty CSR domain  over parent domain: ``{0..<rows, 0..<cols}``*/
   proc CSRDomain(rows, cols) where isIntegral(rows) && isIntegral(cols) {
     if rows <= 0 || cols <= 0 then halt("Matrix dimensions must be > 0");
-    return CSRDomain(1..rows, 1..cols);
+    return CSRDomain(0..<rows, 0..<cols);
   }
 
 
@@ -2299,39 +2313,52 @@ module Sparse {
 
   /* Return a CSR matrix constructed from internal representation:
 
-    - ``shape``: bounding box dimensions
+    - ``parentDom``: parent domain for sparse matrix, bounding box for nonzeros indices
     - ``data``: non-zero element values
     - ``indices``: non-zero row pointers
     - ``indptr``: index pointers
 
   */
-  proc CSRMatrix(shape: 2*int, data: [?nnzDom] ?eltType, indices: [nnzDom], indptr: [?indDom])
-    where indDom.rank == 1 && nnzDom.rank == 1 {
-    var ADom = CSRDomain(shape, indices, indptr);
+  proc CSRMatrix(parentDom: domain(2), data: [?nnzDom] ?eltType, indices: [nnzDom], indptr: [?indDom])
+        where indDom.rank == 1 && nnzDom.rank == 1 {
+    var ADom = CSRDomain(parentDom, indices, indptr);
     var A: [ADom] eltType;
     A.data = data;
     return A;
   }
 
   /* Return a CSR domain constructed from internal representation */
-  proc CSRDomain(shape: 2*int, indices: [?nnzDom], indptr: [?indDom])
-    where indDom.rank == 1 && nnzDom.rank == 1 {
-    const (M, N) = shape;
-    const D = {1..M, 1..N};
-    var ADom: sparse subdomain(D) dmapped CS(sortedIndices=false);
+  proc CSRDomain(parentDom: domain(2), indices: [?nnzDom], indptr: [?indDom])
+        where indDom.rank == 1 && nnzDom.rank == 1 {
+    const rowRange = parentDom.dim(0).low..parentDom.dim(0).high;
+    var ADom: sparse subdomain(parentDom) dmapped CS(sortedIndices=false);
 
-    ADom.startIdxDom = {1..indptr.size};
+    ADom.startIdxDom = {rowRange.low..rowRange.high+1};
     ADom.startIdx = indptr;
-    const (hasZero, zeroIndex) = indices.find(0);
-    if hasZero {
-      ADom._nnz = zeroIndex-1;
-    } else {
-      ADom._nnz = indices.size;
-    }
-    ADom.nnzDom = {1..indices.size};
+    ADom._nnz = indices.size;
+    ADom.nnzDom = {0..#indices.size};
     ADom.idx = indices;
 
     return ADom;
+  }
+
+  /* Return a CSR matrix constructed from internal representation:
+    - ``shape``: (M,N) bounding box will be {0..#M,0..#N}
+    - ``data``: non-zero element values
+    - ``indices``: non-zero row pointers
+    - ``indptr``: index pointers
+  */
+  proc CSRMatrix(shape: 2*int, data: [?nnzDom] ?eltType, indices: [nnzDom], indptr: [?indDom])
+        where indDom.rank == 1 && nnzDom.rank == 1 {
+    const (M, N) = shape;
+    return CSRMatrix({0..#M, 0..#N}, data, indices, indptr);
+  }
+
+  /* Return a CSR domain constructed from internal representation */
+  proc CSRDomain(shape: 2*int, indices: [?nnzDom], indptr: [?indDom])
+        where indDom.rank == 1 && nnzDom.rank == 1 {
+    const (M, N) = shape;
+    return CSRDomain({0..#M, 0..#N}, indices, indptr);
   }
 
   /*
@@ -2425,7 +2452,6 @@ module Sparse {
     return Y;
   }
 
-  pragma "no doc"
   /* Sparse matrix-matrix multiplication.
 
      Does not assume sorted indices, but preserves sorted indices.
@@ -2438,24 +2464,40 @@ module Sparse {
       https://link.springer.com/article/10.1007/BF02070824
 
   */
-  proc _csrmatmatMult(A: [?ADom] ?eltType, B: [?BDom] eltType) where isCSArr(A) && isCSArr(B) {
+  private proc _csrmatmatMult(A: [?ADom] ?eltType, B: [?BDom] eltType)
+    where isCSArr(A) && isCSArr(B)
+  {
     type idxType = ADom.idxType;
 
-    const (M, K1) = A.shape,
-          (K2, N) = B.shape;
+    // The ranges for the inner dimensions need to match up
+    const rowRange = ADom.dim(0);
+    const innerARange = ADom.dim(1);
+    const innerBRange = BDom.dim(0);
+    const colRange = BDom.dim(1);
 
-    // major axis
-    var indPtr: [1..M+1] idxType;
+    if innerARange != innerBRange then
+        halt("Mismatched shape in sparse matrix-matrix multiplication");
+
+    // TODO: Return empty (rowRange, colRange) sparse array if A or B size == 0
+
+    /* Note on compressed sparse (CS) internals:
+       - startIdx.domain (indPtr) can start with any index
+       - idx.domain (ind) starts on 0
+       - data.domain starts on 0
+     */
+
+    // major axis (or row) for result matrix
+    var indPtr: [rowRange.low..rowRange.high+1] idxType;
 
     pass1(A, B, indPtr);
 
     const nnz = indPtr[indPtr.domain.last];
-    var indices: [1..nnz] idxType;
-    var data: [1..nnz] eltType;
+    var ind: [0..#nnz] idxType;
+    var data: [0..#nnz] eltType;
 
-    pass2(A, B, indPtr, indices, data);
+    pass2(A, B, indPtr, ind, data);
 
-    var C = CSRMatrix((M, N), data, indices, indPtr);
+    var C = CSRMatrix({rowRange, colRange}, data, ind, indPtr);
 
     if C.domain.sortedIndices {
       sortIndices(C);
@@ -2465,37 +2507,41 @@ module Sparse {
   }
 
 
-  pragma "no doc"
   /* Populate indPtr and total nnz (last element of indPtr) */
-  proc pass1(ref A: [?ADom] ?eltType, ref B: [?BDom] eltType, ref indPtr) {
+  private proc pass1(ref A: [?ADom] ?eltType, ref B: [?BDom] eltType, ref indPtr) {
     // TODO: Parallelize - mask -> atomic ints,
     //                   - Write a scan to compute idxPtr in O(log(n))
 
     /* Aliases for readability */
     proc _array.indPtr ref return this.dom.startIdx;
-    proc _array.indices ref return this.dom.idx;
+    proc _array.ind ref return this.dom.idx;
 
-    const (M, K1) = A.shape,
-          (K2, N) = B.shape;
+    const row_range = ADom.dim(0);
+    const inner_Arange = ADom.dim(1);
+    const inner_Brange = BDom.dim(0);
+    const col_range = BDom.dim(1);
+
     type idxType = ADom.idxType;
-    var mask: [1..N] idxType;
-    indPtr[1] = 1;
-    var nnz = 1: idxType;
 
-    // Rows of C
-    for i in 1..M {
+    var mask: [col_range.low..col_range.high] idxType;
+    mask = col_range.low-1;    // init to something not in col range
+    indPtr[col_range.low] = 0; // col indices definitely start at 0
+    var nnz = 0: idxType;
+
+    // Rows of output matrix C
+    for i in row_range {
       var row_nnz = 0;
-      const Arange = A.indPtr[i]..A.indPtr[i+1]-1;
+      const Apos_range = A.indPtr[i]..A.indPtr[i+1]-1;  // nonzero position range
       // Row pointers of A
-      for jj in Arange {
+      for jpos in Apos_range {
         // Column index of A
-        const j = A.indices[jj];
-        const Brange = B.indPtr[j]..B.indPtr[j+1]-1;
+        const j = A.ind[jpos];
+        const Bpos_range = B.indPtr[j]..B.indPtr[j+1]-1;
         // Row pointers of B
-        for kk in Brange {
+        for kk in Bpos_range {
           // Column index of B
-          var k = B.indices[kk];
-          if mask[k] != i {
+          var k = B.ind[kk];
+          if mask[k] != i { // default of 0 for mask would not count a 0-indexed matrix
             mask[k] = i;
             row_nnz += 1;
           }
@@ -2507,46 +2553,48 @@ module Sparse {
     }
   }
 
-  pragma "no doc"
   /* Populate indices and data */
-  proc pass2(ref A: [?ADom] ?eltType, ref B: [?BDom] eltType, ref indPtr, ref indices, ref data) {
+  private proc pass2(ref A: [?ADom] ?eltType, ref B: [?BDom] eltType, ref indPtr, ref ind, ref data) {
     // TODO: Parallelize - next, sums -> task-private stacks
 
     /* Aliases for readability */
     proc _array.indPtr ref return this.dom.startIdx;
-    proc _array.indices ref return this.dom.idx;
+    proc _array.ind ref return this.dom.idx;
 
     type idxType = ADom.idxType;
 
-    const (M, K1) = A.shape,
-          (K2, N) = B.shape;
+    const row_range = ADom.dim(0);
+    const inner_Arange = ADom.dim(1);
+    const inner_Brange = BDom.dim(0);
+    const col_range = BDom.dim(1);
 
-    const cols = {1..N};
+    const cols = col_range;
 
     var next: [cols] idxType = -1,
         sums: [cols] eltType;
 
-    var nnz = 1;
+    var nnz = 0;
 
-    for i in 1..M {
+    for i in row_range {
       var head = 0:idxType,
           length = 0:idxType;
 
       // Maps row index (i) -> nnz index of A
-      const Arange = A.indPtr[i]..A.indPtr[i+1]-1;
-      for jj in Arange {
-        // Non-zero column index of A for row i
-        const j = A.indices[jj];
-        const v = A.data[jj];
+      const Apos_range = A.indPtr[i]..A.indPtr[i+1]-1;
+      for jpos in Apos_range {
+        // Nonzero column index of A for row i
+        const j = A.ind[jpos];
+        const v = A.data[jpos];
 
         // Maps row index (j) -> nnz index of B
-        const Brange = B.indPtr[j]..B.indPtr[j+1]-1;
-        for kk in Brange {
-          // Non-zero column index of B for row j
-          const k = B.indices[kk];
+        const Bpos_range = B.indPtr[j]..B.indPtr[j+1]-1;
+        for kk in Bpos_range {
+          // Nonzero column index of B for row j
+          const k = B.ind[kk];
 
           sums[k] += v*B.data[kk];
 
+          // ?fromMMS: what is all of this pushing about?
           // push k to stack
           if next[k] == -1 {
             next[k] = head;
@@ -2558,7 +2606,7 @@ module Sparse {
 
       // Recounting is faster than accessing 'nnz in indPtr[i]..indPtr[i+1]-1'
       for 1..length {
-        indices[nnz] = head;
+        ind[nnz] = head;
         data[nnz] = sums[head];
 
         nnz += 1;
@@ -2579,16 +2627,16 @@ module Sparse {
   private proc sortIndices(ref A: [?Dom] ?eltType) where isCSArr(A) {
     use Sort;
 
-    const (M, N) = A.shape;
+    const rowRange = Dom.dim(0);
 
     proc _array.indPtr ref return this.dom.startIdx;
-    proc _array.indices ref return this.dom.idx;
-    type idxType = A.indices.eltType;
+    proc _array.ind return this.dom.idx;
+    type idxType = A.ind.eltType;
 
-    var temp: [1..A.indices.size] (idxType, eltType);
-    temp = for (idx, datum) in zip(A.indices, A.data) do (idx, datum);
+    var temp: [0..#A.ind.size] (idxType, eltType);
+    temp = for (idx, datum) in zip(A.ind, A.data) do (idx, datum);
 
-    for i in 1..M {
+    for i in rowRange {
       const rowStart = A.indPtr[i],
             rowEnd = A.indPtr[i+1]-1;
       if rowEnd - rowStart > 0 {
@@ -2597,7 +2645,7 @@ module Sparse {
     }
 
     for i in temp.domain {
-      (A.indices[i], A.data[i]) = temp[i];
+      (A.ind[i], A.data[i]) = temp[i];
     }
   }
 
@@ -2826,11 +2874,11 @@ module Sparse {
 
       var start, end = 0;
       if (k >= 0) { // upper or main diagonal
-        start = 1;
+        start = 0;
         end = D.shape(0) - k;
       }
       else { // lower diagonal
-        start = 1 - k;
+        start = -k;
         end = D.shape(0);
       }
       var indices : [start..end] (D.idxType, D.idxType);

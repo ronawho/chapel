@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -526,6 +526,17 @@ class UserMapAssocDom: BaseAssociativeDom {
 
   }
 
+  proc dsiHasSingleLocalSubdomain() param return false;
+
+  pragma "order independent yielding loops"
+  iter dsiLocalSubdomains(loc: locale) {
+    for (idx,l) in zip(dist.targetLocDom, dist.targetLocales) {
+      if l == loc {
+        yield locDoms[idx]!.myInds;
+      }
+    }
+  }
+
   override proc dsiSupportsAutoLocalAccess() param { return true; }
 
   override proc dsiSupportsPrivatization() param return true;
@@ -681,6 +692,10 @@ class UserMapAssocArr: AbsBaseArr {
 
   override proc dsiGetBaseDom() return dom;
 
+  override proc dsiIteratorYieldsLocalElements() param {
+    return true;
+  }
+
   proc setup(param initElts: bool) {
     coforall localeIdx in dom.dist.targetLocDom {
       on dom.dist.targetLocales(localeIdx) {
@@ -756,6 +771,11 @@ class UserMapAssocArr: AbsBaseArr {
     }
     return locArr[i];
   }
+
+  proc dsiAccess(i: 1*idxType) ref {
+    return dsiAccess(i(0));
+  }
+
   proc dsiAccess(i: idxType)
   where shouldReturnRvalueByValue(eltType) {
     const localeIndex = dom.dist.indexToLocaleIndex(i);
@@ -767,6 +787,12 @@ class UserMapAssocArr: AbsBaseArr {
     }
     return locArr[i];
   }
+
+  proc dsiAccess(i: 1*idxType)
+  where shouldReturnRvalueByValue(eltType) {
+    return dsiAccess(i(0));
+  }
+
   proc dsiAccess(i: idxType) const ref
   where shouldReturnRvalueByConstRef(eltType) {
     const localeIndex = dom.dist.indexToLocaleIndex(i);
@@ -777,6 +803,11 @@ class UserMapAssocArr: AbsBaseArr {
       }
     }
     return locArr[i];
+  }
+
+  proc dsiAccess(i: 1*idxType) const ref
+  where shouldReturnRvalueByConstRef(eltType) {
+    return dsiAccess(i(0));
   }
 
   inline proc dsiLocalAccess(i) ref {
@@ -799,7 +830,7 @@ class UserMapAssocArr: AbsBaseArr {
     return locArr[i];
   }
 
-  proc dsiTargetLocales() {
+  proc dsiTargetLocales() const ref {
     return dom.dist.targetLocales;
   }
 
@@ -807,11 +838,8 @@ class UserMapAssocArr: AbsBaseArr {
 
   pragma "order independent yielding loops"
   iter dsiLocalSubdomains(loc: locale) {
-    for (idx,l) in zip(dom.dist.targetLocDom, dom.dist.targetLocales) {
-      if l == loc {
-        yield dom.locDoms[idx]!.myInds;
-      }
-    }
+    for locdom in dom.dsiLocalSubdomains(loc) do
+      yield locdom;
   }
 
   //
@@ -861,21 +889,24 @@ class UserMapAssocArr: AbsBaseArr {
   //
   // how to print out the whole array, sequentially
   //
-  proc dsiSerialWrite(x) {
+  proc dsiSerialWrite(f) {
     use IO;
+
+    var binary = f.binary();
+    var arrayStyle = f.styleElement(QIO_STYLE_ELEMENT_ARRAY);
+    var isjson = arrayStyle == QIO_ARRAY_FORMAT_JSON && !binary;
+    var ischpl = arrayStyle == QIO_ARRAY_FORMAT_CHPL && !binary;
+
+    var printBraces = (isjson || ischpl);
+
+    if printBraces then f <~> new ioLiteral("[");
 
     var first = true;
     for locArr in locArrs {
-      if locArr!.size {
-        if first {
-          first = false;
-        } else {
-          x <~> " ";
-        }
-      }
-      x <~> locArr;
-      try! stdout.flush();
+      locArr!.myElems._value.dsiSerialReadWrite(f, printBraces=false, first);
     }
+    if printBraces then f <~> new ioLiteral("]");
+
   }
 
   override proc dsiDisplayRepresentation() {

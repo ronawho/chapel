@@ -1,3 +1,5 @@
+.. default-domain:: chpl
+
 .. _Chapter-Statements:
 
 Statements
@@ -27,6 +29,7 @@ Chapel provides the following statements:
      continue-statement
      param-for-statement
      use-statement
+     import-statement
      defer-statement
      empty-statement
      return-statement
@@ -306,11 +309,17 @@ The syntax for a conditional statement is given by
 .. code-block:: syntax
 
    conditional-statement:
-     `if' expression `then' statement else-part[OPT]
-     `if' expression block-statement else-part[OPT]
+     'if' expression 'then' statement else-part[OPT]
+     'if' expression block-statement else-part[OPT]
+     'if' ctrl-decl 'then' statement else-part[OPT]
+     'if' ctrl-decl block-statement else-part[OPT]
 
    else-part:
-     `else' statement
+     'else' statement
+
+   ctrl-decl:
+     'var' identifier '=' expression
+     'const' identifier '=' expression
 
 A conditional statement evaluates an expression of bool type. If the
 expression evaluates to true, the first statement in the conditional
@@ -327,6 +336,19 @@ statement is removed.
 
 Each statement embedded in the *conditional-statement* has its own scope
 whether or not an explicit block surrounds it.
+
+The control-flow declaration *ctrl-decl*, when used, declares a variable
+whose scope is the then-clause of the conditional statement.
+The expression must be of a class type. 
+If it evaluates to ``nil``, the else-clause is executed if present. Otherwise 
+its value is stored in the declared variable and the then-clause is executed.
+If the expression's type is ``borrowed`` or  ``unmanaged``,
+the variable's type is its non-nilable variant (:ref:`Nilable_Classes`).
+Otherwise the variable stores a borrow of the expression's value
+(:ref:`Class_Lifetime_and_Borrows`), and its type is the non-nilable
+``borrowed`` counterpart of the expression's type.
+The variable can be modified within the then-clause if it is declared
+with the ``var`` keyword.
 
 If the statement that immediately follows the optional ``then`` keyword
 is a conditional statement and it is not in a block, the else-clause is
@@ -383,17 +405,17 @@ statement. The syntax is given by:
 .. code-block:: syntax
 
    select-statement:
-     `select' expression { when-statements }
+     'select' expression { when-statements }
 
    when-statements:
      when-statement
      when-statement when-statements
 
    when-statement:
-     `when' expression-list `do' statement
-     `when' expression-list block-statement
-     `otherwise' statement
-     `otherwise' `do' statement
+     'when' expression-list 'do' statement
+     'when' expression-list block-statement
+     'otherwise' statement
+     'otherwise' 'do' statement
 
    expression-list:
      expression
@@ -427,15 +449,17 @@ while-do loop is given by:
 .. code-block:: syntax
 
    while-do-statement:
-     `while' expression `do' statement
-     `while' expression block-statement
+     'while' expression 'do' statement
+     'while' expression block-statement
+     'while' ctrl-decl 'do' statement
+     'while' ctrl-decl block-statement
 
 The syntax of the do-while loop is given by: 
 
 .. code-block:: syntax
 
    do-while-statement:
-     `do' statement `while' expression ;
+     'do' statement 'while' expression ;
 
 In both variants, the expression evaluates to a value of type ``bool``
 which determines when the loop terminates and control continues with the
@@ -530,6 +554,22 @@ termination expression.
       4
       5
 
+The control-flow declaration *ctrl-decl*, when used in a while-do loop,
+works similarly to how it does in a conditional statement
+(:ref:`The_Conditional_Statement`).
+It declares a variable whose scope is the loop body.
+Its *expression* must be of a class type.
+If it evaluates to ``nil``, the loop exits. Otherwise
+its value is stored in the declared variable, the loop body is executed,
+and the control returns to evaluating the expression again.
+If the expression's type is ``borrowed`` or  ``unmanaged``,
+the variable's type is its non-nilable variant (:ref:`Nilable_Classes`).
+Otherwise the variable stores a borrow of the expression's value
+(:ref:`Class_Lifetime_and_Borrows`), and its type is the non-nilable
+``borrowed`` counterpart of the expression's type.
+The variable can be modified within the loop body if it is declared
+with the ``var`` keyword.
+
 .. _The_For_Loop:
 
 The For Loop
@@ -542,10 +582,10 @@ loop is given by:
 .. code-block:: syntax
 
    for-statement:
-     `for' index-var-declaration `in' iteratable-expression `do' statement
-     `for' index-var-declaration `in' iteratable-expression block-statement
-     `for' iteratable-expression `do' statement
-     `for' iteratable-expression block-statement
+     'for' index-var-declaration 'in' iteratable-expression 'do' statement
+     'for' index-var-declaration 'in' iteratable-expression block-statement
+     'for' iteratable-expression 'do' statement
+     'for' iteratable-expression block-statement
 
    index-var-declaration:
      identifier
@@ -553,7 +593,7 @@ loop is given by:
 
    iteratable-expression:
      expression
-     `zip' ( expression-list )
+     'zip' ( expression-list )
 
 The ``index-var-declaration`` declares new variables for the scope of
 the loop. It may specify a new identifier or may specify multiple
@@ -614,12 +654,12 @@ parameter for loop statement is given by:
 .. code-block:: syntax
 
    param-for-statement:
-     `for' `param' identifier `in' param-iteratable-expression `do' statement
-     `for' `param' identifier `in' param-iteratable-expression block-statement
+     'for' 'param' identifier 'in' param-iteratable-expression 'do' statement
+     'for' 'param' identifier 'in' param-iteratable-expression block-statement
 
    param-iteratable-expression:
      range-literal
-     range-literal `by' integer-literal
+     range-literal 'by' integer-literal
 
 Parameter for loops are restricted to iteration over range literals with
 an optional by expression where the bounds and stride must be
@@ -653,13 +693,13 @@ The syntax for label, break, and continue statements is given by:
 .. code-block:: syntax
 
    break-statement:
-     `break' identifier[OPT] ;
+     'break' identifier[OPT] ;
 
    continue-statement:
-     `continue' identifier[OPT] ;
+     'continue' identifier[OPT] ;
 
    label-statement:
-     `label' identifier statement
+     'label' identifier statement
 
 A ``break`` statement cannot be used to exit a parallel loop
 :ref:`Forall`.
@@ -747,7 +787,7 @@ The syntax is:
 .. code-block:: syntax
 
    defer-statement:
-     `defer' statement
+     'defer' statement
 
 At each place where control flow exits a block, the compiler will add
 cleanup actions for the in-scope ``defer`` statements that have executed and

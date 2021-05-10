@@ -1,3 +1,5 @@
+.. default-domain:: chpl
+
 .. _Chapter-Interoperability:
 
 Interoperability
@@ -60,7 +62,7 @@ An external procedure declaration has the following syntax:
 .. code-block:: syntax
 
    external-procedure-declaration-statement:
-     `extern' external-name[OPT] `proc' function-name argument-list return-intent[OPT] return-type[OPT]
+     'extern' external-name[OPT] 'proc' identifier argument-list return-intent[OPT] return-type[OPT]
 
 Chapel code will call the external function using the parameter types
 supplied in the ``extern`` declaration. Therefore, in general, the type
@@ -138,7 +140,7 @@ An exported procedure declaration has the following syntax:
 .. code-block:: syntax
 
    exported-procedure-declaration-statement:
-     `export' external-name[OPT] `proc' function-name argument-list return-intent[OPT] return-type[OPT]
+     'export' external-name[OPT] 'proc' identifier argument-list return-intent[OPT] return-type[OPT]
        function-body
 
    external-name:
@@ -241,7 +243,7 @@ declaration with the following syntax.
 .. code-block:: syntax
 
    external-type-alias-declaration-statement:
-     `extern' `type' type-alias-declaration-list ;
+     'extern' 'type' type-alias-declaration-list ;
 
 In each ``type-alias-declaration``, if the ``type-expression`` part is
 supplied, then Chapel uses the supplied type specifier internally.
@@ -264,16 +266,16 @@ can be described in Chapel using
 
 .. _Referring_to_External_C_Structs:
 
-Referring to External C Structs
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Referring to External C Structs and Unions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-External C struct types can be referred to within Chapel by prefixing a
+External C struct and union types can be referred to within Chapel by prefixing a
 Chapel ``record`` definition with the ``extern`` keyword. 
 
 .. code-block:: syntax
 
    external-record-declaration-statement:
-     `extern' external-name[OPT] simple-record-declaration-statement
+     'extern' external-name[OPT] simple-record-declaration-statement
 
 For example, consider an external C structure defined in ``foo.h``
 called ``fltdbl``. 
@@ -297,8 +299,27 @@ This type could be referred to within a Chapel program using
 
 and defined by supplying ``foo.h`` on the ``chpl`` command line.
 
+The same applies for a C union. An example would be such:
+
+.. code-block:: chapel
+
+       typedef union _someUnion {
+         float x;
+         double y;
+       } someUnion;
+
+and this type could be referred to within a Chapel program using
+
+
+.. code-block:: chapel
+
+      extern record someUnion {
+        var x: real(32);
+        var y: real(64);
+      }
+
 Within the Chapel declaration, some or all of the fields from the C
-structure may be omitted. The order of these fields need not match the
+structure or union may be omitted. The order of these fields need not match the
 order they were specified within the C code. Any fields that are not
 specified (or that cannot be specified because there is no equivalent
 Chapel type) cannot be referenced within the Chapel code. Some effort is
@@ -309,12 +330,12 @@ fields of which it has no knowledge.
 If the optional ``external-name`` is supplied, then it is used verbatim
 as the exported struct symbol.
 
-A C header file containing the struct’s definition in C must be
+A C header file containing the struct’s (or union's) definition in C must be
 specified on the chpl compiler command line. Note that only typdef’d C
-structures are supported by default. That is, in the C header file, the
-``struct`` must be supplied with a type name through a ``typedef``
+structures or unions are supported by default. That is, in the C header file, the
+``struct`` or ``union`` must be supplied with a type name through a ``typedef``
 declaration. If this is not true, you can use the ``external-name`` part
-to apply the ``struct`` specifier. As an example of this, given a C
+to apply the ``struct`` (or ``union``) specifier. As an example of this, given a C
 declaration of:
 
 
@@ -334,6 +355,30 @@ in Chapel you would refer to this ``struct`` via
      extern "struct Vec3" record Vec3 {
        var x, y, z: real(64);
      }
+
+Note that the above examples apply for C unions as well, so an example
+for non-typedef'd C ``union`` would be like this:
+
+.. code-block:: chapel
+
+      union noTypedefUnion {
+         float x;
+         double y;
+         int64_t z;
+      };
+
+referring to this ``union`` would be allowed in Chapel, via:
+
+
+
+.. code-block:: chapel
+
+     extern "union noTypedefUnion" record noTypedefUnion {
+         var x: real(32);
+         var y: real(64);
+         var z: int(64);
+     }
+
 
 .. _Opaque_Types:
 
@@ -532,8 +577,6 @@ Chapel  C
 ======= =======
 T       const T
 in T    T
-inout T T\*
-out T   T\*
 ref T   T\*
 param  
 type    char\*
@@ -542,8 +585,8 @@ type    char\*
 Currently, ``param`` arguments are not allowed in an extern function
 declaration, and ``type`` args are passed as a string containing the
 name of the actual type being passed. Note that the level of indirection
-is changed when passing arguments to a C function using ``inout``,
-``out``, or ``ref`` intent. The C code implementing that function must
+is changed when passing arguments to a C function using
+the ``ref`` intent. The C code implementing that function must
 dereference the argument to extract its value.
 
 .. [4]

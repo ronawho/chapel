@@ -1,5 +1,5 @@
 /*
- * Copyright 2004-2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Other additional copyright holders may be indicated within.
  *
  * The entirety of this work is licensed under the Apache License,
@@ -137,7 +137,7 @@ module Treap {
     param parSafe = false;
 
     /* The comparator to use for comparing elements */
-    var comparator: record = defaultComparator;
+    var comparator;
 
     pragma "no doc"
     type nodeType = unmanaged _treapNode(eltType)?;

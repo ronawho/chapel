@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
@@ -37,7 +37,7 @@ class listNode {
 
 
   pragma "no doc"
-  proc =(ref l1: LinkedList(?t), const ref l2: LinkedList(?t2)) {
+  operator LinkedList.=(ref l1: LinkedList(?t), const ref l2: LinkedList(?t2)) {
     l1.destroy();
     for i in l2 do
       l1.append(i);

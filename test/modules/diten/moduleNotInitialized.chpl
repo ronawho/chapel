@@ -9,11 +9,11 @@ module OuterModule {
     }
     var a: unmanaged C?;
     var raninit = false;
-    proc init() {
+    proc M1init() {
       if (!raninit) {
         raninit = true;
-        lock1 = false;
-        lock2;
+        lock1.writeEF(false);
+        lock2.readFE();
         a = new unmanaged C(1);
       }
     }
@@ -23,16 +23,16 @@ module OuterModule {
     use OuterModule;
     proc main {
       var b, c: sync borrowed object?;
-      begin {
+      begin with (ref a) {
         use M1;
-        M1.init();
-        b = a;
+        M1init();
+        b.writeEF(a);
       }
-      lock1;
+      lock1.readFE();
       use M1;
-      M1.init();
+      M1init();
       c = a;
-      lock2 = false;
+      lock2.writeEF(false);
 
       writeln(b.readFF());
       writeln(c.readFF());

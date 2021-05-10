@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
@@ -25,7 +25,7 @@
 #include "qbuffer.h"
 #include "qio.h"
 #include "qio_formatted.h"
-#include "qio_regexp.h"
+#include "qio_regex.h"
 #include "qio_style.h"
 #include "bulkget.h"
 #include "sys.h"

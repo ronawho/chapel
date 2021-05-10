@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -54,10 +54,6 @@ Type::Type(AstTag astTag, Symbol* iDefaultVal) : BaseAST(astTag) {
   scalarPromotionType = NULL;
 }
 
-Type::~Type() {
-
-}
-
 const char* Type::name() const {
   return symbol->name;
 }
@@ -75,7 +71,6 @@ bool Type::inTree() {
   else
     return false;
 }
-
 
 QualifiedType Type::qualType() {
   return QualifiedType(this);
@@ -126,10 +121,61 @@ void Type::setDestructor(FnSymbol* fn) {
   destructor = fn;
 }
 
+Symbol* Type::getSubstitutionWithName(const char* name) const {
+
+  if (fVerify) {
+    INT_ASSERT(name == astr(name));
+  }
+
+  if (this->substitutions.n > 0) {
+    // should only exist during resolution
+    form_Map(SymbolMapElem, e, this->substitutions) {
+      if (e->key && e->key->name == name)
+        return e->value;
+    }
+  }
+
+  // after resolution (or possibly during)
+  size_t n = this->substitutionsPostResolve.size();
+  for (size_t i = 0; i < n; i++) {
+    const NameAndSymbol& ns = this->substitutionsPostResolve[i];
+    if (ns.name == name)
+      return ns.value;
+  }
+
+  return NULL;
+}
+
+void Type::setSubstitutionWithName(const char* name, Symbol* value) {
+
+  if (fVerify) {
+    INT_ASSERT(name == astr(name));
+  }
+
+  size_t n = this->substitutionsPostResolve.size();
+  for (size_t i = 0; i < n; i++) {
+    NameAndSymbol& ns = this->substitutionsPostResolve[i];
+    if (ns.name == name) {
+      ns.value = value;
+      return;
+    }
+  }
+
+  // if none was found, we could add one, but that functionality
+  // isn't currently used, so error.
+  INT_FATAL("substitution not found");
+}
+
 const char* toString(Type* type, bool decorateAllClasses) {
   const char* retval = NULL;
 
-  if (type != NULL) {
+  if (type == NULL ||
+      type == dtUnknown ||
+      type == dtSplitInitType) {
+    retval = "<type unknown>";
+  } else if (type == dtAny) {
+    retval = "<any type>";
+  } else {
     Type* vt = type->getValType();
 
     if (AggregateType* at = toAggregateType(vt)) {
@@ -203,17 +249,13 @@ const char* toString(Type* type, bool decorateAllClasses) {
           retval = useName;
         }
       }
+    } else if (vt == dtCVoidPtr) {  // de-sugar chpl__c_void_ptr
+      retval = "c_void_ptr";
     }
 
     if (retval == NULL)
       retval = vt->symbol->name;
-    /* This can be helpful when debugging (and perhaps we should enable it
-       by default?): */
-//    if (developer)
-//      retval = vt->symbol->cname;
 
-  } else {
-    retval = "null type";
   }
 
   return retval;
@@ -378,6 +420,95 @@ void PrimitiveType::accept(AstVisitor* visitor) {
   visitor->visitPrimType(this);
 }
 
+
+ConstrainedType::ConstrainedType(ConstrainedTypeUse use) :
+  Type(E_ConstrainedType, NULL), ctUse(use)
+{
+  gConstrainedTypes.add(this);
+}
+
+ConstrainedType* ConstrainedType::copyInner(SymbolMap* map) {
+  return new ConstrainedType(ctUse);
+}
+
+void ConstrainedType::replaceChild(BaseAST* old_ast, BaseAST* new_ast) {
+  INT_FATAL(this, "Unexpected case in ConstrainedType::replaceChild");
+}
+
+void ConstrainedType::verify() {
+  Type::verify();
+  INT_ASSERT(astTag == E_ConstrainedType);
+
+  DefExpr* def = symbol->defPoint;  // assumes this->inTree()
+  switch (ctUse) {
+  case CT_IFC_FORMAL: {
+    InterfaceSymbol* isym = toInterfaceSymbol(def->parentSymbol);
+    INT_ASSERT(def->list == &(isym->ifcFormals));
+    break;
+  }
+  case CT_IFC_ASSOC_TYPE: {
+    InterfaceSymbol* isym = toInterfaceSymbol(def->parentSymbol);
+    INT_ASSERT(def->parentExpr == isym->ifcBody);
+    break;
+  }
+  case CT_CGFUN_FORMAL: {
+    FnSymbol* fn = toFnSymbol(def->parentSymbol);
+    INT_ASSERT(def->list == &(fn->interfaceInfo->constrainedTypes));
+    break;
+  }
+  case CT_CGFUN_ASSOC_TYPE: {
+    // These arise during resolution and are pruned at resolution end.
+    INT_FATAL(this, "unexpected");
+    break;
+  }}
+}
+
+const char* ConstrainedType::useString() const {
+  switch (ctUse) {
+  case CT_IFC_FORMAL:       return "CT_IFC_FORMAL";
+  case CT_IFC_ASSOC_TYPE:   return "CT_IFC_ASSOC_TYPE";
+  case CT_CGFUN_FORMAL:     return "CT_CGFUN_FORMAL";
+  case CT_CGFUN_ASSOC_TYPE: return "CT_CGFUN_ASSOC_TYPE";
+  }
+  INT_FATAL(this, "unknown ConstrainedType use");
+  return NULL;
+}
+
+void ConstrainedType::printDocs(std::ostream *file, unsigned int tabs) {
+  return;  // not to be printed
+}
+
+void ConstrainedType::accept(AstVisitor* visitor) {
+  visitor->visitConstrainedType(this);
+}
+
+TypeSymbol* ConstrainedType::buildSym(const char* name,
+                                      ConstrainedTypeUse use) {
+  Type* ct = new ConstrainedType(use);
+  return new TypeSymbol(name, ct);
+}
+
+ConstrainedType* ConstrainedType::buildType(const char* name,
+                                         ConstrainedTypeUse use) {
+  ConstrainedType* ct = new ConstrainedType(use);
+  new TypeSymbol(name, ct); // attaches to 'ct'
+  return ct;
+}
+
+bool isConstrainedType(Type* t, ConstrainedTypeUse use) {
+  if (ConstrainedType* ct = toConstrainedType(t))
+    if (ct->ctUse == use)
+      return true;
+  return false;
+}
+
+bool isConstrainedTypeSymbol(Symbol* s, ConstrainedTypeUse use) {
+  if (TypeSymbol* ts = toTypeSymbol(s))
+    if (isConstrainedType(ts->type, use))
+      return true;
+  return false;
+}
+
 EnumType::EnumType() :
   Type(E_EnumType, NULL),
   constants(), integerType(NULL),
@@ -386,10 +517,6 @@ EnumType::EnumType() :
   gEnumTypes.add(this);
   constants.parent = this;
 }
-
-
-EnumType::~EnumType() { }
-
 
 void EnumType::verify() {
   Type::verify();
@@ -634,7 +761,8 @@ void initPrimitiveTypes() {
   // This type should not be visible past normalize.
   CREATE_DEFAULT_SYMBOL (dtVoid, gNoInit, "_gnoinit");
 
-  CREATE_DEFAULT_SYMBOL (dtVoid, gSplitInit, "_gsplitinit");
+  dtSplitInitType = createInternalType("_splitInitType", "_splitInitType");
+  CREATE_DEFAULT_SYMBOL (dtSplitInitType, gSplitInit, "_gsplitinit");
 
   dtUnknown = createInternalType ("_unknown", "_unknown");
   CREATE_DEFAULT_SYMBOL (dtUnknown, gUnknown, "_gunknown");
@@ -691,7 +819,7 @@ void initPrimitiveTypes() {
 
   // Could be == c_ptr(int(8)) e.g.
   // used in some runtime interfaces
-  dtCVoidPtr   = createPrimitiveType("c_void_ptr", "c_void_ptr" );
+  dtCVoidPtr   = createPrimitiveType("chpl__c_void_ptr", "c_void_ptr" );
   dtCVoidPtr->symbol->addFlag(FLAG_NO_CODEGEN);
   dtCVoidPtr->defaultValue = gNil;
 
@@ -788,17 +916,16 @@ void initPrimitiveTypes() {
 
 
   dtMethodToken = createInternalType ("_MT", "_MT");
-  dtDummyRef = createInternalType ("_DummyRef", "_DummyRef");
-
   CREATE_DEFAULT_SYMBOL(dtMethodToken, gMethodToken, "_mt");
+
+  dtDummyRef = createInternalType ("_DummyRef", "_DummyRef");
   CREATE_DEFAULT_SYMBOL(dtDummyRef, gDummyRef, "_dummyRef");
+  CREATE_DEFAULT_SYMBOL(dtVoid, gDummyWitness, "_dummyWitness");
 
   dtTypeDefaultToken = createInternalType("_TypeDefaultT", "_TypeDefaultT");
-
   CREATE_DEFAULT_SYMBOL(dtTypeDefaultToken, gTypeDefaultToken, "_typeDefaultT");
 
   dtModuleToken = createInternalType("tmodule=", "tmodule=");
-
   CREATE_DEFAULT_SYMBOL(dtModuleToken, gModuleToken, "module=");
 
   dtUninstantiated = createInternalType("_uninstantiated", "_uninstantiated");
@@ -897,6 +1024,10 @@ void initCompilerGlobals() {
   gDivZeroChecking = new VarSymbol("chpl_checkDivByZero", dtBool);
   gDivZeroChecking->addFlag(FLAG_PARAM);
   setupBoolGlobal(gDivZeroChecking, !fNoDivZeroChecks);
+
+  gCacheRemote = new VarSymbol("CHPL_CACHE_REMOTE", dtBool);
+  gCacheRemote->addFlag(FLAG_PARAM);
+  setupBoolGlobal(gCacheRemote, fCacheRemote);
 
   gPrivatization = new VarSymbol("_privatization", dtBool);
   gPrivatization->addFlag(FLAG_PARAM);
@@ -1287,7 +1418,17 @@ Type* getManagedPtrBorrowType(const Type* managedPtrType) {
 
   INT_ASSERT(at);
 
-  Type* borrowType = at->getField("chpl_t")->type;
+  const char* fieldName = astr("chpl_t");
+  Type* borrowType = NULL;
+  Symbol* field = at->getField(fieldName, /*fatal*/ false);
+  if (field) {
+    borrowType = field->type;
+  } else {
+    Symbol* sub = at->getSubstitution(fieldName);
+    borrowType = sub->type;
+  }
+  if (borrowType == NULL)
+    INT_FATAL("Could not determine borrow type");
 
   ClassTypeDecorator decorator = CLASS_TYPE_BORROWED_NONNIL;
 
@@ -1429,7 +1570,7 @@ bool typeNeedsCopyInitDeinit(Type* type) {
   if (AggregateType* aggr = toAggregateType(type)) {
     Symbol*     sym  = aggr->symbol;
 
-    // Must be a record type
+    // Must be a record or union type
     if (aggr->aggregateTag != AGGREGATE_RECORD &&
         aggr->aggregateTag != AGGREGATE_UNION) {
       retval = false;
@@ -1767,4 +1908,16 @@ bool isNumericParamDefaultType(Type* t)
     return true;
 
   return false;
+}
+
+TypeSymbol*
+getDataClassType(TypeSymbol* ts) {
+  Symbol* value = ts->type->getSubstitutionWithName(astr("eltType"));
+
+  return toTypeSymbol(value);
+}
+
+void
+setDataClassType(TypeSymbol* ts, TypeSymbol* ets) {
+  ts->type->setSubstitutionWithName(astr("eltType"), ets);
 }

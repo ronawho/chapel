@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -69,14 +69,12 @@ module BytesStringCommon {
   // issue (#448 chapel-private)
   inline proc getCStr(const ref x: ?t): c_string {
     assertArgType(t, "getCStr");
-    inline proc _cast(type t:c_string, b:bufferType) {
-      return __primitive("cast", t, b);
-    }
-
     if _local == false && x.locale_id != chpl_nodeID then
       halt("Cannot call .c_str() on a remote " + t:string);
 
-    return x.buff:c_string;
+    var buff: bufferType = x.buff;
+    var asCString = __primitive("cast", c_string, buff);
+    return asCString;
   }
 
   /*

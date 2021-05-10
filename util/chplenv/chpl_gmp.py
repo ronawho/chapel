@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import os
 import sys
 
@@ -11,25 +11,26 @@ from utils import memoize
 def get():
     gmp_val = overrides.get('CHPL_GMP')
     if not gmp_val:
-        target_compiler = chpl_compiler.get('target')
-        if target_compiler == 'cray-prgenv-cray':
+        target_platform = chpl_platform.get('target')
+
+        # Detect if gmp has been built for this configuration.
+        third_party = get_chpl_third_party()
+        uniq_cfg_path = get_uniq_cfg_path()
+        gmp_subdir = os.path.join(third_party, 'gmp', 'install', uniq_cfg_path)
+
+        if os.path.exists(os.path.join(gmp_subdir, 'include', 'gmp.h')):
+            gmp_val = 'bundled'
+        elif target_platform.startswith('cray-x'):
+            gmp_val = 'system'
+        elif target_platform == 'aarch64':
             gmp_val = 'system'
         else:
-            target_platform = chpl_platform.get('target')
+            gmp_val = 'none'
+    elif gmp_val == 'gmp':
+        sys.stderr.write("Warning: CHPL_GMP=gmp is deprecated. "
+                         "Use CHPL_GMP=bundled instead.\n")
+        gmp_val = 'bundled'
 
-            # Detect if gmp has been built for this configuration.
-            third_party = get_chpl_third_party()
-            uniq_cfg_path = get_uniq_cfg_path()
-            gmp_subdir = os.path.join(third_party, 'gmp', 'install', uniq_cfg_path)
-
-            if os.path.exists(os.path.join(gmp_subdir, 'include', 'gmp.h')):
-                gmp_val = 'gmp'
-            elif target_platform.startswith('cray-x'):
-                gmp_val = 'system'
-            elif target_platform == 'aarch64':
-                gmp_val = 'system'
-            else:
-                gmp_val = 'none'
     return gmp_val
 
 
@@ -40,7 +41,7 @@ def get_uniq_cfg_path():
 
 @memoize
 def get_link_args(gmp):
-    if gmp == 'gmp':
+    if gmp == 'bundled':
         return third_party_utils.default_get_link_args('gmp')
     elif gmp == 'system':
         return ['-lgmp']

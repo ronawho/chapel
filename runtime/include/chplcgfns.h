@@ -1,16 +1,16 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
- * 
+ *
  * The entirety of this work is licensed under the Apache License,
  * Version 2.0 (the "License"); you may not use this file except
  * in compliance with the License.
- * 
+ *
  * You may obtain a copy of the License at
- * 
+ *
  *     http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -36,6 +36,10 @@
 #include "chpltypes.h"
 
 /* This header file is for routines that are in the generated code */
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /* defined in chpl_compilation_config.c: */
 extern const char* chpl_compileCommand;
@@ -63,7 +67,7 @@ extern const char* CHPL_ATOMICS;
 extern const char* CHPL_NETWORK_ATOMICS;
 extern const char* CHPL_GMP;
 extern const char* CHPL_HWLOC;
-extern const char* CHPL_REGEXP;
+extern const char* CHPL_RE2;
 extern const char* CHPL_LLVM;
 extern const char* CHPL_AUX_FILESYS;
 extern const char* CHPL_UNWIND;
@@ -102,5 +106,9 @@ extern int64_t chpl_gen_main(chpl_main_argument* const _arg);
 
 /* used for config vars: */
 extern void CreateConfigVarTable(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

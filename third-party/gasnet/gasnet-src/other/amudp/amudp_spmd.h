@@ -65,6 +65,13 @@ extern int AMUDP_SPMDIsWorker(char **argv);
 extern int AMUDP_SPMDNumProcs(void); /* return the number of processors in the parallel job */
 extern int AMUDP_SPMDMyProc(void);   /* return a zero-based unique identifier of this processor in the parallel job */
 
+extern void AMUDP_SPMDSetProc(int rank); 
+  /* programmatically force a rank assignment for the calling worker process.
+   * ignoring the WORKER_RANK envvar (if any). 
+   * May only be called collectively by all workers before AMUDP_SPMDStartup with disjoint
+   * rank ids in 0..NumProcs-1. Not supported for local spawn.
+   */
+
 extern int AMUDP_SPMDBarrier(void); 
 /* block until all SPMD processors call this function, 
  * and poll the SPMD endpoint while waiting
@@ -121,13 +128,6 @@ extern amudp_spawnfn_desc_t const AMUDP_Spawnfn_Desc[];
 
 #define AMX_SPMDStartup(pargc, pargv, networkdepth, pnetworkpid, peb, pep) \
       AMUDP_SPMDStartup((pargc), (pargv), 0, (networkdepth), NULL, (pnetworkpid), (peb), (pep))
-
-/* ------------------------------------------------------------------------------------ */
-/* non-standard extensions for checkpoint/restart */
-
-extern int  AMUDP_SPMDCheckpoint(eb_t *eb, ep_t *ep, const char *dir);
-extern void AMUDP_SPMDRunRestart(char *argv0, char *dir, int nproc);
-extern int  AMUDP_SPMDRestartProcId(int *argc, char ***argv);
 
 AMUDP_END_EXTERNC
 

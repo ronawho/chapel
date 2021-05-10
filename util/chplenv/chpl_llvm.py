@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import optparse
 import os
 import sys
@@ -9,7 +9,7 @@ from utils import memoize, run_command
 
 @memoize
 def get_uniq_cfg_path_for(llvm_val):
-    if llvm_val == "llvm":
+    if llvm_val == "bundled":
       # put platform-arch-compiler for included llvm
       host_bin_subdir = chpl_bin_subdir.get('host')
       host_compiler = chpl_compiler.get('host')
@@ -27,7 +27,7 @@ def get_uniq_cfg_path():
 
 def is_included_llvm_built():
     chpl_third_party = get_chpl_third_party()
-    llvm_target_dir = get_uniq_cfg_path_for('llvm')
+    llvm_target_dir = get_uniq_cfg_path_for('bundled')
     llvm_subdir = os.path.join(chpl_third_party, 'llvm', 'install',
                                llvm_target_dir)
     llvm_header = os.path.join(llvm_subdir, 'include', 'llvm',
@@ -53,7 +53,9 @@ def has_compatible_installed_llvm():
 
     got = run_command([find_llvm_config, preferred_vers])
     got = got.strip()
-    if got and got != "missing-llvm-config":
+    platform = chpl_platform.get('target')
+    # We have a problem with homebrew installed system llvm
+    if platform != "darwin" and got and got != "missing-llvm-config":
         return True
     else:
         return False
@@ -65,15 +67,15 @@ def get():
         llvm_val = 'none'
 
         if is_included_llvm_built():
-            llvm_val = 'llvm'
-        elif ("CHPL_LLVM_BY_DEFAULT" in os.environ and
-               os.environ["CHPL_LLVM_BY_DEFAULT"] != "0" and
-               # CHPL_LLVM_BY_DEFAULT is an enviro var to help us transition
-               compatible_platform_for_llvm_default()):
+            llvm_val = 'bundled'
+        elif (compatible_platform_for_llvm_default()):
             if has_compatible_installed_llvm():
                 llvm_val = 'system'
-            else:
-                llvm_val = 'llvm'
+
+    if llvm_val == 'llvm':
+        sys.stderr.write("Warning: CHPL_LLVM=llvm is deprecated. "
+                         "Use CHPL_LLVM=bundled instead\n")
+        llvm_val = 'bundled'
 
     return llvm_val
 
@@ -90,7 +92,7 @@ def _main():
     #if --needs-llvm-runtime is set, print out llvm if runtime is needed,
     # and print out nothing if it is not.
     if options.needsllvm:
-      if llvm_val == 'system' or llvm_val == 'llvm':
+      if llvm_val == 'system' or llvm_val == 'bundled':
         sys.stdout.write("llvm\n");
     else:
       sys.stdout.write("{0}\n".format(llvm_val))

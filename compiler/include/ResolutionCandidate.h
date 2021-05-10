@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -53,6 +53,12 @@ typedef enum {
   // Implicit where clause does not match
   RESOLUTION_CANDIDATE_IMPLICIT_WHERE_FAILED,
 
+  // Could not fulfill interface constraints
+  RESOLUTION_CANDIDATE_INTERFACE_CONSTRAINTS_NOT_SATISFIED,
+
+  // A formal of an interface or CG function as an actual or an UG function
+  RESOLUTION_CANDIDATE_INTERFACE_FORMAL_AS_ACTUAL,
+
   // Types do not match and are in different categories
   RESOLUTION_CANDIDATE_UNRELATED_TYPE,
 
@@ -61,6 +67,9 @@ typedef enum {
 
   // Formal is type but actual is not or vice versa
   RESOLUTION_CANDIDATE_NOT_TYPE,
+
+  // Actual type is not established yet
+  RESOLUTION_CANDIDATE_ACTUAL_TYPE_NOT_ESTABLISHED,
 
   // Too many arguments
   RESOLUTION_CANDIDATE_TOO_MANY_ARGUMENTS,
@@ -91,6 +100,11 @@ public:
   std::vector<Symbol*>    formalIdxToActual;
   std::vector<ArgSymbol*> actualIdxToFormal;
 
+  // One ImplementsStmt per IfcConstraint when 'fn' is CG
+  std::vector<ImplementsStmt*> witnesses;
+  // Is this a CG "interim instantiation"?
+  bool                    isInterimInstantiation;
+
   Symbol*                 failingArgument; // actual or formal
   ResolutionCandidateFailureReason reason;
 
@@ -102,6 +116,9 @@ private:
 
   bool                    isApplicableGeneric(CallInfo& info,
                                               VisibilityInfo* visInfo);
+
+  bool                    isApplicableCG(CallInfo& info,
+                                         VisibilityInfo* visInfo);
 
   bool                    computeAlignment(CallInfo& info);
 

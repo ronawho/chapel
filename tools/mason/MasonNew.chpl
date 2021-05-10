@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -127,8 +127,8 @@ considered if no input is given.""");
   while(1){
     try {
       if !gotCorrectPackageName {
-        write("Package name ");
-        if defPackageName != '' then write("(" + defPackageName + ") ");
+        write("Package name");
+        if defPackageName != '' then write(" (" + defPackageName + ")");
         write(": ");
         IO.stdout.flush();
         IO.stdin.readline(packageName);

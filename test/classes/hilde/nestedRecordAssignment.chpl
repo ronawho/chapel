@@ -14,7 +14,7 @@ proc R.init=(other:R) {
   this.i = other.i;
 }
 
-proc =(ref lhs:R, rhs:R) {
+operator R.=(ref lhs:R, rhs:R) {
   lhs.i = rhs.i;
   writeln("overwrote lhs.i with ", rhs.i);
 }
@@ -23,7 +23,9 @@ record S {
   var r:R;
 }
 
-var s,t:S;
+var s = new S();
+var t = new S();
+
 t.r.i = 121;
 s = t;
 writeln(s);

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -25,10 +25,13 @@ module ChapelAutoLocalAccess {
   // sure that we don't do anything with iterators as we cannot optimize such
   // forall's and we don't want to mess up the iterator
   proc chpl__staticAutoLocalCheck(accessBase: [], loopDomain: domain) param {
-    if chpl__isArrayView(accessBase) then return false;
-
     if accessBase.domain.type == loopDomain.type {
-      return loopDomain.supportsAutoLocalAccess();
+      if chpl__isArrayViewWithDifferentDist(accessBase) {
+        return false;
+      }
+      else {
+        return loopDomain.supportsAutoLocalAccess();
+      }
     }
 
     // support forall i in a.domain.localSubdomain() do .... a[i] ....
@@ -93,5 +96,19 @@ module ChapelAutoLocalAccess {
   }
   proc chpl__dynamicAutoLocalCheck(type accessBase, loopDomain) {
     return false;
+  }
+
+  proc chpl__isArrayViewWithDifferentDist(arr: []) param {
+    // Slices can have different distributions than the original array which can
+    // cause false optimizations
+    if arr._value.isSliceArrayView() {
+      return chpl__getActualArray(arr._value).dom.type != arr.domain._value.type;
+    }
+    else {
+      // Non-slice views have different domain types, but they do not impact how
+      // the values are distributed. So, they are safer from ALA standpoint
+      return false;
+    }
+
   }
 }

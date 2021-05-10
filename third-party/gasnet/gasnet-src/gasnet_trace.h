@@ -86,13 +86,13 @@
   #define GASNETI_STATS_PRINTF(type, args)  ((void)0)
 #endif
 
-/* allow for final output of conduit-core specific statistics */
-#ifndef GASNETC_TRACE_FINISH
-#define GASNETC_TRACE_FINISH()  ((void)0)
+/* allow for dump of conduit-core specific statistics */
+#ifndef GASNETC_STATS_DUMP
+#define GASNETC_STATS_DUMP(reset)  ((void)0)
 #endif
-/* allow for final output of conduit-extended specific statistics */
-#ifndef GASNETE_TRACE_FINISH
-#define GASNETE_TRACE_FINISH()  ((void)0)
+/* allow for dump of conduit-extended specific statistics */
+#ifndef GASNETE_STATS_DUMP
+#define GASNETE_STATS_DUMP(reset)  ((void)0)
 #endif
 
 #ifndef GASNETI_STATS_ECHOED_TO_TRACEFILE
@@ -288,7 +288,7 @@
 /* AM Request/Reply tracing helpers */
 #define _GASNETI_TRACE_GATHERARGS(numargs,lastarg)                  \
   char _tga_argstr[256];                                            \
-  do {                                                              \
+  if (GASNETI_TRACE_ENABLED(A)) {                                   \
     char *_tga_aptr = _tga_argstr;                                  \
     size_t _tga_aspace = sizeof(_tga_argstr);                       \
     va_list _tga_argptr;                                            \
@@ -301,7 +301,7 @@
         _tga_aptr += _tga_len; _tga_aspace -= _tga_len;             \
       }                                                             \
     va_end(_tga_argptr);                                            \
-  } while(0)
+  }
 
 #define GASNETI_TRACE_AMSHORT(name,tm,rank,handler,flags,numargs) do {               \
   _GASNETI_TRACE_GATHERARGS(numargs,numargs);                                        \
@@ -484,7 +484,7 @@
 #if GASNETI_STATS_OR_TRACE
   #define _GASNETI_TRACE_GATHERHANDLERARGS(numargs, arghandle)              \
     char _tgha_argstr[256];                                                 \
-    do {                                                                    \
+    if (GASNETI_TRACE_ENABLED(A)) {                                         \
       char *_tgha_aptr = _tgha_argstr;                                      \
       size_t _tgha_aspace = sizeof(_tgha_argstr);                           \
       *_tgha_aptr = 0;                                                      \
@@ -494,7 +494,7 @@
                                  (int)((uint32_t*)(arghandle))[_tgha_i]);   \
         _tgha_aptr += _tgha_len; _tgha_aspace -= _tgha_len;                 \
       }                                                                     \
-    } while(0)
+    }
 
   #define _GASNETI_TRACE_HANDLER(name, info, timask) do { \
       if ((timask) & GEX_TI_ENTRY) {                                                       \
@@ -654,8 +654,10 @@ typedef struct {
 extern void gasneti_trace_init(int *_argc, char ***_argv);
 extern void gasneti_trace_finish(void);
 
+extern FILE *gasneti_open_outputfile(const char *_filename, const char *_desc);
+
 /* defines all the types */
-#define GASNETI_ALLTYPES "GPRSWXBLAICDNH"
+#define GASNETI_ALLTYPES "GPRSWXBLAIOCDNH"
 
 
 /* GASNETI_ALL_STATS lists all the statistics values we gather, 
@@ -786,7 +788,7 @@ extern void gasneti_trace_finish(void);
         CNT(A, AMREPLY_MEDIUM_HANDLER, cnt)               \
         CNT(A, AMREPLY_LONG_HANDLER, cnt)                 \
                                                           \
-        CNT(I, AMPOLL, cnt)                               \
+        CNT(X, AMPOLL, cnt)                               \
                                                           \
         VAL(I, GASNET_MALLOC, sz)                         \
         VAL(I, GASNET_FREE, sz)                           \
@@ -836,6 +838,10 @@ extern size_t gasneti_format_dt(char *_buf, gex_DT_t _dt);
 extern size_t gasneti_format_op(char *_buf, gex_OP_t _op);
 extern size_t gasneti_format_ti(char *_buf, gex_TI_t _ti);
 
+// Magic number trace formatting - available even without STATS/TRACE
+#define GASNETI_MAX_MAGICSZ 29 // "0x" + 16 hex digits + "(" + 8 chars + ")\0"
+extern void gasneti_format_magic(char *_buf, uint64_t _magic);
+
 GASNETI_FORMAT_PRINTF(gasneti_dynsprintf,1,2,
 extern char *gasneti_dynsprintf(const char *_format,...));
 
@@ -856,6 +862,7 @@ extern char *gasneti_dynsprintf(const char *_format,...));
   extern FILE *gasneti_tracefile;
   extern FILE *gasneti_statsfile;
   extern char *gasneti_formatdata(void *_p, size_t _nbytes);
+  extern char *gasneti_format_eploc(const gex_EP_Location_t *_members, size_t _nmembers);
   extern void gasneti_trace_output(const char *_type, const char *_msg, int _traceheader);
   extern void gasneti_stats_output(const char *_type, const char *_msg, int _traceheader);
 

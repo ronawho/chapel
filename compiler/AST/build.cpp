@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -776,6 +776,13 @@ buildIfStmt(Expr* condExpr, Expr* thenExpr, Expr* elseExpr) {
   return buildChapelStmt(new CondStmt(new CallExpr("_cond_test", condExpr), thenExpr, elseExpr));
 }
 
+CallExpr* buildIfVar(const char* name, Expr* rhs, bool isConst) {
+  VarSymbol* var = new VarSymbol(name);
+  if (isConst) var->addFlag(FLAG_CONST);
+  DefExpr* def = new DefExpr(var);
+  return new CallExpr(PRIM_IF_VAR, def, rhs);
+}
+
 BlockStmt*
 buildExternBlockStmt(const char* c_code) {
   bool privateUse = true;
@@ -867,7 +874,7 @@ BlockStmt* buildIncludeModule(const char* name,
 
   // docs comment is ignored (the one in the module declaration is used)
 
-  if (fWarnUnstable) {
+  if (fWarnUnstable && mod->modTag == MOD_USER) {
     USR_WARN(loc, "module include statements are not yet stable and may change");
   }
 
@@ -1455,6 +1462,9 @@ backPropagateInitsTypes(BlockStmt* stmts) {
   Expr* type = NULL;
   DefExpr* prev = NULL;
   for_alist_backward(stmt, stmts->body) {
+    if(isEndOfStatementMarker(stmt)){
+      continue;
+    }
     if (DefExpr* def = toDefExpr(stmt)) {
       if (def->init || def->exprType) {
         init = def->init;
@@ -1476,8 +1486,7 @@ backPropagateInitsTypes(BlockStmt* stmts) {
         def->exprType = type;
       }
       prev = def;
-    } else
-      INT_FATAL(stmt, "expected DefExpr in backPropagateInitsTypes");
+    }
   }
 }
 
@@ -1612,7 +1621,6 @@ BlockStmt* buildVarDecls(BlockStmt* stmts, const char* docs,
     }
     INT_FATAL(stmt, "Major error in setVarSymbolAttributes");
   }
-  backPropagateInitsTypes(stmts);
   //
   // If blockInfo is set, this is a tuple variable declaration.
   // Add checks that the expression on the right is a tuple and that
@@ -1721,6 +1729,12 @@ DefExpr* buildClassDefExpr(const char*  name,
     if (inherit != NULL)
       USR_FATAL_CONT(inherit,
                      "External types do not currently support inheritance");
+  }
+
+  for_alist(stmt, decls->body){
+    if(BlockStmt* block = toBlockStmt(stmt)) {
+      backPropagateInitsTypes(block);
+    }
   }
 
   ct->addDeclarations(decls);
@@ -2364,7 +2378,13 @@ buildCobeginStmt(CallExpr* byref_vars, BlockStmt* block) {
 
   if (block->blockTag == BLOCK_SCOPELESS) {
     block = toBlockStmt(block->body.only());
-    INT_ASSERT(block);
+    if (block == NULL) {
+      // Though 'block' should be non-NULL in correct programs, in
+      // cobegins containing syntax errors, it may be NULL.  So we'll
+      // just return the original block statement to make progress
+      // until the compiler exits.
+      return outer;
+    }
     block->remove();
   }
 
@@ -2490,36 +2510,27 @@ BlockStmt* handleConfigTypes(BlockStmt* blk) {
   return blk;
 }
 
-static VarSymbol* one = NULL;
-
-static SymExpr* buildOneExpr() {
-  if (one == NULL) {
-    one = new_IntSymbol(1);
-  }
-  return new SymExpr(one);
-}
-
 CallExpr* buildBoundedRange(Expr* low, Expr* high,
                             bool openlow, bool openhigh) {
   if (openlow) {
-    low = new CallExpr("+", low, buildOneExpr());
+    low = new CallExpr("chpl__nudgeLowBound", low);
   }
   if (openhigh) {
-    high = new CallExpr("-", high, buildOneExpr());
+    high = new CallExpr("chpl__nudgeHighBound", high);
   }
   return new CallExpr("chpl_build_bounded_range",low, high);
 }
 
 CallExpr* buildLowBoundedRange(Expr* low, bool open) {
   if (open) {
-    low = new CallExpr("+", low, buildOneExpr());
+    low = new CallExpr("chpl__nudgeLowBound", low);
   }
   return new CallExpr("chpl_build_low_bounded_range", low);
 }
 
 CallExpr* buildHighBoundedRange(Expr* high, bool open) {
   if (open) {
-    high = new CallExpr("-", high, buildOneExpr());
+    high = new CallExpr("chpl__nudgeHighBound", high);
   }
   return new CallExpr("chpl_build_high_bounded_range", high);
 }
@@ -2612,4 +2623,19 @@ void redefiningReservedWordError(const char* name)
 {
   USR_FATAL_CONT(buildErrorStandin(),
                  "attempt to redefine reserved word '%s'", name);
+}
+
+void updateOpThisTagOrErr(FnSymbol* fn) {
+  if (fn->thisTag == INTENT_BLANK) {
+    fn->thisTag = INTENT_TYPE;
+  } else {
+    USR_FATAL_CONT(buildErrorStandin(),
+                   "attempt to declare unsupported this intent tag for operator"
+                   " function '%s'", fn->name);
+  }
+}
+
+BlockStmt* foreachNotImplementedError() {
+  USR_FATAL_CONT(buildErrorStandin(), "foreach is not yet implemented");
+  return new BlockStmt();
 }

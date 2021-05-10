@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 Provides simple 'get()' interface for accessing default value overrides
 Checks environment variables first, then chplconfig file for definitions
@@ -23,6 +23,7 @@ chplvars = [
              'CHPL_COMM',
              'CHPL_COMM_SUBSTRATE',
              'CHPL_GASNET_SEGMENT',
+             'CHPL_LIBFABRIC',
              'CHPL_TASKS',
              'CHPL_LAUNCHER',
              'CHPL_TIMERS',
@@ -34,7 +35,7 @@ chplvars = [
              'CHPL_GMP',
              'CHPL_HWLOC',
              'CHPL_JEMALLOC',
-             'CHPL_REGEXP',
+             'CHPL_RE2',
              'CHPL_LLVM',
              'CHPL_AUX_FILESYS',
              'CHPL_LIB_PIC',

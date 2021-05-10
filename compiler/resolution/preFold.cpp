@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -30,7 +30,7 @@
 #include "iterator.h"
 #include "ParamForLoop.h"
 #include "passes.h"
-#include "preNormalizeOptimizations.h"
+#include "forallOptimizations.h"
 #include "resolution.h"
 #include "resolveFunction.h"
 #include "resolveIntents.h"
@@ -156,7 +156,7 @@ Expr* preFold(CallExpr* call) {
 
       callExpr->replace(callExpr->baseExpr->remove());
 
-      if (Expr* tmp = preFoldNamed(callExpr)) {
+      if (Expr* tmp = preFoldNamed(call)) {
         retval = tmp;
       }
 
@@ -574,6 +574,23 @@ static Expr* preFoldPrimOp(CallExpr* call) {
     retval = preFoldMaybeLocalThis(call);
     call->replace(retval);
     break;
+
+  case PRIM_MAYBE_LOCAL_ARR_ELEM:
+    retval = preFoldMaybeLocalArrElem(call);
+    call->replace(retval);
+    break;
+
+  case PRIM_MAYBE_AGGREGATE_ASSIGN: {
+    Expr *aggReplacement = preFoldMaybeAggregateAssign(call);
+    call->insertAfter(aggReplacement);
+    if (isCondStmt(aggReplacement)) {
+      normalize(aggReplacement);
+    }
+
+    retval = new CallExpr(PRIM_NOOP);
+    call->replace(retval);
+    break;
+  }
 
   case PRIM_CALL_RESOLVES:
   case PRIM_CALL_AND_FN_RESOLVES:
@@ -1964,6 +1981,17 @@ static Expr* unrollHetTupleLoop(CallExpr* call, Expr* tupExpr, Type* iterType) {
 }
 
 
+static bool isMethodCall(CallExpr* call) {
+  // The first argument could be DefExpr for a query expr, see
+  //   test/arrays/formals/queryArrOfArr2.chpl
+  if (call->numActuals() == 2)
+    if (SymExpr* arg1 = toSymExpr(call->get(1)))
+      if (arg1->typeInfo() == dtMethodToken )
+        return true;
+  return false;
+}
+
+
 static Expr* preFoldNamed(CallExpr* call) {
   Expr* retval = NULL;
 
@@ -2202,9 +2230,19 @@ static Expr* preFoldNamed(CallExpr* call) {
 
   // BHARSH TODO: Move the dtUninstantiated stuff over to resolveTypeComparisonCall
   } else if (call->isNamed("==")) {
-    if (isTypeExpr(call->get(1)) && isTypeExpr(call->get(2))) {
-      Type* lt = call->get(1)->getValType();
-      Type* rt = call->get(2)->getValType();
+    bool isMethodCall = false;
+    if (call->partialTag == false) {
+      if (SymExpr* se = toSymExpr(call->get(1))) {
+        if (se->symbol() == gMethodToken) {
+          isMethodCall = true;
+        }
+      }
+    }
+    int lhsNum = isMethodCall ? 3 : 1;
+    int rhsNum = isMethodCall ? 4 : 2;
+    if (isTypeExpr(call->get(lhsNum)) && isTypeExpr(call->get(rhsNum))) {
+      Type* lt = call->get(lhsNum)->getValType();
+      Type* rt = call->get(rhsNum)->getValType();
 
       if (lt                                != dtUnknown &&
           rt                                != dtUnknown &&
@@ -2213,24 +2251,34 @@ static Expr* preFoldNamed(CallExpr* call) {
         retval = (lt == rt) ? new SymExpr(gTrue) : new SymExpr(gFalse);
         call->replace(retval);
       }
-    } else if (call->get(2)->getValType() == dtUninstantiated) {
-      retval = (call->get(1)->getValType() == dtUninstantiated) ? new SymExpr(gTrue) : new SymExpr(gFalse);
+    } else if (call->get(rhsNum)->getValType() == dtUninstantiated) {
+      retval = (call->get(lhsNum)->getValType() == dtUninstantiated) ? new SymExpr(gTrue) : new SymExpr(gFalse);
       call->replace(retval);
     }
 
 
   } else if (call->isNamed("!=")) {
-    if (isTypeExpr(call->get(1)) && isTypeExpr(call->get(2))) {
-      Type* lt = call->get(1)->getValType();
-      Type* rt = call->get(2)->getValType();
+    bool isMethodCall = false;
+    if (call->partialTag == false) {
+      if (SymExpr* se = toSymExpr(call->get(1))) {
+        if (se->symbol() == gMethodToken) {
+          isMethodCall = true;
+        }
+      }
+    }
+    int lhsNum = isMethodCall ? 3 : 1;
+    int rhsNum = isMethodCall ? 4 : 2;
+    if (isTypeExpr(call->get(lhsNum)) && isTypeExpr(call->get(rhsNum))) {
+      Type* lt = call->get(lhsNum)->getValType();
+      Type* rt = call->get(rhsNum)->getValType();
 
       if (lt                                != dtUnknown &&
           rt                                != dtUnknown) {
         retval = (lt != rt) ? new SymExpr(gTrue) : new SymExpr(gFalse);
         call->replace(retval);
       }
-    } else if (call->get(2)->getValType() == dtUninstantiated) {
-      retval = (call->get(1)->getValType() != dtUninstantiated) ? new SymExpr(gTrue) : new SymExpr(gFalse);
+    } else if (call->get(rhsNum)->getValType() == dtUninstantiated) {
+      retval = (call->get(lhsNum)->getValType() != dtUninstantiated) ? new SymExpr(gTrue) : new SymExpr(gFalse);
       call->replace(retval);
     }
 
@@ -2292,6 +2340,11 @@ static Expr* preFoldNamed(CallExpr* call) {
       if (retval != NULL)
         call->replace(retval);
     }
+  } else if (isMethodCall(call)) {
+    // Handle a reference to an interface associated type, if applicable.
+    if (ConstrainedType* recv = toConstrainedType(call->get(2)->typeInfo())) {
+      retval = resolveCallToAssociatedType(call, recv);
+    }
   }
 
   return retval;
@@ -2311,7 +2364,7 @@ static Expr* resolveTupleIndexing(CallExpr* call, Symbol* baseVar) {
 
   Type* indexType = call->get(3)->getValType();
 
-  if (!is_int_type(indexType) && !is_uint_type(indexType))
+  if (!is_int_type(indexType) && !is_uint_type(indexType) && !is_bool_type(indexType))
     USR_FATAL(call, "tuple indexing expression is not of integral type");
 
   AggregateType* baseType = toAggregateType(baseVar->getValType());
@@ -2329,6 +2382,12 @@ static Expr* resolveTupleIndexing(CallExpr* call, Symbol* baseVar) {
       error = true;
     }
   } else if (get_uint(call->get(3), &uindex)) {
+    sprintf(field, "x%" PRIu64, uindex);
+    if (uindex >= (unsigned long)baseType->fields.length-1) {
+      USR_FATAL_CONT(call, "tuple index %" PRIu64 " is out of bounds", uindex);
+      error = true;
+    }
+  } else if (get_bool(call->get(3), &uindex)) {
     sprintf(field, "x%" PRIu64, uindex);
     if (uindex >= (unsigned long)baseType->fields.length-1) {
       USR_FATAL_CONT(call, "tuple index %" PRIu64 " is out of bounds", uindex);

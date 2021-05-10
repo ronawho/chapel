@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -38,13 +38,13 @@ module MemConsistency {
     return _defaultOfMemoryOrder();
   }
 
-  proc ==(a:memory_order, b:memory_order):bool {
+  operator memory_order.==(a:memory_order, b:memory_order):bool {
     return __primitive("==", a, b);
   }
-  proc !=(a:memory_order, b:memory_order):bool {
+  operator memory_order.!=(a:memory_order, b:memory_order):bool {
     return __primitive("!=", a, b);
   }
-  proc =(ref lhs:memory_order, rhs:memory_order) {
+  operator memory_order.=(ref lhs:memory_order, rhs:memory_order) {
     __primitive("=", lhs, rhs);
   }
 

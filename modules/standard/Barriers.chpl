@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -419,7 +419,7 @@ module Barriers {
   }
 
   pragma "no doc"
-  proc =(ref lhs: Barrier, rhs: Barrier) {
+  operator Barrier.=(ref lhs: Barrier, rhs: Barrier) {
     if lhs.isowned {
       delete lhs.bar;
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -28,16 +28,6 @@ LoopStmt::LoopStmt(BlockStmt* initBody) : BlockStmt(initBody)
   mOrderIndependent = false;
   mVectorizationHazard = false;
   mParallelAccessVectorizationHazard = false;
-}
-
-LoopStmt::~LoopStmt()
-{
-
-}
-
-bool LoopStmt::isLoopStmt() const
-{
-  return true;
 }
 
 LabelSymbol* LoopStmt::breakLabelGet() const

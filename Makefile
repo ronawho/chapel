@@ -1,4 +1,4 @@
-# Copyright 2020 Hewlett Packard Enterprise Development LP
+# Copyright 2020-2021 Hewlett Packard Enterprise Development LP
 # Copyright 2004-2019 Cray Inc.
 # Other additional copyright holders may be indicated within.
 #
@@ -48,8 +48,9 @@
 MAKEFLAGS = --no-print-directory
 
 export CHPL_MAKE_HOME=$(shell pwd)
+export CHPL_MAKE_PYTHON := $(shell $(CHPL_MAKE_HOME)/util/config/find-python.sh)
 
-NEEDS_LLVM_RUNTIME=${CHPL_MAKE_HOME}/util/chplenv/chpl_llvm.py \
+NEEDS_LLVM_RUNTIME=$(CHPL_MAKE_PYTHON) ${CHPL_MAKE_HOME}/util/chplenv/chpl_llvm.py \
                     --needs-llvm-runtime
 
 default: all
@@ -71,6 +72,10 @@ notcompiler: FORCE
 	@$(MAKE) always-build-chpldoc
 	@$(MAKE) runtime
 	@$(MAKE) modules
+
+libchplcomp: FORCE
+	@echo "Making the compiler library..."
+	@cd compiler/next && $(MAKE) -f Makefile.help libchplcomp
 
 compiler: FORCE
 	@echo "Making the compiler..."
@@ -104,7 +109,7 @@ third-party: FORCE
 third-party-try-opt: third-party-try-re2 third-party-try-gmp
 
 third-party-try-re2: FORCE
-	-@if [ -z "$$CHPL_REGEXP" ]; then \
+	-@if [ "$$CHPL_RE2" != none ]; then \
 	cd third-party && CHPL_LLVM_CODEGEN=0 $(MAKE) try-re2; \
 	if [ ! -z `${NEEDS_LLVM_RUNTIME}` ]; then \
 	CHPL_LLVM_CODEGEN=1 $(MAKE) try-re2; \
@@ -127,6 +132,11 @@ third-party-test-venv: FORCE
 third-party-chpldoc-venv: FORCE
 	@if [ -z "$$CHPL_DONT_BUILD_CHPLDOC_VENV" ]; then \
 	cd third-party && $(MAKE) chpldoc-venv; \
+	fi
+
+third-party-c2chapel-venv: FORCE
+	@if [ -z "$$CHPL_DONT_BUILD_C2CHAPEL_VENV" ]; then \
+	cd third-party && $(MAKE) c2chapel-venv; \
 	fi
 
 test-venv: third-party-test-venv
@@ -155,7 +165,7 @@ mason: chpldoc notcompiler FORCE
 protoc-gen-chpl: chpldoc notcompiler FORCE
 	cd tools/protoc-gen-chpl && $(MAKE) && $(MAKE) install
 
-c2chapel: FORCE
+c2chapel: third-party-c2chapel-venv FORCE
 	cd tools/c2chapel && $(MAKE)
 	cd tools/c2chapel && $(MAKE) install
 

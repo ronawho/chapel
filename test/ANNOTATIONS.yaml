@@ -434,14 +434,41 @@ all:
   06/06/20:
     - text: Don't GET domain's dimensions unless needed (#15777)
       config: 16-node-xc, 16-node-cs, chapcs.comm-counts
+  06/16/20:
+    - text: Support third-party CHPL_LIBFABRIC=libfabric (#15729)
+      config: 16-node-cs
+    - text: Warm up the comm layer, in the many-to-one test (#15798)
+      config: 16-node-cs
   06/21/20:
     - Switch the domain's list of arrays to a hashtable (#15895)
   06/25/20:
     - Avoid allocating memory for empty hashtables (#15918)
   09/18/20:
     - Remove the single task specialization from parallel iterators (#16401)
+    - text: Upgrade XC-x86 gcc gen compiler to 8.3.0 (#16407)
+      config: 16-node-xc
   09/22/20:
     - Parallelize large DefaultRectangular assignments (#16418)
+  09/29/20:
+    - text: Do sequential DR assignment if GETs are to be used (#16488)
+      config: 16-node-xc, 16-node-cs
+  11/19/20:
+    - Improve the speed of tracking arrays declared over a domain (#16740)
+  02/01/21:
+    - Enable the cache for remote data by default (#17044)
+  03/18/21:
+    - text: Improve NUMA affinity and startup times for configs that use a fixed heap (#17405)
+      config: 16-node-xc, 16-node-cs, 16-node-cs-hdr
+    - text: Set the number of launcher cores per locale for Cray CS perf testing (#17407)
+      config: 16-node-cs
+  03/30/21:
+    - text: OS upgrade
+      config: 16-node-cs-hdr
+  04/01/21:
+    - text: Upgrade to GASNet-EX 2021.3.0 (#17505)
+      config: 16-node-cs, 16-node-cs-hdr
+
+# End all
 
 AllCompTime: &timecomp-base
   11/09/14:
@@ -483,11 +510,11 @@ AllCompTime: &timecomp-base
     - Remove calls to getUserInstantiationPoint (#15051)
   06/11/20:
     - Fix split init of const variables and update lvalue errors (#15800)
-  06/16/20:
-    - text: Support third-party CHPL_LIBFABRIC=libfabric (#15729)
-      config: 16-node-cs
-    - text: Warm up the comm layer, in the many-to-one test (#15798)
-      config: 16-node-cs
+  02/17/21:
+    - GPU code generation (#17116)
+  02/25/21:
+    - Restore timing for makeBinary (#17253)
+    - Stop converting PRIM_ZIP to tuples for forall statements (#17212)
 
 allocate:
   06/11/20:
@@ -591,6 +618,8 @@ binarytrees-submitted:
 blackscholes:
   10/21/16:
     - Improvements to scalarReplace, refPropagation and copyPropagation (#4761)
+  01/06/21:
+    - Remove lots of inlines in IO.chpl for non-trivial procedures (#16887)
 
 blackscholes_promote:
   10/21/16:
@@ -677,6 +706,9 @@ create-views:
     - Put param conditionals before others in domain record initialization (#15591)
   09/17/20:
     - Fix some issues with constant domain optimization (#16397)
+  10/02/20:
+    - Only reference count a distribution's domains (#16528)
+
 
 cs-resize:
   03/05/19:
@@ -687,6 +719,14 @@ dist-performance.cc:
     - Use workaround to enable lifetime checking for lists of borrowed classes (#15575)
   06/27/20:
     - Revert changes to `list._commonInitFromIterable` (#15943)
+  12/16/20:
+    - Distributed sort improvements (#16871)
+
+dist-performance.ml-perf:
+  07/01/20:
+    - Optimize repeated insertions/deletions from chpl__hashtable (#15982)
+  12/16/20:
+    - Distributed sort improvements (#16871)
 
 distCreate-arrays-deinit.cc-perf: &distCreate-base
   02/12/20:
@@ -701,6 +741,10 @@ distCreate-arrays-deinit.cc-perf: &distCreate-base
     - Make locale-related comm improvements (#15288)
   06/02/20:
     - Address performance issues with stencil and block-cyclic array init (#15741)
+  03/23/21:
+    - A few communication micro-optimizations to improve Block array creation (#17354)
+  04/07/21:
+    - Revert a recent change in block array creation that caused performance regression (#17531)
 
 distCreate-arrays-init.cc-perf:
   <<: *distCreate-base
@@ -760,18 +804,28 @@ ep.ml-perf: &ep-ml-base
     - Represent reduce expressions using ForallStmt (#12131)
   08/25/19:
     - Min/max with NaNs and imag inequalities (#13824)
+  07/31/20:
+    - Make observable inout copy/writeback/deinit orders more consistent (#16143)
+  09/09/20:
+    - Adjust inout to be implemented with a single argument (#16180)
+
 ep.ml-time:
   <<: *ep-ml-base
 
 empty-chpl-barrier.ml-time:
   08/02/18:
     - Optimize the atomic barrier implementation for network atomics (#10633)
+  11/03/20:
+    - Do fewer GETs to force PUTs into a visible state, and do them later (#16634)
+
 
 exchange:
   04/18/19:
     - Enable bulk-transfer for BlockDist by default (#12797)
   09/17/20:
     - Fix some issues with constant domain optimization (#16397)
+  09/29/20:
+    - Remove an unneeded assignment from array view slice initializer (#16477)
 
 fannkuch-redux:
   07/22/14:
@@ -829,6 +883,8 @@ fastaredux:
     - Optimize enum->int casts for concrete types (#10308)
   01/29/20:
     - Propagate user thrown errors out of IO routines (#14739)
+  01/06/21:
+    - Remove lots of inlines in IO.chpl for non-trivial procedures (#16887)
 
 fft:
   05/15/19:
@@ -962,6 +1018,8 @@ jacobi:
     - Catch blocks catch owned, test code throws owned (#12090)
   04/23/19:
     - Denormalize the test in CondStmts (#12867)
+  01/26/21:
+    - Automatically aggregate some communication in foralls (#16965)
 
 knucleotide: &knucleotide-base
   10/17/15:
@@ -1022,6 +1080,8 @@ lulesh:
 lulesh-dense:
   03/15/14:
     - improved constness of de-nested functions, improved remove value forwarding
+  07/15/20:
+    - Enable parallel array init for all types (#16070)
 
 mandelbrot:
   01/03/14:
@@ -1089,7 +1149,7 @@ memleaks:
   08/17/16:
     - Single as record (#4350)
   01/05/17:
-    - Maybe "adding support for params without initializers"(#5075)?
+    - Maybe "adding support for params without initializers"(#5069)?
   01/07/17:
     - new test verifying the user's guide type aliases section (#5075)
   01/17/17:
@@ -1124,6 +1184,7 @@ memleaks:
     - Fix problem with new applied to a borrowed nilable type argument (#16380)
   09/17/20:
     - Fix some issues with constant domain optimization (#16397)
+# End memleaks
 
 memleaksfull:
   07/08/14:
@@ -1323,6 +1384,33 @@ memleaksfull:
     - Close a trivial test leak (#15871)
   07/14/20:
     - Add tests for set, map, list of arrays (#16034)
+  10/23/20:
+    - Close leaks coming from unnamed array types (#16600)
+  11/04/20:
+    - Deallocate the RTT memory returned from empty for expressions (#16628)
+  11/20/20:
+    - Fix memory leak in reduceLoopOfPromoted.chpl (#16691)
+  01/09/21:
+    - Add tests and futures looking at I/O on class hierarchies (#16920)
+  01/15/21:
+    - Fix memory leak for classes/io/classToString (#16949)
+  01/26/21:
+    - Support fixed sized arrays of tuples containing non-nilable classes (#16802)
+  02/21/21:
+    - CG enable return types and calling required functions (#17197)
+  02/25/21:
+    - Deprecate regexp ok and error() methods (#17245)
+  03/02/21:
+    - File tests locking in fixes to issue #14226 (#17291)
+  03/03/21:
+    - Fix some issues with new tests locking in bug fixes (#17320)
+  03/24/21:
+    - Add module OrderedMap (#16271)
+  03/26/21:
+    - Two fixes in OrderedMap (#17463)
+  03/27/21:
+    - CG Adjust in-intent handling to fix a memleak (#17480)
+# End memleaksfull
 
 meteor:
   12/18/13:
@@ -1546,6 +1634,8 @@ ra-atomics.ml-perf:
     - Increase the number of updates for RA to stabilize performance timings (#7522)
   09/06/20:
     - Improve LLVM vectorization support (#16152)
+  09/26/20:
+    - Do not check for order independence in forall-unordered opt (#16455)
 
 RBC:
   02/22/17:
@@ -1572,12 +1662,22 @@ regexdna: &regexdna-base
     - Add support for escaping non-UTF8 sequences in strings (#14743)
   06/11/20:
     - Add a field to the string record to store a cached size (#15758)
+  02/24/21:
+    - Upgrade to re2 2021-02-02 (#17230)
 regexdna-redux:
   <<: *regexdna-base
 regexdna-submitted:
   <<: *regexdna-base
 regexdnaredux-submitted:
   <<: *regexdna-base
+
+remote-puts.ml-perf:
+  11/03/20:
+    - Do fewer GETs to force PUTs into a visible state, and do them later (#16634)
+
+remote-fetchAmos.ml-perf:
+  11/03/20:
+    - Do fewer GETs to force PUTs into a visible state, and do them later (#16634)
 
 remote-ons.ml-perf:
   05/17/19:
@@ -1610,7 +1710,7 @@ revcomp: &revcomp-base
     - various qio changes motivated by cygwin failures (#1943)
   10/29/15:
     - Difficult to consistently replicate
-  08/12/16:
+  08/14/16:
     - text: Discontinued performance testing (data invalid) (#4333)
       config: 1-node-xc
   03/10/17:
@@ -1650,10 +1750,16 @@ sad:
 scanPerf:
   03/05/19:
     - Support optionally parallel 1D scans on default rectangular (#12469)
+  01/14/21:
+    - Optimize scans by using noinit for the result array (#16919)
 
 scanPerf.ml-time:
   03/06/19:
     - First good draft of parallel Block-distributed scan (#12481)
+  01/12/21:
+    - Increase the problem size for the multi-locale scan performance test (#16918)
+  01/14/21:
+    - Optimize scans by using noinit for the result array (#16919)
 
 search:
   04/20/17:
@@ -1702,6 +1808,11 @@ split-whitespace-perf:
 SSCA2_main:
   06/12/13:
     - Initial support for hierarchical locales (21480)
+
+SSCA2_main.ml-perf:
+  11/03/20:
+    - text: Do fewer GETs to force PUTs into a visible state, and do them later (#16634)
+      config: 16-node-cs
 
 STREAM_study_fragmented:
   09/06/13:
@@ -1858,6 +1969,8 @@ time_iterate:
 time-write:
   03/05/15:
     - no strings with externs update
+  01/06/21:
+    - Remove lots of inlines in IO.chpl for non-trivial procedures (#16887)
 
 timeMapMinusEqual:
   07/10/20:
@@ -1942,6 +2055,10 @@ compilerAndTestingStats: &compiler-perf-base
     - Give errors in reexporting ambiguities (#15316)
   04/16/20:
     - Cache whether a ResolveScope or UseStmt can reexport (#15517)
+  04/28/20:
+    - Move compiler performance jobs to chapcs04
+  06/15/20:
+    - machine update (McAfee)
   07/27/20:
     - Replace some where-clauses with formals types (#16130)
     - Handle bool tests in the compiler (#16062)
@@ -1951,6 +2068,11 @@ compilerAndTestingStats: &compiler-perf-base
     - Refactor string iterators to reduce generated code size (#16266)
   09/03/20:
     - Improve string to numerical casts' compilation and execution performance (#16278)
+  02/17/21:
+    - GPU code generation (#17116)
+  02/25/21:
+    - Restore timing for makeBinary (#17253)
+    - Stop converting PRIM_ZIP to tuples for forall statements (#17212)
 
 allTotalTime:
   <<: *compiler-perf-base
@@ -1975,7 +2097,46 @@ arkouda: &arkouda-base
     - Translate pdarray setops to server-side operations (mhmerrill/arkouda#392)
   07/02/20:
     - Reduce fragmentation for large allocations (#15992)
+  09/23/20:
+    - text: Optimize DstAggregator by caching remote allocations (mhmerrill/arkouda#485)
+      config: 16-node-cs, 16-node-xc
+  10/02/20:
+    - text: Optimize SrcAggregator by caching remote allocations (mhmerrill/arkouda#503)
+      config: 16-node-cs
+  10/03/20:
+    - text: Enable SrcAggregator under ugni (mhmerrill/arkouda#507)
+      config: 16-node-xc
+    - text: Move XC testing from elogin back to login node
+      config: 16-node-xc
+  10/06/20:
+    - text: Optimize aggregators by yielding more often (mhmerrill/arkouda#509)
+      config: 16-node-cs, 16-node-xc
+  10/21/20:
+    - Upgrade Arkouda release testing from 1.22 to 1.23 (#16599)
+  01/08/21:
+    - Benchmark improvements (mhmerrill/arkouda#616)
+  01/14/21:
+    - Optimize scans by using noinit for the result array (#16919)
+  01/15/21:
+    - Optimize int64 prod reduce (mhmerrill/arkouda#628)
+  02/12/21:
+    - 624 convert message format to json (mhmerrill/arkouda#639)
+  02/16/21:
+    - Optimize string argsort (mhmerrill/arkouda#671)
+  02/18/21:
+    - Increase the problem size for string benchmarks (mhmerrill/arkouda#676)
+  02/19/21:
+    - Skip long string partitioning in string argsort (mhmerrill/arkouda#681)
+  03/23/21:
+    - A few communication micro-optimizations to improve Block array creation (#17354)
+  03/25/21:
+    - fix groupby benchmark bug (mhmerrill/arkouda#712)
+  04/07/21:
+    - Increase the aggregation buffer sizes for non-ugni configurations (mhmerrill/arkouda#732)
+    - Revert a recent change in block array creation that caused performance regression (#17531)
 
+arkouda-string:
+  <<: *arkouda-base
 
 arkouda-comp:
   <<: *arkouda-base
@@ -1993,3 +2154,5 @@ arkouda-comp:
     - Stop inlining many string casts (#16355)
   09/17/20:
     - Fix some issues with constant domain optimization (#16397)
+  02/25/21:
+    - Stop converting PRIM_ZIP to tuples for forall statements (#17212)

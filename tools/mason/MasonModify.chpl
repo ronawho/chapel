@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -18,7 +18,8 @@
  * limitations under the License.
  */
 
-use Regexp;
+use Regex;
+use FileSystem;
 use TOML;
 use MasonUtils;
 private use Map;
@@ -88,7 +89,7 @@ proc masonModify(args: [] string) throws {
     //       this function is only executed when 'add' or 'rm' is passed
 
     // Modify the manifest file based on arguments
-    const cwd = getEnv("PWD");
+    const cwd = here.cwd();
     const projectHome = getProjectHome(cwd, "Mason.toml");
 
     const result = modifyToml(add, dep, external, system, projectHome);

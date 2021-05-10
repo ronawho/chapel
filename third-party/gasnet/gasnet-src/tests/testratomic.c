@@ -865,8 +865,8 @@ int main(int argc, char **argv) {
   // need scratch sizes before Attatch
   gex_TM_t subtm = GEX_TM_INVALID;
   int color = gex_TM_QueryRank(myteam) & 1; // odds & evens
-  scratch_sz1 = gex_TM_Split(&subtm, myteam, color, 0, 0, 0, GEX_FLAG_TM_SCRATCH_SIZE_MIN);
-  scratch_sz2 = gex_TM_Split(&subtm, myteam, mynbrhd, 0, 0, 0, GEX_FLAG_TM_SCRATCH_SIZE_MIN);
+  scratch_sz1 = gex_TM_Split(&subtm, myteam, color, 0, 0, 0, GEX_FLAG_TM_SCRATCH_SIZE_RECOMMENDED);
+  scratch_sz2 = gex_TM_Split(&subtm, myteam, mynbrhd, 0, 0, 0, GEX_FLAG_TM_SCRATCH_SIZE_RECOMMENDED);
 
   GASNET_Safe(gex_Segment_Attach(&mysegment, myteam, TEST_SEGSZ_REQUEST));
 
@@ -876,7 +876,7 @@ int main(int argc, char **argv) {
   gex_Rank_t self = gex_TM_QueryRank(myteam);
   if (seedoffset == 0) {
     seedoffset = (((unsigned int)TIME()) & 0xFFFF);
-    TEST_BCAST(&seedoffset, 0, &seedoffset, sizeof(&seedoffset));
+    TEST_BCAST(&seedoffset, 0, &seedoffset, sizeof(seedoffset));
   }
   TEST_SRAND(self+seedoffset);
 

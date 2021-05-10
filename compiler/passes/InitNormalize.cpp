@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -348,7 +348,7 @@ Expr* InitNormalize::genericFieldInitTypeWoutInit(Expr*    insertBefore,
 
   Type* type = field->sym->type;
 
-  VarSymbol* tmp      = newTemp("tmp", type);
+  VarSymbol* tmp      = newTemp(field->sym->name, type);
   DefExpr*   tmpDefn  = new DefExpr(tmp);
   CallExpr*  tmpInit  = new CallExpr(PRIM_DEFAULT_INIT_VAR,
                                      tmp, field->exprType->copy());
@@ -419,7 +419,7 @@ Expr* InitNormalize::genericFieldInitTypeInference(Expr*    insertBefore,
       insertBefore->insertBefore(fieldSet);
 
     } else {
-      VarSymbol* tmp      = newTemp("tmp");
+      VarSymbol* tmp      = newTemp(field->sym->name);
       DefExpr*   tmpDefn  = new DefExpr(tmp);
       PrimitiveTag tag    = isTypeVar ? PRIM_MOVE : PRIM_INIT_VAR;
       CallExpr*  tmpInit  = new CallExpr(tag, tmp, initExpr);
@@ -458,12 +458,12 @@ Expr* InitNormalize::genericFieldInitTypeInference(Expr*    insertBefore,
       if ((isParam || isTypeVar) && initCall->isPrimitive(PRIM_NEW) == true) {
         const char* kind = isTypeVar ? "type" : "param";
         USR_FATAL(initExpr,
-                  "Cannot initialize %s field '%s' with 'new' expression",
+                  "cannot initialize %s field '%s' with 'new' expression",
                   kind, field->sym->name);
       }
     }
 
-    VarSymbol* tmp      = newTemp("tmp");
+    VarSymbol* tmp      = newTemp(field->sym->name);
     DefExpr*   tmpDefn  = new DefExpr(tmp);
     PrimitiveTag tag    = isTypeVar ? PRIM_MOVE : PRIM_INIT_VAR;
     CallExpr*  tmpInit  = new CallExpr(tag, tmp, initExpr);
@@ -505,7 +505,7 @@ Expr* InitNormalize::fieldInitTypeWoutInit(Expr*    insertBefore,
 
   Type* type = field->sym->type;
 
-  VarSymbol* tmp      = newTemp("tmp", type);
+  VarSymbol* tmp      = newTemp(field->sym->name, type);
   DefExpr*   tmpDefn  = new DefExpr(tmp);
   CallExpr*  tmpInit  = new CallExpr(PRIM_DEFAULT_INIT_VAR,
                                      tmp, field->exprType->copy());
@@ -546,7 +546,7 @@ Expr* InitNormalize::fieldInitTypeWithInit(Expr*    insertBefore,
 
   } else {
     // Do not set type of 'tmp' so that resolution will infer it later
-    VarSymbol* tmp       = newTemp("tmp");
+    VarSymbol* tmp       = newTemp(field->sym->name);
     DefExpr*   tmpDefn   = new DefExpr(tmp);
     Expr*      checkType = NULL;
 
@@ -603,7 +603,7 @@ Expr* InitNormalize::fieldInitTypeInference(Expr*    insertBefore,
     insertBefore->insertBefore(fieldSet);
 
   } else {
-    VarSymbol* tmp      = newTemp("tmp");
+    VarSymbol* tmp      = newTemp(field->sym->name);
     DefExpr*   tmpDefn  = new DefExpr(tmp);
     CallExpr*  tmpInit  = new CallExpr(PRIM_INIT_VAR, tmp, initExpr);
 
@@ -899,7 +899,7 @@ static bool isThisDot(CallExpr* call) {
       retval = true;
     }
   }
-  
+
   return retval;
 }
 
@@ -942,17 +942,17 @@ static bool typeHasMethod(AggregateType* type, const char* methodName) {
   return retval;
 }
 
-class ProcessThisUses : public AstVisitorTraverse
+class ProcessThisUses final : public AstVisitorTraverse
 {
   public:
-    ProcessThisUses(const InitNormalize* state) {
-      this->state = state;
+    ProcessThisUses(const InitNormalize* state)
+      : state(state) {
     }
-    virtual ~ProcessThisUses() { }
+    ~ProcessThisUses() override = default;
 
-    virtual void visitSymExpr(SymExpr* node);
-    virtual bool enterCallExpr(CallExpr* node);
-    virtual bool enterFnSym(FnSymbol* node);
+    void visitSymExpr(SymExpr* node) override;
+    bool enterCallExpr(CallExpr* node) override;
+    bool enterFnSym(FnSymbol* node) override;
 
   private:
     const InitNormalize* state;
@@ -1078,8 +1078,8 @@ bool ProcessThisUses::enterCallExpr(CallExpr* node) {
         return false;
       }
     }
-  } else if (node->isPrimitive(PRIM_CAST) || node->isNamedAstr(astr_cast)) {
-    if (SymExpr* se = toSymExpr(node->get(2))) {
+  } else if (node->isPrimitive(PRIM_CAST) || node->isNamedAstr(astrScolon)) {
+    if (SymExpr* se = toSymExpr(node->get(1))) {
       if (se->symbol()->hasFlag(FLAG_ARG_THIS)) {
         USR_FATAL_CONT(node, "cannot cast \"this\" before this.complete()");
         return false;

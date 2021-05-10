@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -305,7 +305,7 @@ module ChapelLocale {
   inline proc locale.callStackSize { return this._value.callStackSize; }
 
   pragma "no doc"
-  proc =(ref l1: locale, const ref l2: locale) {
+  operator locale.=(ref l1: locale, const ref l2: locale) {
     l1._instance = l2._instance;
   }
 
@@ -530,8 +530,29 @@ module ChapelLocale {
   }
 
 
+  // Returns a reference to a singleton array (stored in AbstractLocaleModel)
+  // storing this locale.
+  //
+  // This singleton array is useful for some array/domain implementations
+  // (such as DefaultRectangular) to help the targetLocales call return
+  // by 'const ref' without requiring the array/domain implementation
+  // to store another array.
+  pragma "no doc"
+  proc chpl_getSingletonLocaleArray(arg: locale) const ref
+  lifetime return c_sublocid_none // indicate return has global lifetime
+  {
+    var casted = arg._instance:borrowed AbstractLocaleModel?;
+    if casted == nil then
+      halt("cannot call chpl_getSingletonCurrentLocaleArray on nil or rootLocale");
+
+    return casted!.chpl_singletonThisLocaleArray;
+  }
+
   pragma "no doc"
   class AbstractLocaleModel : BaseLocale {
+    // Used in chpl_getSingletonLocaleArray -- see the comment there
+    var chpl_singletonThisLocaleArray:[0..0] locale;
+
     // This will be used for interfaces that will be common to all
     // (non-RootLocale) locale models
     proc init(parent_loc : locale) {
@@ -565,8 +586,7 @@ module ChapelLocale {
   // (called origRootLocale), and setting all locales' rootLocale to
   // origRootLocale.  Later, after DefaultRectangular can be
   // initialized, we create local copies of the rootLocale (and the
-  // Locales array).  This is being done in the InitPrivateGlobals
-  // module.
+  // Locales array).
   //
   pragma "no doc"
   var origRootLocale = nilLocale;
@@ -631,6 +651,7 @@ module ChapelLocale {
           b.wait(locIdx, flags);
           chpl_rootLocaleInitPrivate(locIdx);
           chpl_defaultLocaleInitPrivate();
+          chpl_singletonCurrentLocaleInitPrivate(locIdx);
           warmupRuntime();
         }
       }
@@ -669,6 +690,13 @@ module ChapelLocale {
   pragma "no doc"
   class localesSignal {
     var s: atomic bool;
+
+    // Override default initializer; this could go away when the
+    // compiler's default initializer creates a version that takes a
+    // bool rather than an 'atomic bool' (which generates a
+    // '--warn-unstable' warning otherwise)
+    proc init() {
+    }
   }
   pragma "no doc"
   record localesBarrier {
@@ -723,16 +751,6 @@ module ChapelLocale {
     (origRootLocale._instance:borrowed RootLocale?)!.setup();
   }
 
-  pragma "no doc"
-  inline proc chpl_defaultLocaleInitPrivate() {
-    // We don't want to be doing unnecessary ref count updates here
-    // as they require additional tasks.  We know we don't need them
-    // so tell the compiler to not insert them.
-    pragma "no copy" pragma "no auto destroy"
-    const ref rl = (rootLocale._instance:borrowed RootLocale?)!.getDefaultLocaleArray();
-    defaultLocale._instance = rl[0]._instance;
-  }
-
   // This function sets up a private copy of rootLocale by replicating
   // origRootLocale and resets the Locales array to point to the local
   // copy on all but locale 0 (which is done in LocalesArray.chpl as
@@ -772,6 +790,40 @@ module ChapelLocale {
       __primitive("move", Locales, tmp);
     }
     rootLocaleInitialized = true;
+  }
+
+  pragma "no doc"
+  proc chpl_defaultLocaleInitPrivate() {
+    pragma "no copy" pragma "no auto destroy"
+    const ref rl = (rootLocale._instance:borrowed RootLocale?)!.getDefaultLocaleArray();
+    defaultLocale._instance = rl[0]._instance;
+  }
+
+  pragma "no doc"
+  proc chpl_singletonCurrentLocaleInitPrivateSublocs(arg: locale) {
+    for i in 0..#arg.getChildCount() {
+      var subloc = arg.getChild(i);
+
+      var val = subloc._instance:unmanaged AbstractLocaleModel?;
+      if val == nil then
+        halt("error in locale initialization");
+
+      val!.chpl_singletonThisLocaleArray[0]._instance = val;
+
+      chpl_singletonCurrentLocaleInitPrivateSublocs(subloc);
+    }
+  }
+  pragma "no doc"
+  proc chpl_singletonCurrentLocaleInitPrivate(locIdx) {
+    pragma "no copy" pragma "no auto destroy"
+    const ref rl = (rootLocale._instance:borrowed RootLocale?)!.getDefaultLocaleArray();
+    var loc = rl[locIdx];
+    var val = loc._instance:unmanaged AbstractLocaleModel?;
+    if val == nil then
+      halt("error in locale initialization");
+
+    val!.chpl_singletonThisLocaleArray[0]._instance = val;
+    chpl_singletonCurrentLocaleInitPrivateSublocs(loc);
   }
 
   pragma "fn synchronization free"

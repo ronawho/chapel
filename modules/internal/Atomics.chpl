@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -83,7 +83,7 @@
 pragma "atomic module"
 module Atomics {
 
-  use ChapelBase;             // to get CHPL_CACHE_REMOTE...
+  use ChapelBase;
   public use MemConsistency;  // OK: to get and propagate memoryOrder
 
   pragma "no doc"
@@ -350,6 +350,11 @@ module Atomics {
       x <~> read();
     }
 
+  }
+
+  operator :(rhs: bool, type t:AtomicBool) {
+    var lhs: AtomicBool = rhs; // use init=
+    return lhs;
   }
 
   pragma "atomic type"
@@ -679,6 +684,12 @@ module Atomics {
 
   }
 
+  operator :(rhs, type t:AtomicT)
+  where rhs.type == t.T {
+    var lhs: t = rhs; // use init=
+    return lhs;
+  }
+
   //
   // For the first cut, we will be making assignment and other normal
   // operations illegal.  In addition, we are also punting on
@@ -689,35 +700,35 @@ module Atomics {
   // We need to explicitly define these for all types because the atomic
   // types are records and unless explicitly defined, it will resolve
   // to the normal record version of the function.  Sigh.
-  inline proc =(ref a:AtomicBool, const ref b:AtomicBool) {
+  inline operator =(ref a:AtomicBool, const ref b:AtomicBool) {
     a.write(b.read());
   }
-  inline proc =(ref a:AtomicBool, b) {
+  inline operator =(ref a:AtomicBool, b) {
     compilerError("Cannot directly assign atomic variables");
   }
-  inline proc =(ref a:AtomicT, const ref b:AtomicT) {
+  inline operator =(ref a:AtomicT, const ref b:AtomicT) {
     a.write(b.read());
   }
-  inline proc =(ref a:AtomicT, b) {
+  inline operator =(ref a:AtomicT, b) {
     compilerError("Cannot directly assign atomic variables");
   }
-  inline proc +(a:AtomicT, b) {
+  inline operator +(a:AtomicT, b) {
     compilerError("Cannot directly add atomic variables");
     return a;
   }
-  inline proc -(a:AtomicT, b) {
+  inline operator -(a:AtomicT, b) {
     compilerError("Cannot directly subtract atomic variables");
     return a;
   }
-  inline proc *(a:AtomicT, b) {
+  inline operator *(a:AtomicT, b) {
     compilerError("Cannot directly multiply atomic variables");
     return a;
   }
-  inline proc /(a:AtomicT, b) {
+  inline operator /(a:AtomicT, b) {
     compilerError("Cannot directly divide atomic variables");
     return a;
   }
-  inline proc %(a:AtomicT, b) {
+  inline operator %(a:AtomicT, b) {
     compilerError("Cannot directly divide atomic variables");
     return a;
   }

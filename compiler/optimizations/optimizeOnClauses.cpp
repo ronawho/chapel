@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -303,6 +303,9 @@ classifyPrimitive(CallExpr *call) {
   case PRIM_VIRTUAL_METHOD_CALL:
   case PRIM_INT_ERROR:
     return NOT_FAST_NOT_LOCAL;
+
+  case PRIM_GPU_KERNEL_LAUNCH:
+    return LOCAL_NOT_FAST;
 
   // no default, so that it is usually a C compilation
   // error when a primitive is added but not included here.

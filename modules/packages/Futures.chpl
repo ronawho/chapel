@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -264,7 +264,7 @@ module Futures {
   }
 
   pragma "no doc"
-  proc =(ref lhs: Future, rhs: Future) {
+  operator Future.=(ref lhs: Future, rhs: Future) {
     if lhs.classRef == rhs.classRef then return;
     if lhs.classRef != nil then
       lhs.release();

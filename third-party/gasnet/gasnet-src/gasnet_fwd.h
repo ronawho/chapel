@@ -33,6 +33,16 @@ typedef uint32_t gex_Rank_t;
 #define GEX_RANK_INVALID (~(gex_Rank_t)0)
 
 //================================================
+// gex_EP_Index_t and gex_EP_Location_t
+//================================================
+
+typedef uint16_t gex_EP_Index_t;
+typedef struct {
+  gex_Rank_t     gex_rank;
+  gex_EP_Index_t gex_ep_index;
+} gex_EP_Location_t;
+
+//================================================
 // gex_Event_t
 //================================================
 
@@ -47,6 +57,12 @@ typedef struct _gex_event_s *gex_Event_t;
 #define GEX_EVENT_NOW    ((gex_Event_t*)(uintptr_t)1)
 #define GEX_EVENT_DEFER  ((gex_Event_t*)(uintptr_t)2)
 #define GEX_EVENT_GROUP  ((gex_Event_t*)(uintptr_t)3)
+
+//================================================
+// gex_Addr_t
+//================================================
+
+typedef void* gex_Addr_t;
 
 //================================================
 // GEX_DT_*
@@ -168,8 +184,33 @@ typedef uint32_t gex_Flags_t;
 
 #define GEX_FLAG_TM_SCRATCH_SIZE_MIN          (1U <<  0)
 #define GEX_FLAG_TM_SCRATCH_SIZE_RECOMMENDED  (1U <<  1)
+#define GEX_FLAG_TM_GLOBAL_SCRATCH            (1U <<  2)
+#define GEX_FLAG_TM_LOCAL_SCRATCH             (1U <<  3)
+#define GEX_FLAG_TM_SYMMETRIC_SCRATCH         (1U <<  4)
+#define GEX_FLAG_TM_NO_SCRATCH                (1U <<  5)
+#define GEX_FLAG_SCRATCH_SEG_OFFSET           (1U <<  6)
+
+#define GEX_FLAG_GLOBALLY_QUIESCED      (1U << 13)
 
 #define GEX_FLAG_RANK_IS_JOBRANK        (1U << 13)
+
+#define GEX_FLAG_HINT_ACCEL_AD          (1U <<  0)
+#define GEX_FLAG_HINT_ACCEL_COLL        (1U <<  1)
+#define GEX_FLAG_HINT_ACCEL_ALL        ((1U <<  2)-1)
+
+//================================================
+// GEX_EP_CAPABILITY_*
+// Flags used when creating endpoints
+//================================================
+
+typedef uint32_t gex_EP_Capabilities_t;
+
+#define GEX_EP_CAPABILITY_RMA           (1U << 0)
+#define GEX_EP_CAPABILITY_AM            (1U << 1)
+#define GEX_EP_CAPABILITY_VIS           (1U << 2)
+#define GEX_EP_CAPABILITY_COLL          (1U << 3)
+#define GEX_EP_CAPABILITY_AD            (1U << 4)
+#define GEX_EP_CAPABILITY_ALL          ((1U << 5)-1)
 
 //--------------------------------------------------------
 // Private definitions

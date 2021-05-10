@@ -5,6 +5,8 @@ doctrees
 /rst/modules
 /rst/primers
 /rst/examples
+/rst/language/spec/syntax.rst
+/rst/compiler-internals/
 
 man.rst
 /rst/tools/chplvis/examples

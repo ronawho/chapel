@@ -33,8 +33,9 @@ class CommandError(Exception):
     pass
 
 
-def run_command(command, stdout=True, stderr=False, cmd_input=None):
-    """Command subprocess wrapper.
+def try_run_command(command, cmd_input=None):
+    """Command subprocess wrapper tolerating failure to find or run the cmd.
+       For normal usage the vanilla run_command() may be simpler to use.
        This should be the only invocation of subprocess in all chplenv scripts.
        This could be replaced by subprocess.check_output, but that
        is only available after Python 2.7, and we still support 2.6 :("""
@@ -44,23 +45,33 @@ def run_command(command, stdout=True, stderr=False, cmd_input=None):
                                    stderr=subprocess.PIPE,
                                    stdin=subprocess.PIPE)
     except OSError:
-        error("command not found: {0}".format(command[0]), OSError)
-
+        return (False, 0, None, None)
     byte_cmd_input = str.encode(cmd_input, "utf-8") if cmd_input else None
     output = process.communicate(input=byte_cmd_input)
-    if process.returncode != 0:
-        error("command failed: {0}\noutput was:\n{1}".format(
-            command, output[1]), CommandError)
+    return (True, process.returncode, output[0].decode("utf-8"),
+            output[1].decode("utf-8"))
+
+
+def run_command(command, stdout=True, stderr=False, cmd_input=None):
+    """Command subprocess wrapper.
+       This is the usual way to run a command and collect its output."""
+    exists, returncode, my_stdout, my_stderr = try_run_command(command,
+                                                               cmd_input)
+    if not exists:
+        error("command not found: {0}".format(command[0]), OSError)
+    if returncode != 0:
+        error("command failed: {0}\noutput was:\n{1}".format(command,
+                                                             my_stderr),
+              CommandError)
+    if stdout and stderr:
+        return my_stdout, my_stderr
+    elif stdout:
+        return my_stdout
+    elif stderr:
+        return my_stderr
     else:
-        output = (output[0].decode("utf-8"), output[1].decode("utf-8"))
-        if stdout and stderr:
-            return output
-        elif stdout:
-            return output[0]
-        elif stderr:
-            return output[1]
-        else:
-            return ''
+        return None
+
 
 def run_live_command(command):
     """Run a command, yielding the merged output (stdout/stderr) as the process

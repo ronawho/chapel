@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -151,6 +151,16 @@ bool AggregateType::isUnion() const {
   return aggregateTag == AGGREGATE_UNION;
 }
 
+const char* AggregateType::aggregateString() const {
+  switch (aggregateTag) {
+  case AGGREGATE_CLASS:   return "class";
+  case AGGREGATE_RECORD:  return "record";
+  case AGGREGATE_UNION:   return "union";
+  }
+  INT_FATAL(this, "unknown AggregateType tag");
+  return NULL;
+}
+
 bool AggregateType::isGeneric() const {
   return mIsGeneric;
 }
@@ -171,33 +181,52 @@ void AggregateType::markAsGenericWithDefaults() {
 void AggregateType::verify() {
   Type::verify();
 
-  if (astTag != E_AggregateType) {
+  if (astTag != E_AggregateType)
     INT_FATAL(this, "Bad AggregateType::astTag");
 
-  } else if (aggregateTag != AGGREGATE_CLASS  &&
-             aggregateTag != AGGREGATE_RECORD &&
-             aggregateTag != AGGREGATE_UNION) {
+  if (aggregateTag != AGGREGATE_CLASS  &&
+      aggregateTag != AGGREGATE_RECORD &&
+      aggregateTag != AGGREGATE_UNION)
     INT_FATAL(this, "Bad AggregateType::aggregateTag");
 
-  } else if (fields.parent != this || inherits.parent != this) {
+  if (fields.parent != this || inherits.parent != this)
     INT_FATAL(this, "Bad AList::parent in AggregateType");
 
-  } else {
-    for_alist(expr, fields) {
-      if (expr->parentSymbol != symbol) {
-        INT_FATAL(this, "Bad AggregateType::fields::parentSymbol");
-      }
+  for_alist(expr, fields) {
+    if (expr->parentSymbol != symbol) {
+      INT_FATAL(this, "Bad AggregateType::fields::parentSymbol");
     }
+  }
 
-    for_alist(expr, inherits) {
-      if (expr->parentSymbol != symbol) {
-        INT_FATAL(this, "Bad AggregateType::inherits::parentSymbol");
-      }
+  for_alist(expr, inherits) {
+    if (expr->parentSymbol != symbol) {
+      INT_FATAL(this, "Bad AggregateType::inherits::parentSymbol");
     }
+  }
 
-    for_alist(expr, forwardingTo) {
-      if (expr->parentSymbol != symbol)
-        INT_FATAL(this, "Bad AggregateType::forwardingTo::parentSymbol");
+  for_alist(expr, forwardingTo) {
+    if (expr->parentSymbol != symbol)
+      INT_FATAL(this, "Bad AggregateType::forwardingTo::parentSymbol");
+  }
+
+  if (this->instantiatedFrom && !this->instantiatedFrom->inTree())
+    INT_FATAL(this, "instantiatedFrom not in tree");
+
+  // check substitutions
+  form_Map(SymbolMapElem, e, this->substitutions) {
+    if (e->key && !e->key->inTree())
+      INT_FATAL(this, "Substitution key not in tree");
+    if (e->value && !e->value->inTree())
+      INT_FATAL(this, "Substitution value not in tree");
+  }
+
+  // check substitutionsPostResolve
+  {
+    size_t n = this->substitutionsPostResolve.size();
+    for (size_t i = 0; i < n; i++) {
+      const NameAndSymbol& ns = this->substitutionsPostResolve[i];
+      if (ns.value && !ns.value->inTree())
+        INT_FATAL(this, "Substitution value not in tree");
     }
   }
 }
@@ -340,9 +369,7 @@ bool AggregateType::fieldIsGeneric(Symbol* field, bool &hasDefault) {
         INT_ASSERT(!var->type->symbol->hasFlag(FLAG_GENERIC));
 
         retval = true;
-      } else if (def->init == NULL && def->exprType != NULL &&
-                 !mIsGenericWithDefaults) {
-
+      } else if (def->exprType != NULL) {
         // Temporarily mark the aggregate type as generic with defaults
         // in order to avoid infinite recursion.
         bool wasGenericWithDefaults = mIsGenericWithDefaults;
@@ -604,6 +631,10 @@ void AggregateType::addDeclaration(DefExpr* defExpr) {
       }
 
       fn->_this = arg;
+
+      if (fn->hasFlag(FLAG_OPERATOR)) {
+        updateOpThisTagOrErr(fn);
+      }
 
       if (fn->thisTag == INTENT_TYPE) {
         arg->intent = INTENT_BLANK;
@@ -875,6 +906,19 @@ static void resolveConcreteFields(AggregateType* ret, CallExpr* call, const char
       }
     }
   }
+}
+
+static Symbol* substitutionForField(Symbol* field, SymbolMap& subs) {
+  Symbol* retval = NULL;
+
+  form_Map(SymbolMapElem, e, subs) {
+    if (field->name == e->key->name) {
+      retval = e->value;
+      break;
+    }
+  }
+
+  return retval;
 }
 
 AggregateType* AggregateType::generateType(CallExpr* call, const char* callString) {
@@ -1240,23 +1284,29 @@ AggregateType* AggregateType::generateType(SymbolMap& subs, CallExpr* call, cons
           if (Symbol* sym = resolveFieldDefault(field, call, callString)) {
             retval = retval->getInstantiation(sym, index, insnPoint);
           }
-        } else if (field->hasFlag(FLAG_PARAM) && field->defPoint->init != NULL) {
+        } else if (field->defPoint->init != NULL) {
           Type* expected = resolveFieldTypeExpr(field, call, callString);
           Symbol* value = resolveFieldDefault(field, call, callString);
 
           if (expected != NULL && value != NULL) {
             if (getInstantiationType(value->type, NULL,
                                      expected, NULL, call) == NULL) {
-              // TODO: pretty-print resolved value
-              USR_FATAL_CONT(call, "unable to resolve type '%s'", callString);
-              USR_PRINT(call, "param field '%s' has type '%s' but default value is of incompatible type '%s'",
-                        field->name, expected->symbol->name, value->type->symbol->name);
-              USR_STOP();
+                USR_FATAL_CONT(call, "unable to resolve type '%s'", callString);
+                USR_PRINT(call, "field '%s' has type '%s' but default value "
+                                "is of incompatible type '%s'",
+                                 field->name, expected->symbol->name,
+                                 value->type->symbol->name);
+                USR_STOP();
             }
-            retval = retval->getInstantiation(value, index, insnPoint);
-          } else if (expected == NULL && value != NULL) {
-            retval = retval->getInstantiation(value, index, insnPoint);
           }
+          if (value == NULL) {
+            USR_FATAL_CONT(call, "unable to resolve type '%s'", callString);
+            USR_PRINT(call, "could not resolve default value for field '%s'",
+                             field->name);
+            USR_STOP();
+          }
+
+          retval = retval->getInstantiation(value, index, insnPoint);
         }
       }
     }
@@ -1380,20 +1430,6 @@ AggregateType* AggregateType::instantiationWithParent(AggregateType* parent, Exp
     symbol->defPoint->insertBefore(new DefExpr(retval->symbol));
 
     instantiations.push_back(retval);
-  }
-
-  return retval;
-}
-
-Symbol* AggregateType::substitutionForField(Symbol*    field,
-                                            SymbolMap& subs) const {
-  Symbol* retval = NULL;
-
-  form_Map(SymbolMapElem, e, subs) {
-    if (strcmp(field->name, e->key->name) == 0) {
-      retval = e->value;
-      break;
-    }
   }
 
   return retval;
@@ -2805,16 +2841,6 @@ void AggregateType::setCreationStyle(TypeSymbol* t, FnSymbol* fn) {
       USR_FATAL(fn, "an initializer cannot be declared without parentheses");
     }
 
-    if (fn->hasFlag(FLAG_METHOD_PRIMARY) == false &&
-        fn->getModule() != t->getModule()) {
-      // We are looking at a secondary initializer defined in a module
-      // other than the module defining the type.
-      USR_WARN(fn, "initializers defined outside the module where the "
-               "type was originally defined may cause issues");
-      USR_PRINT(fn, "This will no longer be a problem when constructors "
-                "are deprecated");
-    }
-
     if (ct->hasUserDefinedInit == false) {
       // We hadn't previously seen an initializer definition.
       // Update the field on the type appropriately.
@@ -2857,18 +2883,14 @@ void AggregateType::addRootType() {
 *                                                                             *
 ************************************** | *************************************/
 
-Symbol* AggregateType::getSubstitution(const char* name) {
-  Vec<Symbol*> keys;
+Symbol* AggregateType::getSubstitution(const char* name) const {
   Symbol*      retval = NULL;
 
-  substitutions.get_keys(keys);
-
-  forv_Vec(Symbol, key, keys) {
-    if (strcmp(name, key->name) == 0) {
-      retval = substitutions.get(key);
-      break;
-    }
+  if (fVerify) {
+    INT_ASSERT(name == astr(name));
   }
+
+  retval = this->getSubstitutionWithName(name);
 
   if (retval == NULL && dispatchParents.n == 1) {
     retval = dispatchParents.v[0]->getSubstitution(name);
@@ -2959,23 +2981,15 @@ Type* AggregateType::getDecoratedClass(ClassTypeDecorator d) {
 }
 
 Type* AggregateType::cArrayElementType() const {
-  TypeSymbol* eltTS = NULL;
   INT_ASSERT(symbol->hasFlag(FLAG_C_ARRAY));
-  form_Map(SymbolMapElem, e, substitutions) {
-    if (TypeSymbol* ets = toTypeSymbol(e->value))
-      eltTS = ets;
-  }
+  TypeSymbol* eltTS = toTypeSymbol(getSubstitutionWithName(astr("eltType")));
   INT_ASSERT(eltTS);
   return eltTS->type;
 }
 
 int64_t AggregateType::cArrayLength() const {
-  VarSymbol* sizeVar = NULL;
   INT_ASSERT(symbol->hasFlag(FLAG_C_ARRAY));
-  form_Map(SymbolMapElem, e, substitutions) {
-    if (VarSymbol* evs = toVarSymbol(e->value))
-      sizeVar = evs;
-  }
+  VarSymbol* sizeVar = toVarSymbol(getSubstitutionWithName(astr("size")));
   INT_ASSERT(sizeVar);
   Immediate* imm = getSymbolImmediate(sizeVar);
   INT_ASSERT(imm);

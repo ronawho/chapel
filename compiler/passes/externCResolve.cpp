@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -92,7 +92,7 @@ static Expr* convertPointerToChplType(ModuleSymbol* module,
 
   // Pointers to void (aka void*) convert to c_void_ptr
   if (pointeeType.getTypePtr()->isVoidType()) {
-    return tryCResolveExpr(module, "c_void_ptr");
+    return tryCResolveExpr(module, "chpl__c_void_ptr");
   }
 
   Expr* pointee = convertToChplType(module, pointeeType.getTypePtr());

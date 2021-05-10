@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
@@ -35,5 +35,6 @@ module Prefetch {
 }
 
 module Prefetch_internal {
+  use CPtr;
   extern proc chpl_prefetch(addr: c_void_ptr);
 }

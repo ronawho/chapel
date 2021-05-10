@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -137,6 +137,13 @@ enum ShadowVarPrefix {
   SVP_VAR,
 };
 
+// Ensures consistent iteration order over std::map<const char*,...>
+struct CharStarComparator {
+  bool operator()(const char* lhs, const char* rhs) const {
+    return strcmp(lhs, rhs) < 0;
+  }
+};
+
 /************************************* | **************************************
 *                                                                             *
 *                                                                             *
@@ -146,10 +153,10 @@ enum ShadowVarPrefix {
 class Symbol : public BaseAST {
 public:
   // Interface for BaseAST
-  virtual GenRet     codegen();
-          bool       inTree();
-  virtual QualifiedType qualType();
-  virtual void       verify();
+  GenRet         codegen()   override;
+  bool           inTree()    override;
+  QualifiedType  qualType()  override;
+  void           verify()    override;
 
   // Note: copy may add copied Symbols to the supplied map
   virtual Symbol*    copy(SymbolMap* map      = NULL,
@@ -232,12 +239,12 @@ protected:
                             const char* init_name,
                             Type*       init_type = dtUnknown);
 
-  virtual           ~Symbol();
+                    ~Symbol() override;
 
 private:
-                     Symbol();
-
   virtual void       codegenPrototype(); // ie type decl
+  virtual Symbol*    copyInner(SymbolMap* map) = 0;
+
 
   SymExpr*           symExprsHead;
   SymExpr*           symExprsTail;
@@ -283,10 +290,9 @@ protected:
                       const char* initName,
                       Type*       initType);
 
-  virtual  ~LcnSymbol();
+           ~LcnSymbol() override = default;
 
 private:
-            LcnSymbol();
 
   int       mDepth;                // Lexical depth relative to root
   int       mOffset;               // Byte offset within frame
@@ -307,35 +313,36 @@ public:
   //changed isconstant flag to reflect var, const, param: 0, 1, 2
   VarSymbol(const char* init_name, Type* init_type = dtUnknown);
   VarSymbol(const char* init_name, QualifiedType qType);
-  virtual ~VarSymbol();
+ ~VarSymbol() override;
 
-  void verify();
-  virtual void    accept(AstVisitor* visitor);
+  void   verify()                                            override;
+  void   accept(AstVisitor* visitor)                         override;
   DECLARE_SYMBOL_COPY(VarSymbol);
-  void replaceChild(BaseAST* old_ast, BaseAST* new_ast);
+  VarSymbol* copyInner(SymbolMap* map)                       override;
 
-  virtual bool       isConstant()                              const;
-  virtual bool       isConstValWillNotChange();
-  virtual bool       isImmediate()                             const;
-  virtual bool       isParameter()                             const;
-  virtual bool       isType()                                  const;
+  void   replaceChild(BaseAST* old_ast, BaseAST* new_ast)    override;
+
+  bool   isConstant()                                  const override;
+  bool   isConstValWillNotChange()                           override;
+  bool   isImmediate()                                 const override;
+  bool   isParameter()                                 const override;
+  bool   isType()                                               const;
 
   const char* doc;
 
   GenRet codegenVarSymbol(bool lhsInSetReference=false);
-  GenRet codegen();
-  void codegenDefC(bool global = false, bool isHeader = false);
-  void codegenDef();
+  GenRet codegen()                                           override;
+  void   codegenDefC(bool global = false, bool isHeader = false);
+  void   codegenDef()                                        override;
   // global vars are different ...
-  void codegenGlobalDef(bool isHeader);
+  void   codegenGlobalDef(bool isHeader);
 
-  virtual void printDocs(std::ostream *file, unsigned int tabs);
+  void printDocs(std::ostream *file, unsigned int tabs);
 
   void makeField();
 
 private:
-
-  virtual std::string docsDirective();
+  std::string docsDirective();
   bool isField;
 
 protected:
@@ -358,7 +365,7 @@ public:
 *                                                                             *
 ************************************** | *************************************/
 
-class ArgSymbol : public LcnSymbol {
+class ArgSymbol final : public LcnSymbol {
 public:
   ArgSymbol(IntentTag   iIntent,
             const char* iName,
@@ -369,22 +376,21 @@ public:
 
 
   // Interface for BaseAST
-  virtual GenRet  codegen();
+  GenRet codegen()                                       override;
 
-  virtual void    verify();
-  virtual void    accept(AstVisitor* visitor);
+  void   verify()                                        override;
+  void   accept(AstVisitor* visitor)                     override;
   DECLARE_SYMBOL_COPY(ArgSymbol);
+  ArgSymbol* copyInner(SymbolMap* map)                   override;
+
 
   // Interface for Symbol
-  virtual void    replaceChild(BaseAST* oldAst, BaseAST* newAst);
+  void   replaceChild(BaseAST* oldAst, BaseAST* newAst)  override;
+  bool   isConstant()                              const override;
+  bool   isConstValWillNotChange()                       override;
+  bool   isParameter()                             const override;
 
-
-  // New interface
-  virtual bool    isConstant()                              const;
-  virtual bool    isConstValWillNotChange();
-  virtual bool    isParameter()                             const;
-
-  virtual bool    isVisible(BaseAST* scope)                 const;
+  bool   isVisible(BaseAST* scope)                 const override;
 
   bool            requiresCPtr();
   const char*     intentDescrString() const;
@@ -394,6 +400,8 @@ public:
   std::string     getPythonType(PythonFileType pxd);
   std::string     getPythonDefaultValue();
   std::string     getPythonArgTranslation();
+
+  std::string     demungeVarArgName(std::string* num=NULL);
 
   IntentTag       intent;
   IntentTag       originalIntent; // stores orig intent after resolve intents
@@ -421,24 +429,26 @@ public:
 *                                                                             *
 ************************************** | *************************************/
 
-class ShadowVarSymbol : public VarSymbol {
+class ShadowVarSymbol final : public VarSymbol {
 public:
   ShadowVarSymbol(ForallIntentTag iIntent,
                   const char* iName,
                   SymExpr* outerVar,
                   Expr* iSpec = NULL);
 
-  virtual void    verify();
-  virtual void    accept(AstVisitor* visitor);
+  void  verify()                                           override;
+  void  accept(AstVisitor* visitor)                        override;
   DECLARE_SYMBOL_COPY(ShadowVarSymbol);
+  ShadowVarSymbol* copyInner(SymbolMap* map)               override;
 
-  virtual void    replaceChild(BaseAST* oldAst, BaseAST* newAst);
-  virtual bool    isConstant()                              const;
-  virtual bool    isConstValWillNotChange();
+
+  void  replaceChild(BaseAST* oldAst, BaseAST* newAst)     override;
+  bool  isConstant()                                 const override;
+  bool  isConstValWillNotChange()                          override;
 
   const char* intentDescrString() const;
-  bool        isReduce()          const { return intent == TFI_REDUCE;       }
-  bool        isTaskPrivate()     const { return intent == TFI_TASK_PRIVATE; }
+  bool  isReduce()          const { return intent == TFI_REDUCE;       }
+  bool  isTaskPrivate()     const { return intent == TFI_TASK_PRIVATE; }
 
   static ShadowVarSymbol* buildForPrefix(ShadowVarPrefix prefix,
                                          Expr* name, Expr* type, Expr* init);
@@ -488,7 +498,7 @@ public:
 *                                                                   *
 ********************************* | ********************************/
 
-class TypeSymbol : public Symbol {
+class TypeSymbol final : public Symbol {
  public:
   // We need to know whether or not the definition
   // for this type has already been codegen'd
@@ -520,14 +530,17 @@ class TypeSymbol : public Symbol {
 #endif
 
   TypeSymbol(const char* init_name, Type* init_type);
-  void verify();
-  virtual void    accept(AstVisitor* visitor);
+  void  verify()                                          override;
+  void  accept(AstVisitor* visitor)                       override;
   DECLARE_SYMBOL_COPY(TypeSymbol);
-  void replaceChild(BaseAST* old_ast, BaseAST* new_ast);
+  TypeSymbol* copyInner(SymbolMap* map)                   override;
 
-  GenRet codegen();
-  void codegenDef();
-  void codegenPrototype();
+  void  replaceChild(BaseAST* old_ast, BaseAST* new_ast)  override;
+
+  GenRet codegen()                                        override;
+  void   codegenDef()                                     override;
+  void   codegenPrototype()                               override;
+
   // This function is used to code generate the LLVM TBAA metadata
   // after all of the types have been defined.
   void codegenMetadata();
@@ -552,25 +565,75 @@ class TypeSymbol : public Symbol {
 
 /************************************* | **************************************
 *                                                                             *
+* An InterfaceSymbol represents an interface declaration. An IfcConstraint or *
+* an ImplementsStmt reference the interface being constrained or implemented  *
+* via a SymExpr referring to the InterfaceSymbol.                             *
+*                                                                             *
+* An interface declaration looks like this:                                   *
+*   interface InterfaceName(InterfaceFormal...) {                             *
+*     proc requiredFunction(args...);                                         *
+*     proc requiredFunctionWithDefaultImplementation(args...) {...}           *
+*   }                                                                         *
+*                                                                             *
+************************************** | *************************************/
+
+class InterfaceSymbol final : public Symbol {
+public:
+  static DefExpr* buildDef(const char* name, CallExpr* formals, BlockStmt* body);
+  static DefExpr* buildFormal(const char* name, IntentTag intent);
+  InterfaceSymbol(const char* name, BlockStmt* body);
+
+  DECLARE_SYMBOL_COPY(InterfaceSymbol);
+  InterfaceSymbol* copyInner(SymbolMap* map)             override;
+  void  verify()                                         override;
+  void  accept(AstVisitor* visitor)                      override;
+
+  void  replaceChild(BaseAST* oldAst, BaseAST* newAst)   override;
+  void  printDocs(std::ostream* file, unsigned int tabs);
+
+  int   numFormals() const { return ifcFormals.length; }
+
+  // the DefExprs for each interface formal
+  AList      ifcFormals;
+
+  // the body block of the interface declaration, always non-null
+  BlockStmt* ifcBody;
+
+  // maps name to the ConstrainedType for an associated type
+  // their DefExprs are in ifcBody
+  std::map<const char*, ConstrainedType*, CharStarComparator> associatedTypes;
+
+  // constraints to be checked for each implementation
+  std::vector<IfcConstraint*> associatedConstraints;
+
+  // each FnSymbol for the interface's required function is mapped
+  //  - to itself, if there is a default implementation
+  //  - to gDummyWitness, otherwise
+  SymbolMap  requiredFns;
+};
+
+/************************************* | **************************************
+*                                                                             *
 *                                                                             *
 *                                                                             *
 ************************************** | *************************************/
 
-class EnumSymbol : public Symbol {
+class EnumSymbol final : public Symbol {
 public:
                   EnumSymbol(const char* initName);
 
-  virtual void    verify();
-  virtual void    accept(AstVisitor* visitor);
+  void  verify()                                        override;
+  void  accept(AstVisitor* visitor)                     override;
 
   DECLARE_SYMBOL_COPY(EnumSymbol);
+  EnumSymbol* copyInner(SymbolMap* map)                 override;
 
-  virtual void    replaceChild(BaseAST* oldAst, BaseAST* newAst);
-  virtual void    codegenDef();
+  void  replaceChild(BaseAST* oldAst, BaseAST* newAst)  override;
+  void  codegenDef()                                    override;
 
-  virtual bool    isParameter()                             const;
+  bool  isParameter()                             const override;
 
-  Immediate*      getImmediate();
+  Immediate* getImmediate();
 };
 
 /************************************* | **************************************
@@ -587,15 +650,18 @@ public:
 *                                                                             *
 ************************************** | *************************************/
 
-class LabelSymbol : public Symbol {
+class LabelSymbol final : public Symbol {
 public:
   GotoStmt* iterResumeGoto;
   LabelSymbol(const char* init_name);
-  void verify();
-  virtual void    accept(AstVisitor* visitor);
+
+  void  verify()                                          override;
+  void  accept(AstVisitor* visitor)                       override;
   DECLARE_SYMBOL_COPY(LabelSymbol);
-  void replaceChild(BaseAST* old_ast, BaseAST* new_ast);
-  void codegenDef();
+  LabelSymbol* copyInner(SymbolMap* map)                  override;
+
+  void  replaceChild(BaseAST* old_ast, BaseAST* new_ast)  override;
+  void  codegenDef()                                      override;
 };
 
 /************************************* | **************************************
@@ -688,6 +754,7 @@ extern const char* astrSgte;    // >=
 extern const char* astrSlt;     // <
 extern const char* astrSlte;    // <=
 extern const char* astrSswap;   // <=>
+extern const char* astrScolon;  // :
 extern const char* astr_cast;
 extern const char* astr_defaultOf;
 extern const char* astrInit;
@@ -715,6 +782,8 @@ extern const char* astr_coerceCopy;
 extern const char* astr_coerceCopy;
 extern const char* astr_coerceMove;
 
+bool isAstrOpName(const char* name);
+
 void initAstrConsts();
 
 // Return true if the arg must use a C pointer whether or not
@@ -741,9 +810,6 @@ extern StringChainHash uniqueStringHash;
 extern Symbol *gNil;
 extern Symbol *gUnknown;
 extern Symbol *gMethodToken;
-// Pass this to a return-by-ref formal when the result is not needed.
-// Used when inlining iterators for ForallStmts.
-extern Symbol *gDummyRef;
 extern Symbol *gTypeDefaultToken;
 extern Symbol *gLeaderTag, *gFollowerTag, *gStandaloneTag;
 extern Symbol *gModuleToken;
@@ -755,6 +821,11 @@ extern Symbol *gStringC;
 extern Symbol *gOpaque;
 extern Symbol *gTimer;
 extern Symbol *gTaskID;
+// Used in InterfaceSymbol::requiredFns
+extern Symbol *gDummyWitness;
+// Pass this to a return-by-ref formal when the result is not needed.
+// Used when inlining iterators for ForallStmts.
+extern Symbol *gDummyRef;
 extern VarSymbol *gTrue;
 extern VarSymbol *gFalse;
 extern VarSymbol *gBoundsChecking;
@@ -762,6 +833,7 @@ extern VarSymbol *gCastChecking;
 extern VarSymbol *gNilChecking;
 extern VarSymbol *gOverloadSetsChecks;
 extern VarSymbol *gDivZeroChecking;
+extern VarSymbol *gCacheRemote;
 extern VarSymbol *gPrivatization;
 extern VarSymbol *gLocal;
 extern VarSymbol *gWarnUnstable;
@@ -821,7 +893,15 @@ void printLlvmIr(const char* name, llvm::Function *func, llvmStageNum_t numStage
 void preparePrintLlvmIrForCodegen();
 void completePrintLlvmIrStage(llvmStageNum_t numStage);
 
-const char* toString(ArgSymbol* arg);
-const char* toString(VarSymbol* var);
+const char* toString(ArgSymbol* arg, bool withTypeAndIntent);
+const char* toString(VarSymbol* var, bool withType);
+const char* toString(Symbol* sym, bool withTypeAndIntent);
+
+struct SymbolMapKeyValue {
+  Symbol *key, *value;
+  SymbolMapKeyValue(Symbol* k, Symbol* v): key(k), value(v) { }
+};
+typedef std::vector<SymbolMapKeyValue> SymbolMapVector;
+SymbolMapVector sortedSymbolMapElts(const SymbolMap& map);
 
 #endif

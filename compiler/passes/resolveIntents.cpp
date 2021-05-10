@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -24,6 +24,12 @@
 #include "resolution.h"
 
 bool intentsResolved = false;
+
+static bool isConstrainedTypeWrapper(Type* t) {
+  bool result = isConstrainedType(t);
+  //if (result) INT_FATAL("CG case"); // used for testing
+  return result;
+}
 
 IntentTag constIntentForType(Type* t) {
   if (is_bool_type(t) ||
@@ -54,6 +60,7 @@ IntentTag constIntentForType(Type* t) {
              isSingleType(t)        ||
              isRecordWrappedType(t) ||  // domain, array, or distribution
              isManagedPtrType(t) ||
+             isConstrainedTypeWrapper(t) ||
              isAtomicType(t) ||
              isUnion(t) ||
              isRecord(t)) { // may eventually want to decide based on size
@@ -148,6 +155,7 @@ IntentTag blankIntentForType(Type* t) {
              isRecord(t)                             ||
              // Note: isRecord(t) includes range (FLAG_RANGE)
              isUnion(t)                              ||
+             isConstrainedTypeWrapper(t)             ||
              t == dtTaskID                           ||
              t == dtFile                             ||
              t == dtNil                              ||

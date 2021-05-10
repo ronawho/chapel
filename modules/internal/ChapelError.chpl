@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -59,9 +59,11 @@ module ChapelError {
     }
 
     /* Override this method to provide an error message
-       in case the error is printed out or never caught.
-     */
-    proc message() {
+       of type string in case the error is printed out or never caught.
+      
+       :rtype: string
+    */
+    proc message():string {
       return _msg;
     }
   }

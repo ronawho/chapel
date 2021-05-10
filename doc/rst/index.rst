@@ -26,6 +26,7 @@ Chapel Documentation
    modules/standard
    modules/packages
    modules/layoutdist
+   mason-packages
    users-guide/index
 
 .. toctree::
@@ -34,6 +35,14 @@ Chapel Documentation
 
    Chapel Evolution <language/evolution>
    Documentation Archives <language/archivedSpecs>
+
+.. toctree::
+   :caption: Compiler Internals
+   :maxdepth: 1
+
+   compiler-internals/index
+
+
 
 Index
 -----

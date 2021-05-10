@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -43,6 +43,7 @@
 
 #ifdef HAVE_LLVM
 #include "llvm/IR/Module.h"
+#include "llvm/IR/DataLayout.h"
 #endif
 
 
@@ -62,6 +63,9 @@ void Type::codegenPrototype() { }
 
 
 void PrimitiveType::codegenDef() {
+}
+
+void ConstrainedType::codegenDef() {
 }
 
 void EnumType::codegenDef() {
@@ -93,7 +97,7 @@ void EnumType::codegenDef() {
 
     if(!(type = info->lvt->getType(symbol->cname))) {
       type = ty->codegen().type;
-      info->lvt->addGlobalType(symbol->cname, type);
+      info->lvt->addGlobalType(symbol->cname, type, !is_signed(ty));
 
       // Convert enums to constants with the user-specified immediate,
       // sized appropriately, when it exists.  When it doesn't, give
@@ -312,6 +316,11 @@ void AggregateType::codegenDef() {
 #ifdef HAVE_LLVM
       int paramID = 0;
       std::vector<llvm::Type*> params;
+#if HAVE_LLVM_VER >= 100
+      std::vector<llvm::MaybeAlign> aligns;
+#else
+      std::vector<unsigned> aligns;
+#endif
 
       if ((symbol->hasFlag(FLAG_OBJECT_CLASS) && aggregateTag == AGGREGATE_CLASS)) {
         llvm::Type* cidType = info->lvt->getType("chpl__class_id");
@@ -367,6 +376,7 @@ void AggregateType::codegenDef() {
             fieldType = info->lvt->getType(ct->classStructName(true));
           INT_ASSERT(fieldType);
           params.push_back(fieldType);
+          aligns.push_back(getAlignment(field->type));
           GEPMap.insert(std::pair<std::string, int>(field->cname, paramID++));
         }
       }
@@ -420,9 +430,24 @@ void AggregateType::codegenDef() {
                                           symbol->cname);
         }
 
-
         llvm::StructType* stype = llvm::cast<llvm::StructType>(type);
         stype->setBody(params);
+
+        if (aligns.size() == params.size()) {
+          for (size_t i = 0; i < params.size(); i++) {
+            unsigned offset = info->module->getDataLayout().getStructLayout(stype)->getElementOffset(i);
+#if HAVE_LLVM_VER >= 100
+            unsigned align = 1 << Log2(aligns[i].valueOrOne());
+#else
+            unsigned align = aligns[i];
+#endif
+            if ((offset % align) != 0) {
+              // Not aligned. Issue an error. In the future, we expect to add
+              // padding to make it aligned.
+              USR_FATAL(this->symbol->defPoint, "unhandled misaligned record member");
+            }
+          }
+        }
 
         if (aggregateTag == AGGREGATE_CLASS) {
           type = stype->getPointerTo();
@@ -436,7 +461,7 @@ void AggregateType::codegenDef() {
   if( !outfile ) {
 #ifdef HAVE_LLVM
     if( ! this->symbol->llvmType ) {
-      info->lvt->addGlobalType(this->symbol->cname, type);
+      info->lvt->addGlobalType(this->symbol->cname, type, false);
       this->symbol->llvmType = type;
     }
 #endif
@@ -459,10 +484,10 @@ void AggregateType::codegenPrototype() {
 
       llvm::StructType* st;
       st = llvm::StructType::create(info->module->getContext(), struct_name);
-      info->lvt->addGlobalType(struct_name, st);
+      info->lvt->addGlobalType(struct_name, st, false);
 
       llvm::PointerType* pt = llvm::PointerType::getUnqual(st);
-      info->lvt->addGlobalType(symbol->cname, pt);
+      info->lvt->addGlobalType(symbol->cname, pt, false);
       symbol->llvmType = pt;
 #endif
     }

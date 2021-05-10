@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
@@ -69,11 +69,20 @@
 
 #include <sys/types.h>
 #include <unistd.h>
+
+#ifdef __cplusplus
+#include <cerrno>
+#include <cstdlib>
+#include <cstdio>
+#include <cstdint>
+#include <climits>
+#else
 #include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <limits.h>
+#endif
 
 #define PTR_ADDBYTES(ptr,nbytes) ((void*) ( ((unsigned char*)ptr) + nbytes))
 

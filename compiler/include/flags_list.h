@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -33,6 +33,11 @@
 #define npr false /* NO, cannot be set via a pragma */
 #define ncm ""    /* no comment */
 
+// flags to be added to the aggregation markers
+symbolFlag ( FLAG_AGG_MARKER, npr, "aggregation marker", ncm)
+symbolFlag ( FLAG_AGG_IN_STATIC_ONLY_CLONE, npr, "static only aggregation marker", " this aggregation is happening in a static only forall clone")
+symbolFlag ( FLAG_AGG_IN_STATIC_AND_DYNAMIC_CLONE, npr, "static and dynamic aggregation marker", " this aggregation is happening in a static and dynamic forall clone")
+symbolFlag ( FLAG_AGG_GENERATOR, ypr, "aggregator generator", " this function generates and returns an aggregator")
 
 // Indicates an array implementation class can alias other array implementations
 // e.g. array views
@@ -94,6 +99,7 @@ symbolFlag( FLAG_COMMAND_LINE_SETTING , ypr, "command line setting" , ncm )
 //    for functions added by the compiler (e.g. with error handling)
 symbolFlag( FLAG_COMPILER_GENERATED , ypr, "compiler generated" , "marks functions that are compiler-generated or supplied by an internal module" )
 symbolFlag( FLAG_COMPILER_ADDED_WHERE , npr, "compiler added where" , "marks functions that have a where clause only because compiler added one" )
+symbolFlag( FLAG_COMPILER_ADDED_AGGREGATOR , npr, "compiler added aggregator" , "marks aggregator symbols that the compiler added" )
 
 symbolFlag( FLAG_COMPILER_NESTED_FUNCTION , npr, "compiler nested function" , ncm )
 symbolFlag( FLAG_CONCURRENTLY_ACCESSED , npr, "concurrently accessed" , "local variables accessed by multiple threads" )
@@ -119,6 +125,7 @@ symbolFlag( FLAG_DEFAULT_INTENT_IS_REF_MAYBE_CONST, ypr, "default intent is ref 
 symbolFlag( FLAG_COPY_INIT, npr, "copy initializer", ncm )
 symbolFlag( FLAG_DESTRUCTOR , npr, "destructor" , "applied to functions that are destructors" )
 symbolFlag( FLAG_DISTRIBUTION , ypr, "distribution" , ncm )
+symbolFlag( FLAG_DOCS_ONLY, ypr, "docs only", "this symbol is for documentation purposes only - ignore this symbol when compiling" )
 symbolFlag( FLAG_DOMAIN , ypr, "domain" , ncm )
 symbolFlag( FLAG_DONT_DISABLE_REMOTE_VALUE_FORWARDING , ypr, "dont disable remote value forwarding" , ncm )
 symbolFlag( FLAG_DOWN_END_COUNT_FN , ypr, "down end count fn" , ncm )
@@ -146,6 +153,7 @@ symbolFlag( FLAG_FN_RETARG, npr, "fn returns via _retArg", ncm )
 symbolFlag( FLAG_FOLLOWER_INDEX, npr, "follower index", "a variable representing a follower loop index" )
 symbolFlag( FLAG_FORMAL_TEMP, npr, "formal temp", "a formal temp requiring write-back for an out or inout argument" )
 symbolFlag( FLAG_FORMAL_TEMP_OUT, npr, "formal temp out", "a formal temp to back an out argument" )
+symbolFlag( FLAG_FORMAL_TEMP_OUT_CALLSITE, npr, "formal temp out callsite", "a formal temp to handle out/inout writeback at the callsite" )
 symbolFlag( FLAG_FORWARDING_FN , npr, "forwarding function" , ncm )
 symbolFlag( FLAG_FUNCTION_CLASS , npr, "function class" , "first-class function class representation" )
 symbolFlag( FLAG_FUNCTION_TERMINATES_PROGRAM, ypr, "function terminates program", "function that causes the program to exit" )
@@ -163,6 +171,7 @@ symbolFlag( FLAG_GET_MODULE_NAME, ypr, "get module name", "replace calls to this
 
 symbolFlag( FLAG_GLOBAL_TYPE_SYMBOL, ypr, "global type symbol", "is accessible through a global type variable")
 symbolFlag( FLAG_GLOBAL_VAR_BUILTIN, ypr, "global var builtin", "is accessible through a global symbol variable")
+symbolFlag( FLAG_GPU_CODEGEN , ypr, "codegen for GPU" , "generate GPU code" )
 symbolFlag( FLAG_HAS_POSTINIT , ypr, "has postinit" , "type that has a postinit method" )
 symbolFlag( FLAG_HAS_RUNTIME_TYPE , ypr, "has runtime type" , "type that has an associated runtime type" )
 
@@ -182,7 +191,6 @@ symbolFlag( FLAG_INDEX_VAR , npr, "index var" , ncm )
 // into loop index variables.
 symbolFlag( FLAG_INDEX_OF_INTEREST , npr, "an _indexOfInterest or chpl__followIdx variable" , ncm )
 symbolFlag( FLAG_INIT_COPY_FN,  ypr, "init copy fn" , "init copy function" )
-symbolFlag( FLAG_INITIALIZED_LATER,  ypr, "initialized later" , "initialized in subsequent statement" )
 symbolFlag( FLAG_INIT_TUPLE, ypr, "tuple init fn", ncm)
 symbolFlag( FLAG_INLINE , npr, "inline" , ncm )
 symbolFlag( FLAG_INLINED_FN , npr, "inlined function" , ncm )
@@ -194,11 +202,15 @@ symbolFlag( FLAG_INSTANTIATED_PARAM , npr, "instantiated param" , "this formal i
 symbolFlag( FLAG_INSTANTIATED_GENERIC , npr, "instantiated generic" , "this is an instantiation of a generic" )
 symbolFlag( FLAG_INSTANTIATED_FROM_ANY , npr, "instantiated from any" , "this is an instantiation from any type" )
 symbolFlag( FLAG_INTENT_REF_MAYBE_CONST_FORMAL, ypr, "intent ref maybe const formal", "The intent for this formal is ref if it is modified, const ref otherwise" )
+symbolFlag( FLAG_IMPLEMENTS_WRAPPER, npr, "ImplementsStmt wrapper", ncm)
 symbolFlag( FLAG_INVISIBLE_FN , npr, "invisible fn" , "invisible function (not a candidate for resolution)" )
 symbolFlag( FLAG_ITERATOR_CLASS , npr, "iterator class" , ncm )
 symbolFlag( FLAG_ITERATOR_FN , npr, "iterator fn" , ncm )
 symbolFlag( FLAG_ITERATOR_RECORD , npr, "iterator record" , ncm )
 symbolFlag( FLAG_ITERATOR_WITH_ON , npr, "iterator with on" , "iterator which contains an on block" )
+
+symbolFlag( FLAG_ALWAYS_RESOLVE , ypr, "always resolve function" , "keep this function even if it is not called so it can be called during codegen e.g." )
+
 // In resolution, functions marked as last-resort are considered only if
 // no functions without that flag are found. This usually is used to create
 // a pattern enabling user-supplied replacement of default behavior.
@@ -257,6 +269,9 @@ symbolFlag( FLAG_METHOD_PRIMARY , npr, "primary method" , "function that is a me
 symbolFlag( FLAG_MODIFIES_CONST_FIELDS , npr, "modifies const fields" , "... of 'this' argument" )
 symbolFlag( FLAG_MODULE_FROM_COMMAND_LINE_FILE, npr, "module from command line file", "This is a module that came from a file named on the compiler command line")
 symbolFlag( FLAG_MODULE_INIT , npr, "module init" , "a module init function" )
+
+symbolFlag( FLAG_MODULE_INCLUDED_BY_DEFAULT , ypr, "module included by default" , "module is included by default" )
+
 // This flag marks the result of an autoCopy as necessary.
 // Necessary autoCopies are not removed by the removeUnnecessaryAutoCopyCalls optimization.
 symbolFlag( FLAG_NECESSARY_AUTO_COPY, npr, "necessary auto copy", "a variable containing a necessary autoCopy" )
@@ -269,6 +284,7 @@ symbolFlag( FLAG_NO_BORROW_CONVERT , ypr, "no borrow convert", "arguments that a
 symbolFlag( FLAG_NO_CAPTURE_FOR_TASKING , npr, "no capture for tasking", "does not need to be captured before spawning tasks" )
 symbolFlag( FLAG_NO_CODEGEN , ypr, "no codegen" , "do not generate e.g. C code defining this symbol" )
 symbolFlag( FLAG_NO_COPY , ypr, "no copy" , "do not apply chpl__initCopy to initialization of a variable" )
+symbolFlag( FLAG_ERROR_ON_COPY, ypr, "error on copy", "error if actual is copied at callsite" )
 symbolFlag( FLAG_NO_COPY_RETURN, ypr, "no copy return", ncm)
 symbolFlag( FLAG_NO_COPY_RETURNS_OWNED, ypr, "no copy returns owned", ncm)
 symbolFlag( FLAG_NO_DEFAULT_FUNCTIONS , ypr, "no default functions" , ncm )
@@ -323,6 +339,8 @@ symbolFlag( FLAG_OBJECT_CLASS , ypr, "object class" , ncm )
 symbolFlag( FLAG_ON , npr, "on" , ncm )
 symbolFlag( FLAG_ON_BLOCK , npr, "on block" , ncm )
 
+symbolFlag( FLAG_OPERATOR , npr, "operator" , ncm )
+
 symbolFlag( FLAG_OVERRIDE , npr, "method overrides" , ncm )
 
 // variables added by flatten functions
@@ -370,7 +388,7 @@ symbolFlag( FLAG_POD , ypr, "plain old data" , "data can be bit copied")
 // These will be allocated outside of the loop in the IR (with an alloca
 // instruction). So, it should mark all variables other than those that
 // are loop-local stack variables inside of an order-independent loop.
-symbolFlag( FLAG_POINTS_OUTSIDE_ORDER_INDEPENDENT_LOOP , npr, "points outside order independent loop" , "points to memory other than local variables inside order indpendent loop")
+symbolFlag( FLAG_POINTS_OUTSIDE_ORDER_INDEPENDENT_LOOP , npr, "points outside order independent loop" , "points to memory other than local variables inside order independent loop")
 
 symbolFlag( FLAG_PRIMITIVE_TYPE , ypr, "primitive type" , "attached to primitive types to keep them from being deleted" )
 symbolFlag( FLAG_PRINT_MODULE_INIT_FN , ypr, "print module init fn" , ncm )
@@ -411,24 +429,32 @@ symbolFlag( FLAG_RUNTIME_TYPE_VALUE , npr, "runtime type value" , "associated ru
 symbolFlag( FLAG_SAFE, ypr, "safe", "safe (activate lifetime checking)")
 symbolFlag( FLAG_SCOPE, npr, "scope", "scoped (lifetime checking like a local variable)")
 symbolFlag( FLAG_SHOULD_NOT_PASS_BY_REF, npr, "should not pass by ref", "this symbol should be passed by value (not by reference) for performance, not for correctness")
-symbolFlag( FLAG_SINGLE , ypr, "single" , ncm )
-// Based on how this is used, I suggest renaming it to return_value_has_initializer
-// or something similar <hilde>.
-symbolFlag( FLAG_STAR_TUPLE , ypr, "star tuple" , "mark tuple types as star tuple types" )
-symbolFlag( FLAG_STAR_TUPLE_ACCESSOR , ypr, "star tuple accessor" , "this function for star tuple types" )
+
 symbolFlag( FLAG_SUPER_CLASS , npr, "super class" , ncm )
 symbolFlag( FLAG_SUPER_TEMP, npr, "temporary of super field", ncm)
 symbolFlag( FLAG_SUPPRESS_LVALUE_ERRORS , ypr, "suppress lvalue error" , "do not report an lvalue error if it occurs in a function with this flag" )
+
+// represents an interface formal, assoc. type, or required function
+// within a constrained generic function
+symbolFlag( FLAG_CG_REPRESENTATIVE, npr, "cg representative", ncm )
+// this instantiation does not need to be resolved
+symbolFlag( FLAG_CG_INTERIM_INST, npr, "cg interim instantiation", ncm)
+
+symbolFlag( FLAG_SINGLE , ypr, "single" , ncm )
 symbolFlag( FLAG_SYNC , ypr, "sync" , ncm )
+
 symbolFlag( FLAG_SYNTACTIC_DISTRIBUTION , ypr, "syntactic distribution" , ncm )
 symbolFlag( FLAG_TASK_FN_FROM_ITERATOR_FN , npr, "task fn from iterator fn" , ncm )
 symbolFlag( FLAG_TASK_SPAWN_IMPL_FN , ypr, "task spawn impl fn" , ncm )
 symbolFlag( FLAG_TASK_COMPLETE_IMPL_FN , ypr, "task complete impl fn" , ncm )
 symbolFlag( FLAG_TASK_JOIN_IMPL_FN , ypr, "task join impl fn" , ncm )
 symbolFlag( FLAG_TEMP , npr, "temp" , "compiler-inserted temporary" )
+
 symbolFlag( FLAG_TUPLE , ypr, "tuple" , ncm )
 symbolFlag( FLAG_TUPLE_CAST_FN , ypr, "tuple cast fn" , ncm )
 symbolFlag( FLAG_TUPLE_WITH_REF , npr, "tuple contains ref" , ncm )
+symbolFlag( FLAG_STAR_TUPLE , ypr, "star tuple" , "mark tuple types as star tuple types" )
+symbolFlag( FLAG_STAR_TUPLE_ACCESSOR , ypr, "star tuple accessor" , "this function for star tuple types" )
 
 symbolFlag( FLAG_TYPE_ASSIGN_FROM_CONST, npr, "type has = from const", "type supports assignment from a const rhs" )
 symbolFlag( FLAG_TYPE_ASSIGN_FROM_REF, npr, "type has = from ref", "type supports assignment from a potentially non-const rhs" )
@@ -444,7 +470,6 @@ symbolFlag( FLAG_TYPE_CUSTOM_INIT_EQUAL , npr, "type uses custom init=" , "type 
 symbolFlag( FLAG_TYPE_DEFAULT_ASSIGN , npr, "type uses default =" , "type uses compiler-generated default =" )
 symbolFlag( FLAG_TYPE_CUSTOM_ASSIGN , npr, "type uses custom =" , "type has user-provided custom =" )
 
-symbolFlag( FLAG_TYPE_FORMAL_FOR_OUT , npr, "type formal for out" , "stores the runtime type for an untyped out argument" )
 symbolFlag( FLAG_TYPE_VARIABLE , npr, "type variable" , "contains a type instead of a value" )
 symbolFlag( FLAG_UNCHECKED_THROWS,  ypr, "unchecked throws" , "function throws but handling the errors is not required even in strict mode")
 symbolFlag( FLAG_UNREF_FN,  ypr, "unref fn" , "function to remove reference fields from tuples or copy array slices when returning")

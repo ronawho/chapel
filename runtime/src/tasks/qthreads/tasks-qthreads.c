@@ -8,7 +8,7 @@
 //
 
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -683,6 +683,10 @@ static void setupAffinity(void) {
   if (chpl_env_rt_get_bool("OVERSUBSCRIBED", false)) {
     chpl_qt_setenv("AFFINITY", "no", 0);
   }
+
+  // For the binders topo spread threads across sockets instead of packing.
+  // Only impacts binders, but it doesn't hurt to set it for other configs.
+  chpl_qt_setenv("LAYOUT", "BALANCED", 0);
 }
 
 void chpl_task_init(void)

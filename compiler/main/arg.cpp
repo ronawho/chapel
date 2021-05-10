@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -249,7 +249,7 @@ void usage(const ArgumentState* state,
 static void print_n_spaces(int n)
 {
   for (int i = 0; i < n; i++)
-    fprintf(stdout, " ");
+    putchar(' ');
 }
 
 static void word_wrap_print(const char* text, int startCol, int endCol)

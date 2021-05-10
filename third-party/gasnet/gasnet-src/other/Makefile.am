@@ -14,16 +14,18 @@ AUTOMAKE_OPTIONS = foreign 1.4
 CONDUITMODE_SUBDIRS = \
         ammpi      \
 	amudp	   \
-	blcr       \
 	contrib    \
-	firehose   
+	firehose   \
+	valgrind
 
 CONDUITMODE_EXTRADIST = \
 	amx         \
+	hwloc       \
 	ssh-spawner \
 	mpi-spawner \
 	pmi-spawner \
 	spawner     \
+	kinds       \
 	myxml	\
 	detect-pshm.c \
 	pkgconfig-conduit.pc \

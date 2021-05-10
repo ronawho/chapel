@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -61,11 +61,6 @@ static bool            fixupDefaultInitCopy(FnSymbol* fn,
                                             FnSymbol* newFn,
                                             CallExpr* call);
 
-static void            fixupUntypedOutArgRTTs(FnSymbol* fn,
-                                              FnSymbol* newFn,
-                                              CallExpr* call);
-
-
 static void
 explainInstantiation(FnSymbol* fn) {
   if (strcmp(fn->name, fExplainInstantiation) != 0)
@@ -75,12 +70,15 @@ explainInstantiation(FnSymbol* fn) {
   if (explainInstantiationLine != -1 && explainInstantiationLine != fn->defPoint->linenum())
     return;
 
+  SymbolMapVector elts = sortedSymbolMapElts(fn->substitutions);
+
   char msg[1024] = "";
   int len = sprintf(msg, "instantiated %s(", fn->name);
   bool first = true;
   for_formals(formal, fn) {
-    form_Map(SymbolMapElem, e, fn->substitutions) {
-      ArgSymbol* arg = toArgSymbol(e->key);
+    for (auto elem: elts) {
+      ArgSymbol* arg = toArgSymbol(elem.key);
+
       if (!strcmp(formal->name, arg->name)) {
         if (first)
           first = false;
@@ -89,7 +87,7 @@ explainInstantiation(FnSymbol* fn) {
         INT_ASSERT(arg);
         if (strcmp(fn->name, tupleInitName))
           len += sprintf(msg+len, "%s = ", arg->name);
-        if (VarSymbol* vs = toVarSymbol(e->value)) {
+        if (VarSymbol* vs = toVarSymbol(elem.value)) {
           if (vs->immediate && vs->immediate->const_kind == NUM_KIND_INT)
             len += sprintf(msg+len, "%" PRId64, vs->immediate->int_value());
           else if (vs->immediate && vs->immediate->const_kind == CONST_KIND_STRING)
@@ -97,7 +95,7 @@ explainInstantiation(FnSymbol* fn) {
           else
             len += sprintf(msg+len, "%s", vs->name);
         }
-        else if (Symbol* s = toSymbol(e->value))
+        else if (Symbol* s = toSymbol(elem.value))
       // For a generic symbol, just print the name.
       // Additional clauses for specific symbol types should precede this one.
           len += sprintf(msg+len, "%s", s->name);
@@ -341,7 +339,7 @@ void instantiateBody(FnSymbol* fn) {
  *
  * \param fn   Generic function to instantiate
  * \param subs Type substitutions to be made during instantiation
- * \param call Call that is being resolved
+ * \param visInfo Contains the call that is being resolved
  */
 FnSymbol* instantiateSignature(FnSymbol*  fn,
                                SymbolMap& subs,
@@ -458,9 +456,6 @@ FnSymbol* instantiateSignature(FnSymbol*  fn,
       resolveSignature(newFn);
       newFn->tagIfGeneric(&subs);
 
-      // Fix up out intent arguments
-      fixupUntypedOutArgRTTs(fn, newFn, call);
-
       explainAndCheckInstantiation(newFn, fn);
 
       return newFn;
@@ -500,11 +495,7 @@ static bool fixupDefaultInitCopy(FnSymbol* fn,
         DefExpr*  def      = new DefExpr(thisTmp);
         CallExpr* initCall = NULL;
 
-        if (initFn->name == astrInit) {
-          initCall = new CallExpr(initFn, gMethodToken, thisTmp, arg);
-        } else {
-          initCall = new CallExpr(initFn, gMethodToken, thisTmp, arg);
-        }
+        initCall = new CallExpr(initFn, gMethodToken, thisTmp, arg);
 
         newFn->insertBeforeEpilogue(def);
 
@@ -564,31 +555,6 @@ static bool fixupDefaultInitCopy(FnSymbol* fn,
   return retval;
 }
 
-static void fixupUntypedOutArgRTTs(FnSymbol* fn,
-                                   FnSymbol* newFn,
-                                   CallExpr* call) {
-  // Add an associated argument for out arguments that are
-  // untyped for types with runtime types
-
-  // This argument passes the runtime type from the call site
-  // to the function for use when constructing the out value.
-  for_formals(formal, newFn) {
-    if (formal->typeExpr == NULL &&
-        (formal->intent == INTENT_OUT ||
-         formal->originalIntent == INTENT_OUT)) {
-      Type* formalType = formal->type->getValType();
-      if (formalType->symbol->hasFlag(FLAG_HAS_RUNTIME_TYPE)) {
-        ArgSymbol* newFormal = new ArgSymbol(INTENT_BLANK,
-                                             astr("chpl_type_", formal->name),
-                                             formalType);
-        newFormal->addFlag(FLAG_TYPE_FORMAL_FOR_OUT);
-        newFormal->addFlag(FLAG_TYPE_VARIABLE);
-        formal->defPoint->insertBefore(new DefExpr(newFormal));
-      }
-    }
-  }
-}
-
 //
 // determine root function in the case of partial instantiation
 //
@@ -596,7 +562,7 @@ FnSymbol* determineRootFunc(FnSymbol* fn) {
   FnSymbol* root = fn;
 
   while (root->instantiatedFrom != NULL &&
-         root->numFormals()     == root->instantiatedFrom->numFormals()) {
+         root->numFormals() == root->instantiatedFrom->numFormals()) {
     root = root->instantiatedFrom;
   }
 

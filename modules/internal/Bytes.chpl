@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -308,6 +308,12 @@ module Bytes {
     proc init=(b: string) {
       this.complete();
       initWithNewBuffer(this, b.buff, length=b.numBytes, size=b.numBytes+1);
+    }
+
+    proc init=(b: c_string) {
+      this.complete();
+      var length = b.size;
+      initWithNewBuffer(this, b: bufferType, length=length, size=length+1);
     }
 
     inline proc byteIndices return 0..<size;
@@ -710,9 +716,9 @@ module Bytes {
       return doPartition(this, sep);
     }
 
-    /* Remove indentation from each line of string.
+    /* Remove indentation from each line of bytes.
 
-       This can be useful when applied to multi-line strings that are indented
+       This can be useful when applied to multi-line bytes that are indented
        in the source code, but should not be indented in the output.
 
        When ``columns == 0``, determine the level of indentation to remove from
@@ -732,11 +738,11 @@ module Bytes {
                          common leading whitespace, and make no changes to the
                          first line.
 
-       :returns: A new `string` with indentation removed.
+       :returns: A new `bytes` with indentation removed.
 
        .. warning::
 
-          ``string.dedent`` is not considered stable and is subject to change in
+          ``bytes.dedent`` is not considered stable and is subject to change in
           future Chapel releases.
     */
     proc bytes.dedent(columns=0, ignoreFirst=true): bytes {
@@ -1039,21 +1045,27 @@ module Bytes {
     }
 
   pragma "no doc"
-  inline proc _cast(type t: bytes, x: string) {
+  inline operator :(x: string, type t: bytes) {
     return createBytesWithNewBuffer(x.buff, length=x.numBytes, size=x.numBytes+1);
   }
+  pragma "no doc"
+  inline operator :(x: c_string, type t: bytes) {
+    var length = x.size;
+    return createBytesWithNewBuffer(x: bufferType, length=length, size=length+1);
+  }
+
 
   /*
      Appends the :mod:`bytes <Bytes>` `rhs` to the :mod:`bytes <Bytes>` `lhs`.
   */
-  proc +=(ref lhs: bytes, const ref rhs: bytes) : void {
+  operator bytes.+=(ref lhs: bytes, const ref rhs: bytes) : void {
     doAppend(lhs, rhs);
   }
 
   /*
      Copies the :mod:`bytes <Bytes>` `rhs` into the :mod:`bytes <Bytes>` `lhs`.
   */
-  proc =(ref lhs: bytes, rhs: bytes) {
+  operator bytes.=(ref lhs: bytes, rhs: bytes) {
     doAssign(lhs, rhs);
   }
 
@@ -1062,7 +1074,7 @@ module Bytes {
 
      Halts if `lhs` is a remote bytes.
   */
-  proc =(ref lhs: bytes, rhs_c: c_string) {
+  operator bytes.=(ref lhs: bytes, rhs_c: c_string) {
     lhs = createBytesWithNewBuffer(rhs_c);
   }
 
@@ -1073,79 +1085,97 @@ module Bytes {
      :returns: A new :mod:`bytes <Bytes>` which is the result of concatenating
                `s0` and `s1`
   */
-  proc +(s0: bytes, s1: bytes) {
+  operator bytes.+(s0: bytes, s1: bytes) {
     return doConcat(s0, s1);
   }
 
   pragma "no doc"
-  inline proc +(param s0: bytes, param s1: bytes) param
+  inline operator bytes.+(param s0: bytes, param s1: bytes) param
     return __primitive("string_concat", s0, s1);
 
   /*
      :returns: A new :mod:`bytes <Bytes>` which is the result of repeating `s`
                `n` times.  If `n` is less than or equal to 0, an empty bytes is
                returned.
+          
+     The operation is commutative.
+     For example:
+
+     .. code-block:: chapel
+        
+        writeln(b"Hello! "*3);
+        or
+        writeln(3*b"Hello! ");
+
+     Results in::
+
+        Hello! Hello! Hello!         
   */
-  proc *(s: bytes, n: integral) {
+  operator *(s: bytes, n: integral) {
     return doMultiply(s, n);
   }
 
   pragma "no doc"
-  proc ==(a: bytes, b: bytes) : bool {
+  operator *(n: integral, s: bytes) {
+    return doMultiply(s, n);
+  }
+
+  pragma "no doc"
+  operator bytes.==(a: bytes, b: bytes) : bool {
     return doEq(a,b);
   }
 
   pragma "no doc"
-  inline proc !=(a: bytes, b: bytes) : bool {
+  inline operator bytes.!=(a: bytes, b: bytes) : bool {
     return !doEq(a,b);
   }
 
   pragma "no doc"
-  inline proc <(a: bytes, b: bytes) : bool {
+  inline operator bytes.<(a: bytes, b: bytes) : bool {
     return doLessThan(a, b);
   }
 
   pragma "no doc"
-  inline proc >(a: bytes, b: bytes) : bool {
+  inline operator bytes.>(a: bytes, b: bytes) : bool {
     return doGreaterThan(a, b);
   }
 
   pragma "no doc"
-  inline proc <=(a: bytes, b: bytes) : bool {
+  inline operator bytes.<=(a: bytes, b: bytes) : bool {
     return doLessThanOrEq(a, b);
   }
   pragma "no doc"
-  inline proc >=(a: bytes, b: bytes) : bool {
+  inline operator bytes.>=(a: bytes, b: bytes) : bool {
     return doGreaterThanOrEq(a, b);
   }
 
   pragma "no doc"
-  inline proc ==(param s0: bytes, param s1: bytes) param  {
+  inline operator bytes.==(param s0: bytes, param s1: bytes) param  {
     return __primitive("string_compare", s0, s1) == 0;
   }
 
   pragma "no doc"
-  inline proc !=(param s0: bytes, param s1: bytes) param {
+  inline operator bytes.!=(param s0: bytes, param s1: bytes) param {
     return __primitive("string_compare", s0, s1) != 0;
   }
 
   pragma "no doc"
-  inline proc <=(param a: bytes, param b: bytes) param {
+  inline operator bytes.<=(param a: bytes, param b: bytes) param {
     return (__primitive("string_compare", a, b) <= 0);
   }
 
   pragma "no doc"
-  inline proc >=(param a: bytes, param b: bytes) param {
+  inline operator bytes.>=(param a: bytes, param b: bytes) param {
     return (__primitive("string_compare", a, b) >= 0);
   }
 
   pragma "no doc"
-  inline proc <(param a: bytes, param b: bytes) param {
+  inline operator bytes.<(param a: bytes, param b: bytes) param {
     return (__primitive("string_compare", a, b) < 0);
   }
 
   pragma "no doc"
-  inline proc >(param a: bytes, param b: bytes) param {
+  inline operator bytes.>(param a: bytes, param b: bytes) param {
     return (__primitive("string_compare", a, b) > 0);
   }
 

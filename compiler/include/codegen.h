@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  * 
@@ -110,7 +110,7 @@ struct GenInfo {
   llvm::TargetMachine* targetMachine;
 
   std::vector<LoopData> loopStack;
-  std::vector<std::pair<llvm::Value*, llvm::Type*> > currentStackVariables;
+  std::vector<std::pair<llvm::AllocaInst*, llvm::Type*> > currentStackVariables;
   const clang::CodeGen::CGFunctionInfo* currentFunctionABI;
 
   llvm::LLVMContext llvmContext;
@@ -144,6 +144,7 @@ struct GenInfo {
 extern GenInfo* gGenInfo;
 extern int      gMaxVMT;
 extern int      gStmtCount;
+extern bool     gCodegenGPU;
 
 // Map from filename to an integer that will represent an unique ID for each
 // generated GET/PUT
@@ -173,4 +174,5 @@ void gatherTypesForCodegen(void);
 
 void registerPrimitiveCodegens();
 
+bool localeUsesGPU();
 #endif //CODEGEN_H

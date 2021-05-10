@@ -1,5 +1,5 @@
 /*
- * Copyright 2020 Hewlett Packard Enterprise Development LP
+ * Copyright 2020-2021 Hewlett Packard Enterprise Development LP
  * Copyright 2004-2019 Cray Inc.
  * Other additional copyright holders may be indicated within.
  *
@@ -255,10 +255,24 @@ module SharedObject {
     //   var s : shared = ownedThing;
     pragma "no doc"
     proc init=(pragma "nil from arg" in take: owned) {
-      if isNonNilableClass(this.type) && isNilableClass(take) then
-        compilerError("cannot create a non-nilable shared variable from a nilable class instance");
+      var p = take.release();
 
-      this.init(take);
+      this.chpl_t = if this.type.chpl_t != ?
+                    then this.type.chpl_t
+                    else _to_borrowed(p.type);
+
+      var rc:unmanaged ReferenceCount? = nil;
+
+      if p != nil then
+        rc = new unmanaged ReferenceCount();
+
+      this.chpl_p = p;
+      this.chpl_pn = rc;
+
+      this.complete();
+
+      if isNonNilableClass(this.type) && isNilableClass(take) then
+        compilerError("cannot initialize '", this.type:string, "' from a '", take.type:string, "'");
     }
 
     /*
@@ -267,13 +281,13 @@ module SharedObject {
        These will share responsibility for managing the instance.
      */
     proc init=(pragma "nil from arg" const ref src:_shared) {
-      if isNonNilableClass(this.type) && isNilableClass(src) then
-        compilerError("cannot create a non-nilable shared variable from a nilable class instance");
+      this.chpl_t = if this.type.chpl_t != ?
+                    then this.type.chpl_t
+                    else _to_borrowed(src.type);
 
       if isCoercible(src.chpl_t, this.type.chpl_t) == false then
-        compilerError("cannot coerce '", src.type:string, "' to '", this.type:string, "' in initialization");
+        compilerError("cannot initialize '", this.type:string, "' from a '", src.type:string, "'");
 
-      this.chpl_t = this.type.chpl_t;
       this.chpl_p = src.chpl_p;
       this.chpl_pn = src.chpl_pn;
 
@@ -281,27 +295,39 @@ module SharedObject {
 
       if this.chpl_pn != nil then
         this.chpl_pn!.retain();
+
+      if isNonNilableClass(this.type) && isNilableClass(src) then
+        compilerError("cannot initialize '", this.type:string, "' from a '", src.type:string, "'");
+
     }
 
     pragma "no doc"
     proc init=(src: borrowed) {
-      compilerError("cannot create a shared variable from a borrowed class instance");
-      this.chpl_t = int; //dummy
+      compilerError("cannot initialize '", this.type:string, "' from a '", src.type:string, "'");
+
+      this.chpl_t = if this.type.chpl_t != ?
+                    then this.type.chpl_t
+                    else _to_borrowed(src.type);
     }
 
     pragma "no doc"
     proc init=(src: unmanaged) {
-      compilerError("cannot create a shared variable from an unmanaged class instance");
-      this.chpl_t = int; //dummy
+      compilerError("cannot initialize '", this.type:string, "' from a '", src.type:string, "'");
+      this.chpl_t = if this.type.chpl_t != ?
+                    then this.type.chpl_t
+                    else _to_borrowed(src.type);
     }
 
     pragma "no doc"
     pragma "leaves this nil"
     proc init=(src : _nilType) {
+      if this.type.chpl_t == ? then
+        compilerError("cannot establish type of shared when initializing with 'nil'");
+
       this.init(this.type.chpl_t);
 
       if isNonNilableClass(chpl_t) then
-        compilerError("Assigning non-nilable shared to nil");
+        compilerError("cannot initialize '", this.type:string, "' from 'nil'");
     }
 
     pragma "no doc"
@@ -424,7 +450,7 @@ module SharedObject {
      no other :record:`shared` referring to it. On return,
      ``lhs`` will refer to the same object as ``rhs``.
    */
-  proc =(ref lhs:_shared, rhs: _shared)
+  operator =(ref lhs:_shared, rhs: _shared)
     where ! (isNonNilableClass(lhs) && isNilableClass(rhs))
   {
     // retain-release
@@ -444,14 +470,14 @@ module SharedObject {
      On return, ``lhs`` will refer to the object previously
      managed by ``rhs``, and ``rhs`` will refer to `nil`.
    */
-  proc =(ref lhs:_shared, in rhs:owned)
+  operator =(ref lhs:_shared, in rhs:owned)
     where ! (isNonNilableClass(lhs) && isNilableClass(rhs))
   {
     lhs.retain(rhs.release());
   }
 
   pragma "no doc"
-  proc =(pragma "leaves arg nil" ref lhs:shared, rhs:_nilType)
+  operator =(pragma "leaves arg nil" ref lhs:shared, rhs:_nilType)
     where ! isNonNilableClass(lhs)
   {
     lhs.clear();
@@ -460,7 +486,7 @@ module SharedObject {
   /*
      Swap two :record:`shared` objects.
    */
-  proc <=>(ref lhs: _shared, ref rhs: _shared) {
+  operator <=>(ref lhs: _shared, ref rhs: _shared) {
     lhs.chpl_pn <=> rhs.chpl_pn;
     lhs.chpl_p <=> rhs.chpl_p;
   }
@@ -475,20 +501,31 @@ module SharedObject {
   // Don't print out 'chpl_p' when printing an Shared, just print class pointer
   pragma "no doc"
   proc _shared.readWriteThis(f) throws {
-    f <~> this.chpl_p;
+    if isNonNilableClass(this.chpl_t) {
+      var tmp = this.chpl_p! : borrowed class;
+      f <~> tmp;
+      if tmp == nil then halt("internal error - read nil");
+      if tmp != this.chpl_p then halt("internal error - read changed ptr");
+    } else {
+      var tmp = this.chpl_p : borrowed class?;
+      f <~> tmp;
+      if tmp != this.chpl_p then halt("internal error - read changed ptr");
+      if tmp == nil then
+        this.doClear();
+    }
   }
 
   // Note, coercion from _shared -> _shared.chpl_t is sometimes directly
   // supported in the compiler via a call to borrow() and
   // sometimes uses this cast.
   pragma "no doc"
-  inline proc _cast(type t:borrowed, pragma "nil from arg" const ref x:_shared) where isSubtype(t,x.chpl_t) {
+  inline operator :(pragma "nil from arg" const ref x:_shared, type t:borrowed) where isSubtype(t,x.chpl_t) {
     return x.borrow();
   }
 
   // cast to shared?, no class downcast
   pragma "no doc"
-  inline proc _cast(type t:shared class?, pragma "nil from arg" in x:shared class)
+  inline operator :(pragma "nil from arg" in x:shared class, type t:shared class?)
     where isSubtype(x.chpl_t,_to_nonnil(t.chpl_t))
   {
     return new _shared(true, _to_nilable(t.chpl_t), x);
@@ -496,7 +533,7 @@ module SharedObject {
 
   // cast to shared?, no class downcast
   pragma "no doc"
-  inline proc _cast(type t:shared class?, pragma "nil from arg" in x:shared class?)
+  inline operator :(pragma "nil from arg" in x:shared class?, type t:shared class?)
     where isSubtype(x.chpl_t,t.chpl_t)
   {
     return new _shared(true, t.chpl_t, x);
@@ -504,7 +541,7 @@ module SharedObject {
 
   // cast to shared!, no class downcast, no casting away nilability
   pragma "no doc"
-  inline proc _cast(type t:shared class, in x:shared class)
+  inline operator :(in x:shared class, type t:shared class)
     where isSubtype(x.chpl_t,t.chpl_t)
   {
     return new _shared(true, t.chpl_t, x);
@@ -512,7 +549,7 @@ module SharedObject {
 
   // cast to shared!, no class downcast, casting away nilability
   pragma "no doc"
-  inline proc _cast(type t:shared class, in x:shared class?) throws
+  inline operator :(in x:shared class?, type t:shared class) throws
     where isSubtype(_to_nonnil(x.chpl_t),t.chpl_t)
   {
     if x.chpl_p == nil {
@@ -524,7 +561,7 @@ module SharedObject {
 
   // this version handles downcast to non-nil shared
   pragma "no doc"
-  inline proc _cast(type t:shared class, const ref x:shared class?) throws
+  inline operator :(const ref x:shared class?, type t:shared class) throws
     where isProperSubtype(t.chpl_t,_to_nonnil(x.chpl_t))
   {
     if x.chpl_p == nil {
@@ -536,7 +573,7 @@ module SharedObject {
     return new _shared(true, _to_borrowed(p.type), p, x.chpl_pn);
   }
   pragma "no doc"
-  inline proc _cast(type t:shared class, const ref x:shared class) throws
+  inline operator :(const ref x:shared class, type t:shared class) throws
     where isProperSubtype(t.chpl_t,x.chpl_t)
   {
     // the following line can throw ClassCastError
@@ -548,7 +585,7 @@ module SharedObject {
 
   // this version handles downcast to nilable shared
   pragma "no doc"
-  inline proc _cast(type t:shared class?, pragma "nil from arg" const ref x:shared class?)
+  inline operator :(pragma "nil from arg" const ref x:shared class?, type t:shared class?)
     where isProperSubtype(t.chpl_t,x.chpl_t)
   {
     // this cast returns nil if the dynamic type is not compatible
@@ -556,7 +593,7 @@ module SharedObject {
     return new _shared(true, _to_borrowed(p.type), p, x.chpl_pn);
   }
   pragma "no doc"
-  inline proc _cast(type t:shared class?, const ref x:shared class)
+  inline operator :(const ref x:shared class, type t:shared class?)
     where isProperSubtype(t.chpl_t,_to_nilable(x.chpl_t))
   {
     // this cast returns nil if the dynamic type is not compatible
@@ -566,11 +603,22 @@ module SharedObject {
 
   // cast from nil to shared
   pragma "no doc"
-  inline proc _cast(type t:_shared, pragma "nil from arg" x:_nilType) {
+  inline operator :(pragma "nil from arg" x:_nilType, type t:_shared)  {
     if isNonNilableClass(t.chpl_t) then
       compilerError("Illegal cast from nil to non-nilable shared type");
 
     var tmp:t;
+    return tmp;
+  }
+
+  // cast from owned to shared
+  pragma "no doc"
+  inline operator :(pragma "nil from arg" pragma "leaves arg nil" in x:owned, type t:_shared) {
+    if t.chpl_t != ? && t.chpl_t != x.chpl_t then
+      compilerError("Cannot change class type in conversion from '",
+                    x.type:string, "' to '", t:string, "'");
+
+    var tmp:t = x;
     return tmp;
   }
 
