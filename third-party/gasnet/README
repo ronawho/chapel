@@ -11,6 +11,14 @@ Any Chapel issues that seem to be related to GASNet should be directed
 to the Chapel team at https://chapel-lang.org/bugs.html.
 
 
+Chapel modifications to GASNet
+==============================
+The modifications that we have made to the official GASNet release are
+as follows:
+
+* Pulled in an upstream fix for pmi on Cray EX
+   - https://bitbucket.org/PHHargrove/gasnet-public/commits/219c14337e9
+
 Upgrading GASNet versions
 =========================
 
