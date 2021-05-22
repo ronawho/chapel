@@ -51,9 +51,9 @@ extern "C" {
 extern unsigned CHPL_JE_LG_ARENA;
 static inline int CHPL_JE_MALLOCX_ARENA_FLAG(size_t size) {
   if (size >= ((size_t) 32 << 20)) {
-    return MALLOCX_ARENA(CHPL_JE_LG_ARENA);
+    return MALLOCX_ARENA(CHPL_JE_LG_ARENA) | MALLOCX_ALIGN(64);
   }
-  return MALLOCX_NO_FLAGS;
+  return MALLOCX_ALIGN(64);
 }
 
 
