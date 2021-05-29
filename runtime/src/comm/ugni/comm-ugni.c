@@ -52,6 +52,7 @@
 #include "chplcgfns.h"
 #include "chpl-gen-includes.h"
 #include "chplrt.h"
+#include "chpl-align.h"
 #include "chpl-cache.h"
 #include "chpl-comm.h"
 #include "chpl-comm-diags.h"
@@ -214,11 +215,6 @@ static uint64_t debug_stats_flag = 0;
 #endif
 
 
-// not generally true, but should be for XC
-#define CACHE_LINE_SIZE 64
-#define CACHE_LINE_ALIGN __attribute__((aligned(CACHE_LINE_SIZE)))
-
-
 ////////////////////////////////////////
 //
 // Statistics gathering
@@ -323,7 +319,7 @@ static uint64_t debug_stats_flag = 0;
 #define _PSV_ADD_FUNC    _PSV_SYM(atomic_fetch_add)
 #define _PSV_ADD_FUNC_E  _PSV_SYM(atomic_fetch_add_explicit)
 
-#define _PSV_DECL(psv)  _PSV_ATOMIC_TYPE CACHE_LINE_ALIGN psv;
+#define _PSV_DECL(psv)  _PSV_ATOMIC_TYPE CHPL_CACHE_LINE_ALIGN psv;
 typedef struct chpl_comm_pstats {
   PERFSTATS_VARS_ALL(_PSV_DECL)
 } chpl_comm_pstats_t;
@@ -735,8 +731,8 @@ typedef atomic_uint_least32_t cq_cnt_atomic_t;
 // is the only one with cheap atomic reads.)
 
 typedef struct {
-  atomic_spinlock_t  busy CACHE_LINE_ALIGN;
-  cq_cnt_atomic_t    cq_cnt_curr CACHE_LINE_ALIGN;
+  atomic_spinlock_t  busy CHPL_CACHE_LINE_ALIGN;
+  cq_cnt_atomic_t    cq_cnt_curr CHPL_CACHE_LINE_ALIGN;
   chpl_bool          firmly_bound;
   gni_nic_handle_t   nih;
   gni_ep_handle_t*   remote_eps;
@@ -749,7 +745,7 @@ typedef struct {
   uint64_t           acqs_with_rb_looks;
   uint64_t           reacqs;
 #endif
-} CACHE_LINE_ALIGN comm_dom_t;
+} CHPL_CACHE_LINE_ALIGN comm_dom_t;
 
 
 //
@@ -2078,7 +2074,7 @@ void chpl_comm_post_task_init(void)
   // handles, endpoints, and completion queues.
   //
   comm_doms =
-    (comm_dom_t*) chpl_mem_memalign(CACHE_LINE_SIZE,
+    (comm_dom_t*) chpl_mem_memalign(CHPL_CACHE_LINE_SIZE,
                                     comm_dom_cnt * sizeof(comm_dom_t),
                                     CHPL_RT_MD_COMM_PER_LOC_INFO, 0, 0);
 

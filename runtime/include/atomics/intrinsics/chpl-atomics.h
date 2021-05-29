@@ -24,6 +24,7 @@
 #include "chpltypes.h"
 #include "chpl-comp-detect-macros.h"
 #include "chpl-tasks.h"
+#include "chpl-align.h"
 #include <assert.h>
 
 #ifdef __cplusplus
@@ -33,14 +34,11 @@ extern "C" {
 //
 // SIZE_ALIGN_TYPE:  Declare a version of a type aligned to at least its size.
 //
-// All the compilers we support with the intrinsics version of atomics
-// also support the gcc alignment attribute syntax used here.
-//
 // This is needed for 64-bit atomic types on 32-bit machines,
 // to guarantee that the atomic objects will never straddle a
 // cache line boundary, which has a severe performance penalty.
 //
-#define SIZE_ALIGN_TYPE(t) __attribute__ ((aligned (sizeof(t)))) t
+#define SIZE_ALIGN_TYPE(t) CHPL_ALIGN(sizeof(t)) t
 
 typedef int_least8_t atomic_int_least8_t;
 typedef int_least16_t atomic_int_least16_t;
