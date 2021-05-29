@@ -31,6 +31,11 @@
 extern "C" {
 #endif
 
+// not generally true, but should be for most of the platforms we support
+#define CHPL_CACHE_LINE_SIZE 64
+#define CHPL_ALIGN(alignment) __attribute__ ((aligned (alignment))) 
+#define CHPL_CACHE_LINE_ALIGN CHPL_ALIGN(CHPL_CACHE_LINE_SIZE)
+
 // If we have a mask representing 2^n - 1,
 // round an offset down to a multiple of 2^n.
 static inline
