@@ -55,10 +55,10 @@
 #include <time.h>
 
 typedef struct {
-  gasnet_seginfo_t* table CHPL_CACHE_LINE_ALIGN
+  gasnet_seginfo_t* table CHPL_CACHE_LINE_ALIGN;
 } CHPL_CACHE_LINE_ALIGN aligned_gasnet_seginfo_t;
 
-static aligned_gasnet_seginfo_t* seginfo;
+static aligned_gasnet_seginfo_t seginfo;
 
 // Gasnet AM handler arguments are only 32 bits, so here we have
 // functions to get the 2 arguments for a 64-bit pointer,
