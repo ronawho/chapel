@@ -25,6 +25,7 @@
 #include "gasnet_coll.h"
 #include "gasnet_tools.h"
 #include "chpl-comm.h"
+#include "chpl-align.h"
 #include "chpl-comm-diags.h"
 #include "chpl-comm-callbacks.h"
 #include "chpl-comm-callbacks-internal.h"
@@ -53,7 +54,11 @@
 #include <assert.h>
 #include <time.h>
 
-static gasnet_seginfo_t* seginfo_table = NULL;
+typedef struct {
+  gasnet_seginfo_t* table CHPL_CACHE_LINE_ALIGN
+} CHPL_CACHE_LINE_ALIGN aligned_gasnet_seginfo_t;
+
+static aligned_gasnet_seginfo_t* seginfo;
 
 // Gasnet AM handler arguments are only 32 bits, so here we have
 // functions to get the 2 arguments for a 64-bit pointer,
@@ -537,7 +542,7 @@ static void AM_shutdown(gasnet_token_t token) {
 }
 
 //
-// This global and routine are used to broadcast the seginfo_table at the outset
+// This global and routine are used to broadcast the seginfo.table at the outset
 // of the program's execution.  It is designed to only be used once.  This code
 // was modeled after the _test_segbcast() routine in
 // third-party/gasnet/gasnet-src/tests/test.h
@@ -545,7 +550,7 @@ static void AM_shutdown(gasnet_token_t token) {
 static int bcast_seginfo_done = 0;
 static void AM_bcast_seginfo(gasnet_token_t token, void *buf, size_t nbytes) {
   assert(nbytes == sizeof(gasnet_seginfo_t)*gasnet_nodes());
-  chpl_memcpy(seginfo_table, buf, nbytes);
+  chpl_memcpy(seginfo.table, buf, nbytes);
   gasnett_local_wmb();
   bcast_seginfo_done = 1;
 }
@@ -694,8 +699,8 @@ int chpl_comm_addr_gettable(c_nodeid_t node, void* start, size_t len)
   uintptr_t segstart, segend;
   uintptr_t reqstart, reqend;
 
-  segstart = (uintptr_t) seginfo_table[node].addr;
-  segend = segstart + seginfo_table[node].size;
+  segstart = (uintptr_t) seginfo.table[node].addr;
+  segend = segstart + seginfo.table[node].size;
   reqstart = (uintptr_t) start;
   reqend = reqstart + len;
 
@@ -725,68 +730,73 @@ int32_t chpl_comm_getMaxThreads(void) {
 // even though the tasking layer can implement it however it likes, as a
 // task or thread or whatever.
 //
-static volatile int pollingRunning;
-static volatile int pollingQuit;
-static chpl_bool pollingRequired;
-static atomic_spinlock_t pollingLock;
+
+typedef struct {
+  atomic_spinlock_t lock CHPL_CACHE_LINE_ALIGN;
+  volatile int running CHPL_CACHE_LINE_ALIGN;
+  volatile int quit;
+  chpl_bool required;
+} CHPL_CACHE_LINE_ALIGN polling_t;
+
+static polling_t polling;
 
 static inline void am_poll_try(void) {
   // Serialize polling for IBV, UCX, and Aries. Concurrent polling causes
   // contention in these configurations. For other configurations that are
   // AM-based (udp/amudp, mpi/ammpi) serializing can hurt performance.
 #if defined(GASNET_CONDUIT_IBV) || defined(GASNET_CONDUIT_UCX) || defined(GASNET_CONDUIT_ARIES)
-  if (atomic_try_lock_spinlock_t(&pollingLock)) {
+  if (atomic_try_lock_spinlock_t(&polling.lock)) {
     (void) gasnet_AMPoll();
-    atomic_unlock_spinlock_t(&pollingLock);
+    atomic_unlock_spinlock_t(&polling.lock);
   }
 #else
     (void) gasnet_AMPoll();
 #endif
 }
 
-static void polling(void* x) {
-  pollingRunning = 1;
+static void polling_task(void* unused) {
+  polling.running = 1;
 
-  while (!pollingQuit) {
+  while (!polling.quit) {
     am_poll_try();
     chpl_task_yield();
   }
 
-  pollingRunning = 0;
+  polling.running = 0;
 }
 
 static void setup_polling(void) {
-  atomic_init_spinlock_t(&pollingLock);
+  atomic_init_spinlock_t(&polling.lock);
 #if defined(GASNET_CONDUIT_IBV)
-  pollingRequired = false;
+  polling.required = false;
   chpl_env_set("GASNET_RCV_THREAD", "1", 1);
 #else
-  pollingRequired = true;
+  polling.required = true;
 #endif
 }
 
 static void start_polling(void) {
-  if (!pollingRequired) return;
+  if (!polling.required) return;
 
-  pollingRunning = 0;
-  pollingQuit = 0;
+  polling.running = 0;
+  polling.quit = 0;
 
-  if (chpl_task_createCommTask(polling, NULL)) {
+  if (chpl_task_createCommTask(polling_task, NULL)) {
     chpl_internal_error("unable to start polling task for gasnet");
   }
 
-  while (!pollingRunning) {
+  while (!polling.running) {
     sched_yield();
   }
 }
 
 static void stop_polling(chpl_bool wait) {
-  if (!pollingRequired) return;
+  if (!polling.required) return;
 
-  pollingQuit = 1;
+  polling.quit = 1;
 
   if (wait) {
-    while (pollingRunning) {
+    while (polling.running) {
       sched_yield();
     }
   }
@@ -862,17 +872,15 @@ void chpl_comm_init(int *argc_p, char ***argv_p) {
                             sizeof(ftable)/sizeof(gasnet_handlerentry_t),
                             gasnet_getMaxLocalSegmentSize(),
                             0));
-  // TODO (EJR: 03/03/16): we currently "leak" seginfo_table. We should
-  // probably free it on exit (but only for "clean" exits.)
-  seginfo_table = (gasnet_seginfo_t*)sys_malloc(chpl_numNodes*sizeof(gasnet_seginfo_t));
+  seginfo.table = (gasnet_seginfo_t*)sys_memalign(CHPL_CACHE_LINE_SIZE, chpl_numNodes*sizeof(gasnet_seginfo_t));
   //
   // The following call has no real effect on the .addr and .size
   // fields for GASNET_SEGMENT_EVERYTHING, but is recommended to be
   // used anyway (see third-party/gasnet/gasnet-src/tests/test.h)
-  // in order to ensure that the seginfo_table array is initialized
+  // in order to ensure that the seginfo.table array is initialized
   // appropriately on all locales.
   //
-  GASNET_Safe(gasnet_getSegmentInfo(seginfo_table, chpl_numNodes));
+  GASNET_Safe(gasnet_getSegmentInfo(seginfo.table, chpl_numNodes));
 #ifdef GASNET_SEGMENT_EVERYTHING
   //
   // For SEGMENT_EVERYTHING, there is no GASNet-provided memory
@@ -888,26 +896,26 @@ void chpl_comm_init(int *argc_p, char ***argv_p) {
   if (chpl_nodeID == 0) {
     int i;
     //
-    // Only locale #0 really needs the seginfo_table to store anything since it owns all
+    // Only locale #0 really needs the seginfo.table to store anything since it owns all
     // of the global variable locations; everyone else will just peek at its copy.  So
     // locale 0 sets up its segment to an appropriate size:
     //
     int global_table_size = chpl_numGlobalsOnHeap * sizeof(wide_ptr_t) + GASNETT_PAGESIZE;
     void* global_table = sys_malloc(global_table_size);
-    seginfo_table[0].addr = ((void *)(((uint8_t*)global_table) +
+    seginfo.table[0].addr = ((void *)(((uint8_t*)global_table) +
                                       (((((uintptr_t)global_table)%GASNETT_PAGESIZE) == 0)? 0 :
                                        (GASNETT_PAGESIZE-(((uintptr_t)global_table)%GASNETT_PAGESIZE)))));
-    seginfo_table[0].size = global_table_size;
+    seginfo.table[0].size = global_table_size;
     //
     // ...and then zeroes out everyone else's
     //
     for (i=1; i<chpl_numNodes; i++) {
-      seginfo_table[i].addr = NULL;
-      seginfo_table[i].size = 0;
+      seginfo.table[i].addr = NULL;
+      seginfo.table[i].size = 0;
     }
   }
   //
-  // Then we're going to broadcast the seginfo_table to everyone so that each locale
+  // Then we're going to broadcast the seginfo.table to everyone so that each locale
   // has its own copy of it and knows where everyone else's segment lives (or, really,
   // where locale #0's lives since we're not using anyone else's at this point).
   //
@@ -918,9 +926,9 @@ void chpl_comm_init(int *argc_p, char ***argv_p) {
   //
   if (chpl_nodeID == 0) {
     int i;
-    // Skip loc 0, since that would end up memcpy'ing seginfo_table to itself
+    // Skip loc 0, since that would end up memcpy'ing seginfo.table to itself
     for (i=1; i < chpl_numNodes; i++) {
-      GASNET_Safe(gasnet_AMRequestMedium0(i, BCAST_SEGINFO, seginfo_table,
+      GASNET_Safe(gasnet_AMRequestMedium0(i, BCAST_SEGINFO, seginfo.table,
                                           chpl_numNodes*sizeof(gasnet_seginfo_t)));
     }
   } else {
@@ -968,8 +976,8 @@ void chpl_comm_rollcall(void) {
 void chpl_comm_impl_regMemHeapInfo(void** start_p, size_t* size_p) {
 #if defined(GASNET_SEGMENT_FAST) || defined(GASNET_SEGMENT_LARGE)
   *start_p = chpl_numGlobalsOnHeap * sizeof(wide_ptr_t)
-             + (char*)seginfo_table[chpl_nodeID].addr;
-  *size_p  = seginfo_table[chpl_nodeID].size
+             + (char*)seginfo.table[chpl_nodeID].addr;
+  *size_p  = seginfo.table[chpl_nodeID].size
              - chpl_numGlobalsOnHeap * sizeof(wide_ptr_t);
 #else /* GASNET_SEGMENT_EVERYTHING */
   *start_p = NULL;
@@ -987,13 +995,13 @@ wide_ptr_t* chpl_comm_broadcast_global_vars_helper(void) {
   //
   if (chpl_nodeID == 0) {
     for (int i = 0; i < chpl_numGlobalsOnHeap; i++) {
-      ((wide_ptr_t*) seginfo_table[0].addr)[i] = *chpl_globals_registry[i];
+      ((wide_ptr_t*) seginfo.table[0].addr)[i] = *chpl_globals_registry[i];
     }
     chpl_comm_barrier("fill node 0 globals buf");
     return NULL; // so common code won't try to free it!
   } else {
     chpl_comm_barrier("fill node 0 globals buf");
-    return (wide_ptr_t*) seginfo_table[0].addr;
+    return (wide_ptr_t*) seginfo.table[0].addr;
   }
 }
 
