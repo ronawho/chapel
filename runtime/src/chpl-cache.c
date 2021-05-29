@@ -704,7 +704,7 @@ struct rdcache_s {
   cache_seqn_t *pending_sequence_numbers;
 
   // Lookup table
-  __attribute__ ((aligned (64)))
+  CHPL_CACHE_LINE_ALIGN
   struct cache_table_slot_s table[];
 };
 
@@ -820,7 +820,7 @@ struct rdcache_s* cache_create(void) {
   total_size += CACHEPAGE_SIZE + CACHEPAGE_SIZE * cache_pages;
 
   // Now, allocate it all in one go.
-  buffer = chpl_memalign(64, total_size);
+  buffer = chpl_memalign(CHPL_CACHE_LINE_SIZE, total_size);
   allocated_size = total_size;
 
   // Now divvy up the portions...
