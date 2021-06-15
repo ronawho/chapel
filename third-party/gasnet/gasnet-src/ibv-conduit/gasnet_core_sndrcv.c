@@ -322,6 +322,25 @@ gasnetc_create_cq(struct ibv_context * hca_hndl, int req_size,
   }
 }
 
+#if 1
+  static struct {
+    char pad0[GASNETI_CACHE_LINE_BYTES];
+    gasneti_atomic_t snd;
+    char pad1[GASNETI_CACHE_LINE_BYTES];
+    gasneti_atomic_t rcv;
+    char pad2[GASNETI_CACHE_LINE_BYTES];
+  } gasnetc_cq_poll_locks = {{0}, GASNETI_SPINLOCK_INITIALIZER,
+                             {0}, GASNETI_SPINLOCK_INITIALIZER,
+                             {0}};
+  #define CQ_LOCK(x)      gasneti_spinlock_lock(&gasnetc_cq_poll_locks.x)
+  #define CQ_UNLOCK(x)    gasneti_spinlock_unlock(&gasnetc_cq_poll_locks.x)
+  #define CQ_TRYLOCK(x)   gasneti_spinlock_trylock(&gasnetc_cq_poll_locks.x)
+#else
+  #define CQ_LOCK(x)      do {} while (0)
+  #define CQ_UNLOCK(x)    do {} while (0)
+  #define CQ_TRYLOCK(x)   (0)
+#endif
+
 #if GASNETC_IB_MAX_HCAS > 1
   #define GASNETC_HCA_IDX(_cep)		((_cep)->hca_index)
 #else
@@ -686,7 +705,10 @@ static int gasnetc_snd_reap(int limit) {
   gasneti_assert(limit <= GASNETC_SND_REAP_LIMIT);
 
   for (count = 0; count < limit; ++count) {
+    if (CQ_TRYLOCK(snd)) break;
     int rc = ibv_poll_cq(hca->snd_cq, 1, &comp);
+    CQ_UNLOCK(snd);
+
     if_pt (rc == 0) {
       /* CQ empty - we are done */
       break;
@@ -1050,7 +1072,9 @@ static int gasnetc_rcv_reap(gasnetc_hca_t *hca, const int limit, gasnetc_rbuf_t 
   int count;
 
   for (count = 0; count < limit; ++count) {
+    if (CQ_TRYLOCK(rcv)) break;
     int rc = ibv_poll_cq(hca->rcv_cq, 1, &comp);
+    CQ_UNLOCK(rcv);
     if_pt (rc == 0) {
       /* CQ empty - we are done */
       break;
