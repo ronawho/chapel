@@ -1190,7 +1190,7 @@ static void send_env(int s) {
     }
 
     /* Append all the strings together */
-    q = master_env = gasneti_malloc(master_env_len);
+    q = master_env = gasneti_mmap(master_env_len);
     for (i = 0, p = environ[0]; p != NULL; p = environ[++i]) {
       if (!strncmp(ENV_PREFIX "SSH_", p, rlen)) {
         /* We parse these ourselves, don't forward */
@@ -1210,8 +1210,7 @@ static void send_env(int s) {
 
 static void recv_env(int s) {
   do_read(s, &master_env_len, sizeof(master_env_len));
-  master_env = gasneti_malloc(master_env_len);
-  gasneti_leak(master_env);
+  master_env = gasneti_mmap(master_env_len);
   do_read(s, master_env, master_env_len);
 }
 
