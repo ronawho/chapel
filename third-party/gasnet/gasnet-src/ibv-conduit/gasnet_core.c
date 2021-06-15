@@ -4630,7 +4630,7 @@ extern int gasnetc_RequestSysShort(gasnetc_epid_t dest,
   GASNETI_TRACE_AMREQUESTSHORT(gasneti_THUNK_TM,jobrank,handler,/*flags*/0,numargs);
 
   /* ensure AM progress, but NOT progress functions */
-  gasnetc_poll_rcv();
+  //gasnetc_poll_rcv();
 
   gasnetc_EP_t ep = gasnetc_ep0;
   va_start(argptr, numargs);
@@ -4662,7 +4662,7 @@ extern int gasnetc_RequestSysMedium(gasnetc_epid_t dest,
   GASNETI_TRACE_AMREQUESTMEDIUM(gasneti_THUNK_TM,jobrank,handler,source_addr,nbytes,/*flags*/0,numargs);
 
   /* ensure AM progress, but NOT progress functions */
-  gasnetc_poll_rcv();
+  //gasnetc_poll_rcv();
 
   gasnetc_EP_t ep = gasnetc_ep0;
   va_start(argptr, numargs);
@@ -5311,10 +5311,10 @@ extern int gasnetc_AMRequestShortM(
   GASNETI_COMMON_AMREQUESTSHORT(tm,rank,handler,flags,numargs);
 
   /* ensure progress */
-  if (GASNETC_IMMEDIATE_WOULD_POLL(flags)) {
-    gasnetc_poll_rcv();
-    GASNETI_PROGRESSFNS_RUN();
-  }
+  //if (GASNETC_IMMEDIATE_WOULD_POLL(flags)) {
+  //  gasnetc_poll_rcv();
+  //  GASNETI_PROGRESSFNS_RUN();
+  //}
 
   va_list argptr;
   va_start(argptr, numargs);
@@ -5347,10 +5347,10 @@ extern int gasnetc_AMRequestMediumM(
   GASNETI_COMMON_AMREQUESTMEDIUM(tm,rank,handler,source_addr,nbytes,lc_opt,flags,numargs);
 
   /* ensure progress */
-  if (GASNETC_IMMEDIATE_WOULD_POLL(flags)) {
-    gasnetc_poll_rcv();
-    GASNETI_PROGRESSFNS_RUN();
-  }
+  //if (GASNETC_IMMEDIATE_WOULD_POLL(flags)) {
+  //  gasnetc_poll_rcv();
+  //  GASNETI_PROGRESSFNS_RUN();
+  //}
 
   va_list argptr;
   va_start(argptr, numargs); /*  pass in last argument */
@@ -5384,10 +5384,10 @@ extern int gasnetc_AMRequestLongM(
   GASNETI_COMMON_AMREQUESTLONG(tm,rank,handler,source_addr,nbytes,dest_addr,lc_opt,flags,numargs);
 
   /* ensure progress */
-  if (GASNETC_IMMEDIATE_WOULD_POLL(flags)) {
-    gasnetc_poll_rcv();
-    GASNETI_PROGRESSFNS_RUN();
-  }
+  //if (GASNETC_IMMEDIATE_WOULD_POLL(flags)) {
+  //  gasnetc_poll_rcv();
+  //  GASNETI_PROGRESSFNS_RUN();
+  //}
 
   va_list argptr;
   va_start(argptr, numargs); /*  pass in last argument */

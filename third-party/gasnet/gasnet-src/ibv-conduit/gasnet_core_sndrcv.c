@@ -3352,7 +3352,7 @@ extern int gasnetc_rdma_put(
   if (bias_local_cnt)  local_cb(local_cnt);
   if (bias_remote_cnt) remote_cb(remote_cnt);
 
-  gasnetc_poll_rcv(); /* Progress may depend on firehose AM Reply */
+//  gasnetc_poll_rcv(); /* Progress may depend on firehose AM Reply */
   return 0;
 }
 
@@ -3455,7 +3455,7 @@ extern int gasnetc_rdma_get(
     nbytes -= count;
   } while (nbytes);
 
-  gasnetc_poll_rcv(); /* Progress may depend on firehose AM Reply */
+//  gasnetc_poll_rcv(); /* Progress may depend on firehose AM Reply */
   return 0;
 }
 #endif
