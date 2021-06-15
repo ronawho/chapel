@@ -3035,6 +3035,16 @@ extern void gasnetc_sndrcv_poll(int handler_context) {
   gasnetc_do_poll(!handler_context, 1 GASNETI_THREAD_PASS);
 }
 
+#include <stdatomic.h>
+static atomic_bool my_lock;
+
+static inline int my_try_lock(void) {
+  return !atomic_load(&my_lock) && !atomic_exchange_explicit(&my_lock, 1, memory_order_acquire);
+}
+static inline void my_unlock(void) {
+  atomic_store_explicit(&my_lock, 0, memory_order_release);
+}
+
 extern void gasnetc_counter_wait_aux(gasnetc_counter_t *counter, int handler_context GASNETI_THREAD_FARG)
 {
   const gasnetc_atomic_val_t initiated = (counter->initiated & GASNETI_ATOMIC_MAX);
@@ -3042,15 +3052,21 @@ extern void gasnetc_counter_wait_aux(gasnetc_counter_t *counter, int handler_con
 
   if (handler_context) {
     do {
+      if (my_try_lock()) {
       /* must not poll rcv queue in hander context */
       GASNETI_WAITHOOK();
       gasnetc_poll_snd();
+      my_unlock();
+      }
     } while (initiated != gasnetc_atomic_read(completed, 0));
   } else {
     do {
+      if (my_try_lock()) {
       GASNETI_WAITHOOK();
       gasnetc_poll_both();
       GASNETI_PROGRESSFNS_RUN();
+      my_unlock();
+      }
     } while (initiated != gasnetc_atomic_read(completed, 0));
   }
 }
