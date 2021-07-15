@@ -442,7 +442,7 @@ module ZMQ {
   const unset = -42;
 
   pragma "no doc"
-  proc free_helper(data: c_void_ptr, hint: c_void_ptr) {
+  export proc free_helper(data: c_void_ptr, hint: c_void_ptr) {
     chpl_here_free(data);
   }
 
