@@ -900,6 +900,20 @@ module ZMQ {
       compilerError("Type \"", T:string, "\" is not serializable by ZMQ");
     }
 
+    proc parCopyBytes(src: c_void_ptr, len) {
+      use ByteBufferHelpers;
+      var (dst,_) = bufferAlloc(len+1);
+
+      const numTasks = here.maxTaskPar;
+      const lenPerTask = len:int/numTasks;
+      coforall tid in 0..#numTasks {
+	const myOffset = tid*lenPerTask;
+	const myLen = if tid == numTasks-1 then len:int-myOffset else lenPerTask;
+	c_memcpy(dst:c_ptr(uint(8))+myOffset, src:c_ptr(uint(8))+myOffset, myLen:uint(64));
+      }
+      dst[len] = 0;
+      return createBytesWithOwnedBuffer(dst, len, len+1);
+    }
     // send, strings
     pragma "no doc"
     proc send(data: ?T, flags: int = 0) throws where isString(T) || isBytes(T) {
@@ -913,7 +927,7 @@ module ZMQ {
         // 
         // Note: the string factory below can throw DecodeError
         var copy = if isString(T) then createStringWithNewBuffer(x=data)
-                                  else createBytesWithNewBuffer(x=data);
+                                  else parCopyBytes(data.c_str():c_void_ptr, data.size);
         copy.isOwned = false;
 
         // Create the ZeroMQ message from the data buffer
@@ -1018,8 +1032,7 @@ module ZMQ {
                       createStringWithNewBuffer(zmq_msg_data(msg):c_ptr(uint(8)),
                                                 length=len, size=len+1)
                     else
-                      createBytesWithNewBuffer(zmq_msg_data(msg):c_ptr(uint(8)),
-                                               length=len, size=len+1);
+                      parCopyBytes(zmq_msg_data(msg):c_ptr(uint(8)), len);
         if (0 != zmq_msg_close(msg)) {
           try throw_socket_error(errno, "recv");
         }
