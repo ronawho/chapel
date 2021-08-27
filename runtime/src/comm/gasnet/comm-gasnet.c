@@ -1135,6 +1135,7 @@ void  chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
       // GASNet will handle the local portion not being in the segment.
       gasnet_put(node, raddr, addr, size); // node, dest, src, size
     } else {
+      abort();
       // If it's not in the remote segment, we need to send an
       // active message so that the other node will copy the data
       // that we're sending.
@@ -1220,6 +1221,7 @@ void  chpl_comm_get(void* addr, c_nodeid_t node, void* raddr,
       // GASNet will handle the local portion not being in the segment.
       gasnet_get(addr, node, raddr, size); // dest, node, src, size
     } else {
+      abort();
       // If it's not in the remote segment, we need to send an
       // active message so that the other node will PUT back to us.
       // In order for that to work, the local side has to be in
