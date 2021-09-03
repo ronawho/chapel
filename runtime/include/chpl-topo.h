@@ -65,6 +65,7 @@ void chpl_topo_setThreadLocality(c_sublocid_t);
 //
 c_sublocid_t chpl_topo_getThreadLocality(void);
 
+void chpl_topo_interleaveMemLocality (void*, size_t);
 //
 // set the locality of a block of memory, to a specific NUMA domain
 //
