@@ -30,6 +30,7 @@ module ChapelBase {
   public use ChapelStandard;
   use ChapelEnv, SysCTypes, CPtr;
 
+  config param interleaveElts = true;
   config param enablePostfixBangChecks = false;
 
   // These two are called by compiler-generated code.
@@ -953,6 +954,25 @@ module ChapelBase {
     return _ddata_sizeof_element(x.type);
   }
 
+  proc interleave_elts(x, s, type t): void {
+    extern proc chpl_topo_getNumNumaDomains(): c_int;
+    extern proc touch_region(start: c_void_ptr, size: size_t, tid: c_int, nthreads: c_int);
+    const numaDomains = chpl_topo_getNumNumaDomains():int;
+    const numTasks = here.maxTaskPar;
+    var idx = 0;
+    var tids = c_malloc(int, numTasks);
+    for tid in 0..<numTasks/numaDomains {
+      for numaDomain in 0..<numaDomains {
+        tids[idx] = numaDomain*numTasks/numaDomains + tid;
+        idx += 1;
+      }
+    }
+    coforall i in 0..<here.maxTaskPar {
+      touch_region(x:c_void_ptr:c_ptr(c_char), s:size_t*_ddata_sizeof_element(x), tids[i]:c_int, here.maxTaskPar:c_int);
+    }
+  }
+
+
   // Never initializes elements
   //
   // if callPostAlloc=true, then _ddata_allocate_postalloc should
@@ -982,6 +1002,10 @@ module ChapelBase {
     var ret: _ddata(eltType);
     ret = chpl_mem_array_alloc(size:size_t, _ddata_sizeof_element(ret),
                                subloc, callPostAlloc):ret.type;
+
+    if interleaveElts then
+      interleave_elts(ret, size, eltType);
+
     return ret;
   }
 

@@ -170,6 +170,23 @@ typedef struct {
   int nthreads;
 } memory_region;
 
+void touch_region(unsigned char* start, uintptr_t size, int tid, int nthreads) {
+  uintptr_t page_size = chpl_comm_regMemHeapPageSize();
+  uintptr_t touch_size = page_size > 2<<20 ? page_size: 2<<20;
+  if (size < touch_size) return;
+  unsigned char* aligned_start = round_up_to_mask_ptr(start, touch_size-1);
+  uintptr_t aligned_offset = (uintptr_t)aligned_start - (uintptr_t)start;
+  uintptr_t aligned_size = round_down_to_mask(size - aligned_offset, touch_size-1);
+
+  // Iterate through all the touch regions cyclically
+  for (uintptr_t tr=tid*touch_size; tr<aligned_size; tr+=nthreads*touch_size) {
+    // Iterate through all the page regions in the current region we're touching
+    for (uintptr_t pr=tr; pr<tr+touch_size; pr+=page_size) {
+      aligned_start[pr] = 0;
+    }
+  }
+}
+
 // Pin a thread a specific NUMA domain and cyclically touch pages to get
 // interleaved memory. We don't have an accurate estimate of the page size when
 // Transparent Huge Pages (THP) are used, so we fault in regions in at least 2
@@ -177,21 +194,8 @@ typedef struct {
 // element of every system page or non-transparent huge page to fault in.
 static void *touch_thread(void *mem_region) {
   memory_region* mr = (memory_region*) mem_region;
-
-  uintptr_t page_size = chpl_comm_regMemHeapPageSize();
-  uintptr_t touch_size = page_size > 2<<20 ? page_size: 2<<20;
-  unsigned char* aligned_start = round_up_to_mask_ptr(mr->start, touch_size-1);
-  uintptr_t aligned_offset = (uintptr_t)aligned_start - (uintptr_t)mr->start;
-  uintptr_t aligned_size = round_down_to_mask(mr->size - aligned_offset, touch_size-1);
-
   chpl_topo_setThreadLocality(mr->tid % chpl_topo_getNumNumaDomains());
-  // Iterate through all the touch regions cyclically
-  for (uintptr_t tr=mr->tid*touch_size; tr<aligned_size; tr+=mr->nthreads*touch_size) {
-    // Iterate through all the page regions in the current region we're touching
-    for (uintptr_t pr=tr; pr<tr+touch_size; pr+=page_size) {
-      aligned_start[pr] = 0;
-    }
-  }
+  touch_region(mr->start, mr->size, mr->tid, mr->nthreads);
   return NULL;
 }
 

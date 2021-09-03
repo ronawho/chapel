@@ -290,6 +290,7 @@ size_t chpl_comm_regMemHeapPageSize(void) {
   return CHPL_COMM_IMPL_REG_MEM_HEAP_PAGE_SIZE();
 }
 
+void touch_region(unsigned char* start, uintptr_t size, int tid, int nthreads);
 void chpl_comm_regMemHeapTouch(void* start, size_t size);
 
 #ifndef CHPL_COMM_IMPL_REG_MEM_ALLOC_THRESHOLD
