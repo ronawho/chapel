@@ -30,10 +30,11 @@
 #include "chpl-linefile-support.h"
 #include "chpl-mem.h"
 #include "chpl-mem-desc.h"
+#include "chpl-topo.h"
+#include "chplcgfns.h";
 #include "chplmemtrack.h"
 #include "chpltypes.h"
 #include "error.h"
-#include "chpl-topo.h"
 
 // The dedicated arena to use for large allocations (this is important to
 // minimize contention for large allocations)
@@ -124,7 +125,7 @@ static void* chunk_alloc(void *chunk, size_t size, size_t alignment, bool *zero,
     // now that cur_heap_offset is updated, we can unlock
     pthread_mutex_unlock(&heap.alloc_lock);
 
-    if (arena_ind == CHPL_JE_LG_ARENA) {
+    if (CHPL_INTERLEAVE_MEM && arena_ind == CHPL_JE_LG_ARENA) {
       chpl_topo_interleaveMemLocality(cur_chunk_base, size);
     }
   } else if (heap.type == DYNAMIC) {
