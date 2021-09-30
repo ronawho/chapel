@@ -134,7 +134,7 @@ static void genNumLocalesOptions(FILE* slurmFile, sbatchVersion sbatch,
     fprintf(slurmFile, "#SBATCH --exclude=%s\n", exclude);
   switch (sbatch) {
   case slurm:
-    fprintf(slurmFile, "#SBATCH --nodes=%d\n", numLocales);
+    fprintf(slurmFile, "#SBATCH --nodes=%d\n", numLocales/2);
     fprintf(slurmFile, "#SBATCH --ntasks-per-node=1\n");
     // If needed a constraint can be specified with the env var CHPL_LAUNCHER_CONSTRAINT
     if (constraint) {
@@ -268,7 +268,7 @@ static char* chpl_launch_create_command(int argc, char* argv[],
 
     fprintf(slurmFile, "%s/%s/%s -n %d -N %d -c 0",
             CHPL_THIRD_PARTY, WRAP_TO_STR(LAUNCH_PATH), GASNETRUN_LAUNCHER,
-            numLocales, numLocales);
+            numLocales, numLocales/2);
 
     propagate_environment(envProp);
     fprintf(slurmFile, "%s", envProp);
@@ -290,7 +290,7 @@ static char* chpl_launch_create_command(int argc, char* argv[],
 
     len += sprintf(iCom+len, "--quiet ");
     len += sprintf(iCom+len, "-J %.10s ", basenamePtr);
-    len += sprintf(iCom+len, "-N %d ", numLocales);
+    len += sprintf(iCom+len, "-N %d ", numLocales/2);
     len += sprintf(iCom+len, "--ntasks-per-node=1 ");
     if (nodeAccessStr != NULL)
       len += sprintf(iCom+len, "--%s ", nodeAccessStr);
@@ -306,7 +306,7 @@ static char* chpl_launch_create_command(int argc, char* argv[],
       len += sprintf(iCom+len, " -C %s", constraint);
     len += sprintf(iCom+len, " %s/%s/%s -n %d -N %d -c 0",
                    CHPL_THIRD_PARTY, WRAP_TO_STR(LAUNCH_PATH),
-                   GASNETRUN_LAUNCHER, numLocales, numLocales);
+                   GASNETRUN_LAUNCHER, numLocales, numLocales/2);
     len += propagate_environment(iCom+len);
     len += sprintf(iCom+len, " %s %s", chpl_get_real_binary_wrapper(), chpl_get_real_binary_name());
     for (i=1; i<argc; i++) {
