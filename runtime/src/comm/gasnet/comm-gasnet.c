@@ -861,11 +861,24 @@ void chpl_comm_init(int *argc_p, char ***argv_p) {
 
   // Assumes nodeids are packed (i.e. nodeID 0 and nodeID 1 are on same node)
   chpl_topo_setThreadLocality(chpl_nodeID%2);
-  // TODO this disable core-pinning, but without doing this qthreads will
-  // reset affinity and pin all threads to numa-domain 0. We need qthreads to
-  // respect previously set bindings so that it binds threads to cores within
-  // the numa domain it has affinity to instead of ignoring that.
-  chpl_env_set("QT_AFFINITY", "no", 0);
+  // TODO this disable core-pinning for non-binders topology, since without
+  // doing this qthreads will reset affinity and pin all threads to numa-domain
+  // 0. We need qthreads to respect previously set bindings so that it binds
+  // threads to cores within the numa domain it has affinity to instead of
+  // ignoring that. With binders we can do that manually.
+  char* topo = getenv("CHPL_QTHREAD_TOPOLOGY");
+  if (topo != NULL && strcmp(topo, "binders") == 0) {
+    int cpus = chpl_topo_getNumCPUsPhysical(true);
+    int start = (chpl_nodeID % 2) * cpus;
+    char bindbuf[1024];
+    int len=0;
+    for (int i=start; i<start+cpus; i++)
+      len += sprintf(bindbuf+len, "%d:", i);
+    bindbuf[len-1] = '\0';
+    chpl_env_set("QT_CPUBIND", bindbuf, 0);
+  } else {
+    chpl_env_set("QT_AFFINITY", "no", 0);
+  }
 
   GASNET_Safe(gasnet_attach(ftable,
                             sizeof(ftable)/sizeof(gasnet_handlerentry_t),
