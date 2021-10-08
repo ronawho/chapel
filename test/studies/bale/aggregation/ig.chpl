@@ -3,12 +3,13 @@ use BlockDist;
 use Random;
 use Time;
 use CopyAggregation;
+use UnorderedCopy;
 
 const numTasksPerLocale = if dataParTasksPerLocale > 0 then dataParTasksPerLocale
                                                        else here.maxTaskPar;
 const numTasks = numLocales * numTasksPerLocale;
-config const N = 1000000; // number of updates per task
-config const M = 10000; // number of entries in the table per task
+config const N = 10**8/numTasks; // number of updates per task
+config const M = N; // number of entries in the table per task
 
 const numUpdates = N * numTasks;
 const tableSize = M * numTasks;
@@ -43,8 +44,20 @@ proc main() {
   var tmp: [UpdatesDom] int = -1;
 
   startTimer();
+  forall (t, r) in zip (tmp, Rindex) {
+    t = A[r];
+  }
+  stopTimer("   ordered");
+
+  startTimer();
+  forall (t, r) in zip (tmp, Rindex) {
+    unorderedCopy(t, A[r]);
+  }
+  stopTimer(" unordered");
+
+  startTimer();
   forall (t, r) in zip (tmp, Rindex) with (var agg = new SrcAggregator(int)) {
     agg.copy(t, A[r]);
   }
-  stopTimer("AGG");
+  stopTimer("aggregated");
 }
