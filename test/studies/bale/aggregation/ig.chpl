@@ -8,7 +8,7 @@ use UnorderedCopy;
 const numTasksPerLocale = if dataParTasksPerLocale > 0 then dataParTasksPerLocale
                                                        else here.maxTaskPar;
 const numTasks = numLocales * numTasksPerLocale;
-config const N = 10**8/numTasks; // number of updates per task
+config const N = 2**22; // number of updates per task
 config const M = N; // number of entries in the table per task
 
 const numUpdates = N * numTasks;

@@ -3,6 +3,8 @@
 # chpl test/studies/bale/aggregation/ig.chpl --fast -suseBlockArr --no-optimize-forall-unordered-ops
 
 threads=(1 2 4 8 16 28)
+threads=(1 2 4 8 16 32 48)
+threads=(1 2 4 8 16 32 64 128)
 for t in "${threads[@]}"; do
   export CHPL_RT_NUM_THREADS_PER_LOCALE=$t
   echo "Running with $t threads"
