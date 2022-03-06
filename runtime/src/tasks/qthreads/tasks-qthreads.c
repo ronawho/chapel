@@ -468,6 +468,10 @@ static void setupAvailableParallelism(int32_t maxThreads) {
         hwpar = chpl_topo_getNumCPUsPhysical(true);
     }
 
+    if (chpl_env_rt_get_bool("DEDICATED_PROGRESS_THREAD", false)) {
+        hwpar -= 1;
+    }
+
     // hwpar will only be <= 0 if the user set QT_NUM_SHEPHERDS and/or
     // QT_NUM_WORKERS_PER_SHEPHERD in which case we assume as "expert" user and
     // don't impose any thread limits or set worker_unit.
@@ -753,7 +757,9 @@ typedef struct {
 static void *comm_task_wrapper(void *arg)
 {
     comm_task_wrapper_info_t *rarg = arg;
-    chpl_moveToLastCPU();
+    if (chpl_env_rt_get_bool("DEDICATED_PROGRESS_THREAD", false)) {
+      chpl_moveToLastCPU();
+    }
     (*(chpl_fn_p)(rarg->fn))(rarg->arg);
     return 0;
 }
