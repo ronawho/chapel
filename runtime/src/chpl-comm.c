@@ -184,7 +184,9 @@ static void *touch_thread(void *mem_region) {
   uintptr_t aligned_offset = (uintptr_t)aligned_start - (uintptr_t)mr->start;
   uintptr_t aligned_size = round_down_to_mask(mr->size - aligned_offset, touch_size-1);
 
-  chpl_topo_setThreadLocality(mr->tid % chpl_topo_getNumNumaDomains());
+  if (chpl_env_rt_get_bool("INTERLEAVED_HEAP", true)) {
+    chpl_topo_setThreadLocality(mr->tid % chpl_topo_getNumNumaDomains());
+  }
   // Iterate through all the touch regions cyclically
   for (uintptr_t tr=mr->tid*touch_size; tr<aligned_size; tr+=mr->nthreads*touch_size) {
     // Iterate through all the page regions in the current region we're touching
