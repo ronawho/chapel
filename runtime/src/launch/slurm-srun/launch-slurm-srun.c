@@ -48,7 +48,7 @@ static char* exclude = NULL;
 char slurmFilename[FILENAME_MAX];
 
 /* copies of binary to run per node */
-#define procsPerNode 1
+static int procsPerNode = 1;
 
 typedef enum {
   slurmpro,
@@ -146,6 +146,8 @@ static int getCoresPerLocale(int nomultithread) {
   if (nomultithread)
     numCores /= threadsPerCore;
 
+  numCores /= procsPerNode;
+
   return numCores;
 }
 #define MAX_COM_LEN (FILENAME_MAX + 128)
@@ -163,6 +165,7 @@ static char* chpl_launch_create_command(int argc, char* argv[],
   char* outputfn = getenv("CHPL_LAUNCHER_SLURM_OUTPUT_FILENAME");
   char* errorfn = getenv("CHPL_LAUNCHER_SLURM_ERROR_FILENAME");
   char* nodeAccessEnv = getenv("CHPL_LAUNCHER_NODE_ACCESS");
+  char* procsPerNodeEnv = getenv("CHPL_LAUNCHER_LOCALES_PER_NODE");
   const char* nodeAccessStr = NULL;
 
   char* basenamePtr = strrchr(argv[0], '/');
@@ -228,6 +231,10 @@ static char* chpl_launch_create_command(int argc, char* argv[],
     nodeAccessStr = "exclusive";
   }
 
+  if (procsPerNodeEnv) {
+    procsPerNode = atoi(procsPerNodeEnv);
+  }
+
   if (basenamePtr == NULL) {
     basenamePtr = argv[0];
   } else {
@@ -266,7 +273,7 @@ static char* chpl_launch_create_command(int argc, char* argv[],
     // request the number of locales, with 1 task per node, and number of cores
     // cpus-per-task. We probably don't need --nodes and --ntasks specified
     // since 1 task-per-node with n --tasks implies -n nodes
-    fprintf(slurmFile, "#SBATCH --nodes=%d\n", numLocales);
+    fprintf(slurmFile, "#SBATCH --nodes=%d\n", numLocales/procsPerNode);
     fprintf(slurmFile, "#SBATCH --ntasks=%d\n", numLocales);
     fprintf(slurmFile, "#SBATCH --ntasks-per-node=%d\n", procsPerNode);
     fprintf(slurmFile, "#SBATCH --cpus-per-task=%d\n", getCoresPerLocale(nomultithread(true)));
@@ -384,7 +391,7 @@ static char* chpl_launch_create_command(int argc, char* argv[],
     // request the number of locales, with 1 task per node, and number of cores
     // cpus-per-task. We probably don't need --nodes and --ntasks specified
     // since 1 task-per-node with n --tasks implies -n nodes
-    len += sprintf(iCom+len, "--nodes=%d ",numLocales);
+    len += sprintf(iCom+len, "--nodes=%d ",numLocales/procsPerNode);
     len += sprintf(iCom+len, "--ntasks=%d ", numLocales);
     len += sprintf(iCom+len, "--ntasks-per-node=%d ", procsPerNode);
     len += sprintf(iCom+len, "--cpus-per-task=%d ", getCoresPerLocale(nomultithread(false)));
