@@ -25,6 +25,9 @@ def run_batch_file():
 
 test_dirs = fileutils.find_chpl_test_dirs(sys.argv[1])
 create_batch_file(test_dirs)
+
+os.environ['CHPL_TEST_LIMIT_RUNNING_EXECUTABLES'] = 'yes'
+os.environ['CHPL_RT_OVERSUBSCRIBED'] = 'yes'
 run_batch_file()
 
 input_files = ['start_test_log_{}'.format(i) for i in range(len(test_dirs))]
