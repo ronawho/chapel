@@ -1,9 +1,11 @@
 import os
-import sys
 import subprocess
+import shutil
 
 chpl_home = os.getenv('CHPL_HOME')
 
+# get_chplenv is used to speedup `testEnv` by avoiding repeat calls to
+# printchplenv. TODO this was taken from sub_test, so put in helper
 def get_chplenv():
     env_cmd = [os.path.join(chpl_home, 'util', 'printchplenv'), '--all', '--simple', '--no-tidy', '--internal']
     chpl_env = subprocess.check_output(env_cmd).decode()
@@ -15,6 +17,19 @@ os.environ['CHPLENV_IN_ENV'] = 'true'
 chpl_env = get_chplenv()
 file_env = os.environ.copy()
 file_env.update(chpl_env)
+
+def skipif(skipif_file):
+    testEnv = os.path.join(chpl_home, 'util', 'test', 'testEnv')
+    out = subprocess.check_output([testEnv, skipif_file], env=file_env).decode().strip()
+    return out in ('1', 'True')
+
+
+
+def merge_files(intput_files, output_file):
+    with open(output_file, 'wb') as out_file:
+        for input_file in intput_files:
+            with open(input_file, 'rb') as in_file:
+                shutil.copyfileobj(in_file, out_file)
 
 def has_chpl_files(dirname):
     with os.scandir(dirname) as it:
@@ -36,14 +51,15 @@ def fast_scandir(dirname):
         for dirname in list(subfolders):
             if os.path.exists(dirname + '.notest'):
                 continue
-            skipif = dirname + '.skipif'
-            if os.path.exists(skipif):
-                testEnv = os.path.join(chpl_home, 'util', 'test', 'testEnv')
-                out = subprocess.check_output([testEnv, skipif], env=file_env).decode().strip()
-                if out in ('1', 'True'):
+            skipif_file = dirname + '.skipif'
+            if os.path.exists(skipif_file):
+                if skipif(skipif_file):
                     continue
             chpl_subfolders.extend(fast_scandir(dirname))
         return chpl_subfolders
 
-for d in sorted(fast_scandir(sys.argv[1])):
-    print(d)
+# TODO instead of just sorting, look through old logfiles for long running or
+# estimate based on number and size of .chpl files
+def find_chpl_test_dirs(dirname):
+    test_dirs = sorted(fast_scandir(dirname))
+    return test_dirs
