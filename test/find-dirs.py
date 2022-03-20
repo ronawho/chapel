@@ -2,15 +2,16 @@ import os
 import sys
 import subprocess
 
+chpl_home = os.getenv('CHPL_HOME')
+
 def get_chplenv():
-    env_cmd = [os.path.join('/Users/eronagha/chapel/util', 'printchplenv'), '--all', '--simple', '--no-tidy', '--internal']
+    env_cmd = [os.path.join(chpl_home, 'util', 'printchplenv'), '--all', '--simple', '--no-tidy', '--internal']
     chpl_env = subprocess.check_output(env_cmd).decode()
     chpl_env = dict(map(lambda l: l.split('=', 1), chpl_env.splitlines()))
     return chpl_env
 
 os.environ['CHPL_TEST_VGRND_EXE'] = 'off'
 os.environ['CHPLENV_IN_ENV'] = 'true'
-
 chpl_env = get_chplenv()
 file_env = os.environ.copy()
 file_env.update(chpl_env)
@@ -26,7 +27,7 @@ def has_chpl_files(dirname):
                 contains=True
     return contains
 
-def fast_scandir2(dirname):
+def fast_scandir(dirname):
     with os.scandir(dirname) as it:
         chpl_subfolders = []
         if has_chpl_files(dirname):
@@ -37,22 +38,12 @@ def fast_scandir2(dirname):
                 continue
             skipif = dirname + '.skipif'
             if os.path.exists(skipif):
-                testEnv = '/Users/eronagha/chapel/util/test/testEnv'
+                testEnv = os.path.join(chpl_home, 'util', 'test', 'testEnv')
                 out = subprocess.check_output([testEnv, skipif], env=file_env).decode().strip()
                 if out in ('1', 'True'):
                     continue
-            ret = fast_scandir2(dirname)
-            subfolders.extend(ret[0])
-            chpl_subfolders.extend(ret[1])
-        return (subfolders, chpl_subfolders)
+            chpl_subfolders.extend(fast_scandir(dirname))
+        return chpl_subfolders
 
-def fast_scandir(dirname):
-    subfolders= [f.path for f in os.scandir(dirname) if f.is_dir()]
-    for dirname in list(subfolders):
-        subfolders.extend(fast_scandir(dirname))
-    return subfolders
-
-
-
-for d in sorted(fast_scandir2(sys.argv[1])[1]):
+for d in sorted(fast_scandir(sys.argv[1])):
     print(d)
