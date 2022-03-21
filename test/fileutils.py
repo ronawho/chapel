@@ -1,6 +1,8 @@
 import os
 import subprocess
 import shutil
+import sys
+import re
 
 chpl_home = os.getenv('CHPL_HOME')
 
@@ -60,6 +62,21 @@ def fast_scandir(dirname):
 
 # TODO instead of just sorting, look through old logfiles for long running or
 # estimate based on number and size of .chpl files
-def find_chpl_test_dirs(dirname):
-    test_dirs = sorted(fast_scandir(dirname))
+def find_chpl_test_dirs(dirname, logfile):
+    try:
+        with open(logfile, 'r') as f:
+            reg = re.compile('\[Finished subtest "(.*)" - (.*) seconds')
+            lines = [line.strip() for line in f if reg.match(line)]
+            res = {m.group(1): float(m.group(2)) for l in lines for m in [reg.match(l)] if m}
+    except FileNotFoundError:
+        res = {}
+        pass
+
+    test_dirs = fast_scandir(dirname)
+    test_dirs = [(res.get(td.lstrip('./'), 10000.0), td) for td in test_dirs]
+    test_dirs.sort(reverse=True)
+    test_dirs = [td[1] for td in test_dirs]
     return test_dirs
+
+if __name__ == '__main__':
+    print(' '.join(find_chpl_test_dirs(sys.argv[1], sys.argv[2])))
