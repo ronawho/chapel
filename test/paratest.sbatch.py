@@ -17,13 +17,16 @@ chpl_home = os.getenv('CHPL_HOME')
 def create_batch_file(test_dirs):
     process_template = os.path.join(chpl_home, 'util', 'build_configs', 'cray-internal', 'process-template.py')
     keys_len = "TEST_ARR_LEN={}".format(len(test_dirs)-1)
-    keys_arr = "TEST_ARR={}".format(' '.join(test_dirs))
+    keys_arr = "TEST_ARR={}".format(' '.join('"{}"'.format(test_dir) for test_dir in test_dirs))
     subprocess.check_output([process_template, '--template', 'paratest.batch.template', '--output', 'paratest.batch', keys_len, keys_arr])
 
 def run_batch_file():
     print(subprocess.check_output(['sbatch', '--wait', 'paratest.batch']))
 
 test_dirs = fileutils.find_chpl_test_dirs(sys.argv[1])
+print(len(test_dirs))
+exit()
+test_dirs = test_dirs[0:1000]
 create_batch_file(test_dirs)
 
 os.environ['CHPL_TEST_LIMIT_RUNNING_EXECUTABLES'] = 'yes'
