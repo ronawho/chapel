@@ -220,7 +220,7 @@ sub feed_nodes {
       print $activate_venv_output;
       systemd ("echo '$activate_venv_output' >> $fin_logfile");
     } else {
-      @testdir_list = sort @testdir_list;
+      @testdir_list = @testdir_list;
       print $nodeCount; print " worker(s) (@node_list)\n";
       print "timeout = $timeout\n" if $debug > 0;
       my $startCount = $#testdir_list + 1;
@@ -433,6 +433,9 @@ sub find_subdirs {
     local ($targetdir, $level) = @_;
     local ($filen, @cdir, @founddirs, $i);
 
+    @founddirs = split(' ', `python3 $ENV{CHPL_HOME}/test/fileutils.py $targetdir $fin_logfile`);
+    return @founddirs;
+
     print "looking in '$targetdir'\n" if $debug;
     opendir CURRDIR, $targetdir or die "Cannot open directory '$targetdir'\n";
     @cdir = grep !/^\./, readdir CURRDIR;             # curr dir list of files
@@ -540,7 +543,6 @@ sub main {
     $platform = `../util/chplenv/chpl_platform.py`; chomp $platform;
     $fin_logfile = "$logdir/$user.$platform.log";      # final log file name
     # $fin_logfile = "$logdir/$user.$platform.log";
-    unlink $fin_logfile if (-e $fin_logfile);          # remove final log file
 
     $starttime = `date`; chomp $starttime;
 
@@ -786,6 +788,7 @@ sub main {
             @testdir_list = find_subdirs (".", 0);
         }
     }
+    #unlink $fin_logfile if (-e $fin_logfile);          # remove final log file
 
     unless (-e $logdir) {
         print "Error: log directory $logdir does not exist\n";
