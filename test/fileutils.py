@@ -14,10 +14,10 @@ def get_chplenv():
     chpl_env = dict(map(lambda l: l.split('=', 1), chpl_env.splitlines()))
     return chpl_env
 
-os.environ['CHPL_TEST_VGRND_EXE'] = 'off'
-os.environ['CHPLENV_IN_ENV'] = 'true'
 chpl_env = get_chplenv()
 file_env = os.environ.copy()
+file_env['CHPL_TEST_VGRND_EXE'] = 'off'
+file_env['CHPLENV_IN_ENV'] = 'true'
 file_env.update(chpl_env)
 
 def skipif(skipif_file):
@@ -79,4 +79,6 @@ def find_chpl_test_dirs(dirname, logfile):
     return test_dirs
 
 if __name__ == '__main__':
-    print(' '.join(find_chpl_test_dirs(sys.argv[1], sys.argv[2])))
+    dirname = sys.argv[1] if len(sys.argv) > 1 else '.'
+    logfile = sys.argv[2] if len(sys.argv) > 2 else ''
+    print(' '.join(find_chpl_test_dirs(dirname, logfile)))
