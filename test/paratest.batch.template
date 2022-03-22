@@ -5,7 +5,11 @@
 #SBATCH --error=/dev/null
 #SBATCH --array=0-@@TEST_ARR_LEN
 #SBATCH --oversubscribe
+#SBATCH --nice
 
+START=@@START
 TEST_ARR=(@@TEST_ARR)
 
-nice start_test ${TEST_ARR[$SLURM_ARRAY_TASK_ID]} -norecurse -logfile=start_test_log_$SLURM_ARRAY_TASK_ID
+LOGFILE=$((START + $SLURM_ARRAY_TASK_ID))
+
+nice start_test ${TEST_ARR[$SLURM_ARRAY_TASK_ID]} -norecurse -logfile=start_test_log_$LOGFILE
