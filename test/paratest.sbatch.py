@@ -55,6 +55,8 @@ create_batch_file([test_dirs[-1]], start)
 run_batch_file([test_dirs[-1]], deps)
 
 
+# TODO move this into an sbatch call (and have this be the thing that waits
+# instead of splitting off the last task)
 input_files = ['start_test_log_{}'.format(i) for i in range(len(test_dirs))]
 fileutils.merge_files(input_files, output_file)
 
