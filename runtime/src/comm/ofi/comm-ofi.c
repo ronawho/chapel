@@ -3677,9 +3677,9 @@ void mcmReleaseAllNodes(struct bitmap_t* b1, struct bitmap_t* b2,
         if (skipNode < 0 || node != skipNode) {
           (*tcip->checkTxCmplsFn)(tcip);
           mcmReleaseOneNode(node, tcip, dbgOrderStr);
+          bitmapClear(b2, node);
         }
       } BITMAP_FOREACH_SET_END
-      bitmapZero(b2);
     }
   } else {
     if (b2 == NULL) {
@@ -3687,18 +3687,18 @@ void mcmReleaseAllNodes(struct bitmap_t* b1, struct bitmap_t* b2,
         if (skipNode < 0 || node != skipNode) {
           (*tcip->checkTxCmplsFn)(tcip);
           mcmReleaseOneNode(node, tcip, dbgOrderStr);
+          bitmapClear(b1, node);
         }
       } BITMAP_FOREACH_SET_END
-      bitmapZero(b1);
     } else {
       BITMAP_FOREACH_SET_OR(b1, b2, node) {
         if (skipNode < 0 || node != skipNode) {
           (*tcip->checkTxCmplsFn)(tcip);
           mcmReleaseOneNode(node, tcip, dbgOrderStr);
+          bitmapClear(b1, node);
+          bitmapClear(b2, node);
         }
       } BITMAP_FOREACH_SET_END
-      bitmapZero(b1);
-      bitmapZero(b2);
     }
   }
 }
@@ -4297,7 +4297,7 @@ void amReqFn_msgOrdFence(c_nodeid_t node,
   case am_opExecOn:
   case am_opExecOnLrg:
     forceMemFxVisAllNodes(true /*checkPuts*/, true /*checkAmos*/,
-                          -1 /*skipNode*/, tcip);
+                          node /*skipNode*/, tcip);
     havePutsOut = (tcip->putVisBitmap != NULL
                    && bitmapTest(tcip->putVisBitmap, node));
     haveAmosOut = (tcip->amoVisBitmap != NULL
@@ -4307,7 +4307,7 @@ void amReqFn_msgOrdFence(c_nodeid_t node,
     {
       chpl_bool amoHasMemFx = (req->amo.ofiOp != FI_ATOMIC_READ);
       forceMemFxVisAllNodes(amoHasMemFx /*checkPuts*/, true /*checkAmos*/,
-                            -1 /*skipNode*/, tcip);
+                            node /*skipNode*/, tcip);
       havePutsOut = (amoHasMemFx
                      && tcip->putVisBitmap != NULL
                      && bitmapTest(tcip->putVisBitmap, node));
