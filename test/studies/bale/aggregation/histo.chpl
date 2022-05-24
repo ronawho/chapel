@@ -38,7 +38,7 @@ proc main() {
   Rindex = mod(Rindex, tableSize);
 
   startTimer();
-  forall r in Rindex with (var agg = new AtomicIncAggregator(int)) {
+  forall r in Rindex with (var agg = new AtomicIncAggregator(int, flusher=AtomicInc)) {
     agg.inc(AggA[r]);
   }
   stopTimer("AGP");

@@ -8,6 +8,11 @@ module AtomicAggregation {
   proc AggregatedAtomic(type T) type {
     return chpl__processorAtomicType(T);
   }
+  record AtomicInc {
+    inline proc type op(val) {
+      val.add(1, memoryOrder.relaxed);
+    }
+  }
   /*
    * Aggregates atomic increments. e.g. atomic.add(1). This is a specialization
    * of a non-fetching atomic aggregator that does not have to buffer values.
@@ -23,6 +28,7 @@ module AtomicAggregation {
     var lBuffers: [myLocaleSpace] [0..#bufferSize] aggType;
     var rBuffers: [myLocaleSpace] remoteBuffer(aggType);
     var bufferIdxs: [myLocaleSpace] int;
+    type flusher;
 
     proc postinit() {
       for loc in myLocaleSpace {
@@ -80,7 +86,7 @@ module AtomicAggregation {
       // Process remote buffer
       on Locales[loc] {
         for dstAddr in rBuffer.localIter(remBufferPtr, myBufferIdx) {
-          dstAddr.deref().add(1, memoryOrder.relaxed);
+          flusher.op(dstAddr.deref());
         }
         if freeData {
           rBuffer.localFree(remBufferPtr);
