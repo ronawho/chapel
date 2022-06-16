@@ -2,11 +2,15 @@ module AtomicAggregation {
   use CTypes;
   use AggregationPrimitives;
 
+  private use ChapelLocks;
+  pragma "locale private"
+  var updateLock : chpl_LocalSpinlock;
+
   private config const yieldFrequency = getEnvInt("AGGREGATION_YIELD_FREQUENCY", 1024);
   private config const amoBuffSize = getEnvInt("AGGREGATION_AMO_BUFF_SIZE", 8096);
 
   proc AggregatedAtomic(type T) type {
-    return chpl__processorAtomicType(T);
+    return T;//chpl__processorAtomicType(T);
   }
   /*
    * Aggregates atomic increments. e.g. atomic.add(1). This is a specialization
@@ -79,9 +83,13 @@ module AtomicAggregation {
 
       // Process remote buffer
       on Locales[loc] {
+
+        updateLock.lock();
         for dstAddr in rBuffer.localIter(remBufferPtr, myBufferIdx) {
-          dstAddr.deref().add(1, memoryOrder.relaxed);
+          dstAddr.deref() += 1;//.add(1, memoryOrder.relaxed);
         }
+        updateLock.unlock();
+
         if freeData {
           rBuffer.localFree(remBufferPtr);
         }
