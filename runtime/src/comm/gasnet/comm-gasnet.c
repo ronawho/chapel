@@ -339,7 +339,7 @@ static void AM_fork(gasnet_token_t token, void* buf, size_t nbytes) {
   chpl_comm_on_bundle_t *f = (chpl_comm_on_bundle_t*) buf;
   chpl_task_startMovedTask(f->task_bundle.requested_fid,
                            (chpl_fn_p)fork_wrapper,
-                           f, nbytes,
+                           f, f->task_bundle.nbytes,
                            f->task_bundle.requestedSubloc, chpl_nullTaskID);
 }
 
@@ -1449,7 +1449,7 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
   size_t payload_size = arg_size - sizeof(chpl_comm_on_bundle_t);
   size_t small_msg_size = payload_size + sizeof(small_fork_hdr_t);
   int large = (arg_size > gasnet_AMMaxMedium());
-  int small = (small_msg_size < sizeof(special_fork_t) && !large);
+  int small = false;// (small_msg_size < sizeof(special_fork_t) && !large);
 
   int op;
 
@@ -1484,7 +1484,13 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
   }
   arg->kind = CHPL_ARG_BUNDLE_KIND_COMM;
 
+  void* lsrc_addr;
+  void* ldst_addr;
+  size_t lsize;
+  char* ptr;
+
   if (small || large) {
+    //printf("ADFQWER %d %d\n", (int)small, (int)large);
     special_fork_t tmp;
 
     small_fork_hdr_t hdr = { .caller = chpl_nodeID,
@@ -1540,18 +1546,54 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
     }
   } else {
     // Neither small nor large
+    extern void* chpl_task_getNextOnLongPtr(void);
+    ptr = chpl_task_getNextOnLongPtr();
+    //printf("ASDF %p %d\n", ptr, (int)arg_size);
+
+    if (ptr) {
+      memcpy(&lsrc_addr, &ptr[0], 8);
+      memcpy(&ldst_addr, &ptr[8], 8);
+      memcpy(&lsize    , &ptr[16], 8);
+     // printf("QWER %p %zu\n", lsrc_addr, lsize);
+    }
 
     arg->task_bundle.infoChapel = infoChapel;
     arg->task_bundle.requestedSubloc = subloc;
+    arg->task_bundle.nbytes = arg_size;
     arg->task_bundle.requested_fid = fid;
     arg->comm.caller = chpl_nodeID;
     arg->comm.ack = blocking ? &done : NULL;
 
-    GASNET_Safe(gasnet_AMRequestMedium0(node, op, arg, arg_size));
+    if (ptr && arg_size < 512 && lsize+512 < gasnet_AMMaxLongRequest()) {
+      memmove(lsrc_addr, arg, arg_size);
+     // printf("1234 %d %d\n", (int)arg->comm.caller, ((chpl_comm_on_bundle_t *)lsrc_addr)->comm.caller);
+     printf("zxcv %zu %zu\n", gasnet_AMMaxLongRequest(), lsize);
+
+      //gasnet_put(node, ldst_addr+512, lsrc_addr+512, lsize);
+      //GASNET_Safe(gasnet_AMRequestLong0(node, op, lsrc_addr, lsize+512, ldst_addr));
+      GASNET_Safe(gasnet_AMRequestLong0(node, op, lsrc_addr, lsize+512, ldst_addr));
+      //GASNET_Safe(gasnet_AMRequestMedium0(node, op, lsrc_addr, arg_size));
+    } else {
+      GASNET_Safe(gasnet_AMRequestMedium0(node, op, arg, arg_size));
+    }
   }
 
   if (blocking)
     wait_done_obj(&done, !fast);
+  if (ptr) {
+    lsrc_addr = NULL;
+    ldst_addr = NULL;
+    lsize = 0;
+    memcpy(&ptr[0],  &lsrc_addr, 8);
+    memcpy(&ptr[8],  &ldst_addr, 8);
+    memcpy(&ptr[16], &lsize    , 8);
+    chpl_mem_free(ptr, 0, 0);
+    ptr = NULL;
+
+    //extern void chpl_task_setNextOnLongPtr(void*, void*, size_t);
+    //chpl_task_setNextOnLongPtr(NULL, NULL, 0);
+  }
+  
 }
 
 ////GASNET - introduce locale-int size

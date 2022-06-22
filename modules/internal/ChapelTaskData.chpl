@@ -28,10 +28,12 @@ module ChapelTaskData {
   // up to 16 bytes of wide pointer for _remoteEndCountType
   // 1 byte for serial_state
   // 1 byte for nextCoStmtSerial
+  // 8 byte for remote ptr
   private const chpl_offset_endCount = 0:c_size_t;
   private const chpl_offset_serial = sizeof_endcount_ptr();
   private const chpl_offset_nextCoStmtSerial = chpl_offset_serial+1;
-  private const chpl_offset_end = chpl_offset_nextCoStmtSerial+1;
+  private const chpl_offset_nextOnLongPtr = chpl_offset_nextCoStmtSerial+1;
+  private const chpl_offset_end = chpl_offset_nextOnLongPtr+c_sizeof(c_void_ptr);
 
   // What is the size of a wide _EndCount pointer?
   private
@@ -123,6 +125,37 @@ module ChapelTaskData {
     return v == 1;
   }
 
+  proc chpl_task_data_setNextOnLongPtr(tls:c_ptr(chpl_task_infoChapel_t),
+      src: c_void_ptr, dst: c_void_ptr, size: c_size_t) : void {
+    var prv = tls:c_ptr(c_uchar);
+    var i:c_size_t;
+
+    var src2 = src;
+    var v = c_malloc(c_uchar, 24);
+    i = 0;
+    c_memcpy(c_ptrTo(v[i]), c_ptrTo(src2), c_sizeof(c_void_ptr));
+
+    var dst2 = dst;
+    i += c_sizeof(c_void_ptr);
+    c_memcpy(c_ptrTo(v[i]), c_ptrTo(dst2), c_sizeof(c_void_ptr));
+
+    var size2 = size;
+    i += c_sizeof(c_void_ptr);
+    c_memcpy(c_ptrTo(v[i]), c_ptrTo(size2), c_sizeof(c_size_t));
+
+    i = chpl_offset_nextOnLongPtr;
+    c_memcpy(c_ptrTo(prv[i]), c_ptrTo(v), c_sizeof(c_void_ptr));
+  }
+
+  proc chpl_task_data_getNextOnLongPtr(tls:c_ptr(chpl_task_infoChapel_t)) : c_void_ptr {
+    var ret:bool = false;
+    var prv = tls:c_ptr(c_uchar);
+    var i = chpl_offset_nextOnLongPtr;
+    var v:c_void_ptr;
+    c_memcpy(c_ptrTo(v), c_ptrTo(prv[i]), c_sizeof(c_void_ptr));
+    return v;
+  }
+
 
   // These functions are like the above but first get the pointer
   // to the task local storage region for the currently executing task.
@@ -141,6 +174,15 @@ module ChapelTaskData {
   export proc chpl_task_getSerial() : bool {
     return chpl_task_data_getSerial(chpl_task_getInfoChapel());
   }
+
+  export proc chpl_task_setNextOnLongPtr(src: c_void_ptr, dst: c_void_ptr, size: c_size_t) : void {
+    chpl_task_data_setNextOnLongPtr(chpl_task_getInfoChapel(), src, dst, size);
+  }
+
+  export proc chpl_task_getNextOnLongPtr() : c_void_ptr {
+    return chpl_task_data_getNextOnLongPtr(chpl_task_getInfoChapel());
+  }
+
 
 
   // module init function - check sizes

@@ -96,7 +96,7 @@ module CopyAggregation {
   private const dstBuffSize = getEnvInt("CHPL_AGGREGATION_DST_BUFF_SIZE", defaultBuffSize);
   private const srcBuffSize = getEnvInt("CHPL_AGGREGATION_SRC_BUFF_SIZE", defaultBuffSize);
 
-  private config param aggregate = CHPL_COMM != "none";
+  private config param aggregate = true;//CHPL_COMM != "none";
 
   /*
      Aggregates ``copy(ref dst, src)``. Optimized for when src is local.
@@ -149,7 +149,8 @@ module CopyAggregation {
       lBuffers = c_malloc(c_ptr(aggType), numLocales);
       bufferIdxs = bufferIdxAlloc();
       for loc in myLocaleSpace {
-        lBuffers[loc] = c_malloc(aggType, bufferSize);
+        lBuffers[loc] = c_malloc(aggType, bufferSize+32)+32;
+        //lBuffers[loc] = c_malloc(aggType, bufferSize);
         bufferIdxs[loc] = 0;
         rBuffers[loc] = new remoteBuffer(aggType, bufferSize, loc);
       }
@@ -158,7 +159,7 @@ module CopyAggregation {
     proc deinit() {
       flush();
       for loc in myLocaleSpace {
-        c_free(lBuffers[loc]);
+        c_free(lBuffers[loc]-32);
       }
       c_free(lBuffers);
       c_free(bufferIdxs);
@@ -387,7 +388,8 @@ module AggregationPrimitives {
       if data == c_nil {
         const rvf_size = size;
         on Locales[loc] do {
-          data = c_malloc(elemType, rvf_size);
+          data = c_malloc(elemType, rvf_size+32)+32;
+          //data = c_malloc(elemType, rvf_size);
         }
       }
       return data;
@@ -416,7 +418,7 @@ module AggregationPrimitives {
         assert(this.data == data);
         assert(data != c_nil);
       }
-      c_free(data);
+      c_free(data-32);
     }
 
     // After free'ing the data, need to nil out the records copy of the pointer
@@ -430,23 +432,28 @@ module AggregationPrimitives {
 
     // Copy size elements from lArr to the remote buffer. Must be running on
     // lArr's locale.
-    proc PUT(lArr: [] elemType, size: int) where lArr.isDefaultRectangular() {
-      if boundsChecking {
-        assert(size <= this.size);
-        assert(this.size == lArr.size);
-        assert(lArr.domain.lowBound == 0);
-        assert(lArr.locale.id == here.id);
-      }
-      const byte_size = size:c_size_t * c_sizeof(elemType);
-      AggregationPrimitives.PUT(c_ptrTo(lArr[0]), loc, data, byte_size);
-    }
+    //proc PUT(lArr: [] elemType, size: int) where lArr.isDefaultRectangular() {
+    //  if boundsChecking {
+    //    assert(size <= this.size);
+    //    assert(this.size == lArr.size);
+    //    assert(lArr.domain.lowBound == 0);
+    //    assert(lArr.locale.id == here.id);
+    //  }
+    //  const byte_size = size:c_size_t * c_sizeof(elemType);
+    //  AggregationPrimitives.PUT(c_ptrTo(lArr[0]), loc, data, byte_size);
+    //}
 
     proc PUT(lArr: c_ptr(elemType), size: int) {
       if boundsChecking {
         assert(size <= this.size);
       }
       const byte_size = size:c_size_t * c_sizeof(elemType);
-      AggregationPrimitives.PUT(lArr, loc, data, byte_size);
+      if loc != here.id {
+        chpl_task_setNextOnLongPtr((lArr-32):c_void_ptr, (data-32):c_void_ptr, byte_size);
+       // AggregationPrimitives.PUT(lArr, loc, data, byte_size);
+      } else {
+        AggregationPrimitives.PUT(lArr, loc, data, byte_size);
+      }
     }
 
     proc GET(lArr: [] elemType, size: int) where lArr.isDefaultRectangular() {
