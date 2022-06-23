@@ -1453,7 +1453,8 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
 
   int op;
 
-  chpl_task_infoChapel_t infoChapel = *chpl_task_getInfoChapel();
+  chpl_task_infoChapel_t* infoChapelP = chpl_task_getInfoChapel();
+  chpl_task_infoChapel_t infoChapel = *infoChapelP;
   extern void*  chpl_task_data_getNextOnLongSrcPtr(chpl_task_infoChapel_t*);
   extern void*  chpl_task_data_getNextOnLongDstPtr(chpl_task_infoChapel_t*);
   extern size_t chpl_task_data_getNextOnLongSize  (chpl_task_infoChapel_t*);
@@ -1466,9 +1467,9 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
   void*  longDstPtr = chpl_task_data_getNextOnLongDstPtr(&infoChapel);
   size_t longSize   = chpl_task_data_getNextOnLongSize  (&infoChapel);
 
-  chpl_task_data_setNextOnLongSrcPtr(&infoChapel, NULL);
-  chpl_task_data_setNextOnLongDstPtr(&infoChapel, NULL);
-  chpl_task_data_setNextOnLongSize  (&infoChapel, 0);
+  chpl_task_data_setNextOnLongSrcPtr(infoChapelP, NULL);
+  chpl_task_data_setNextOnLongDstPtr(infoChapelP, NULL);
+  chpl_task_data_setNextOnLongSize  (infoChapelP, 0);
 
   if (blocking)
     init_done_obj(&done, 1);
@@ -1498,6 +1499,10 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
     payload_size = sizeof(large_fork_t) - sizeof(small_fork_hdr_t);
   }
   arg->kind = CHPL_ARG_BUNDLE_KIND_COMM;
+
+  if (longSize != 0) {
+    gasnet_put(node, longDstPtr, longSrcPtr, longSize);
+  }
 
   if (small || large) {
     special_fork_t tmp;
