@@ -1500,11 +1500,12 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
   }
   arg->kind = CHPL_ARG_BUNDLE_KIND_COMM;
 
-  if (longSize != 0) {
-    gasnet_put(node, longDstPtr, longSrcPtr, longSize);
-  }
 
   if (small || large) {
+    if (longSize != 0) {
+      gasnet_put(node, longDstPtr, longSrcPtr, longSize);
+    }
+
     special_fork_t tmp;
 
     small_fork_hdr_t hdr = { .caller = chpl_nodeID,
@@ -1566,6 +1567,13 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
     arg->task_bundle.requested_fid = fid;
     arg->comm.caller = chpl_nodeID;
     arg->comm.ack = blocking ? &done : NULL;
+
+    if (longSize != 0) {
+      gasnet_handle_t handle = gasnet_put_nb(node, longDstPtr, longSrcPtr, longSize);
+      while (gasnet_try_syncnb(handle) != GASNET_OK) {
+        chpl_task_yield();
+      }
+    }
 
     GASNET_Safe(gasnet_AMRequestMedium0(node, op, arg, arg_size));
   }
