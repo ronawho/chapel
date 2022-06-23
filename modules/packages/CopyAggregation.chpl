@@ -437,10 +437,9 @@ module AggregationPrimitives {
       const byte_size = size:c_size_t * c_sizeof(elemType);
       if loc != here.id {
         var infoChapel = chpl_task_getInfoChapel();
-        chpl_task_data_setNextOnLongSrcPtr(infoChapel, (lArr-pad):c_void_ptr);
-        chpl_task_data_setNextOnLongDstPtr(infoChapel, (data-pad):c_void_ptr);
+        chpl_task_data_setNextOnLongSrcPtr(infoChapel, lArr);
+        chpl_task_data_setNextOnLongDstPtr(infoChapel, data);
         chpl_task_data_setNextOnLongSize  (infoChapel, byte_size);
-        AggregationPrimitives.PUT(lArr, loc, data, byte_size);
       } else {
         AggregationPrimitives.PUT(lArr, loc, data, byte_size);
       }
