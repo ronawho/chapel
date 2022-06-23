@@ -1454,6 +1454,21 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
   int op;
 
   chpl_task_infoChapel_t infoChapel = *chpl_task_getInfoChapel();
+  extern void*  chpl_task_data_getNextOnLongSrcPtr(chpl_task_infoChapel_t*);
+  extern void*  chpl_task_data_getNextOnLongDstPtr(chpl_task_infoChapel_t*);
+  extern size_t chpl_task_data_getNextOnLongSize  (chpl_task_infoChapel_t*);
+
+  extern void chpl_task_data_setNextOnLongSrcPtr(chpl_task_infoChapel_t*, void*);
+  extern void chpl_task_data_setNextOnLongDstPtr(chpl_task_infoChapel_t*, void*);
+  extern void chpl_task_data_setNextOnLongSize  (chpl_task_infoChapel_t*, size_t);
+
+  void*  longSrcPtr = chpl_task_data_getNextOnLongSrcPtr(&infoChapel);
+  void*  longDstPtr = chpl_task_data_getNextOnLongDstPtr(&infoChapel);
+  size_t longSize   = chpl_task_data_getNextOnLongSize  (&infoChapel);
+
+  chpl_task_data_setNextOnLongSrcPtr(&infoChapel, NULL);
+  chpl_task_data_setNextOnLongDstPtr(&infoChapel, NULL);
+  chpl_task_data_setNextOnLongSize  (&infoChapel, 0);
 
   if (blocking)
     init_done_obj(&done, 1);

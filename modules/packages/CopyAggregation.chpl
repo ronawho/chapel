@@ -435,7 +435,15 @@ module AggregationPrimitives {
         assert(size <= this.size);
       }
       const byte_size = size:c_size_t * c_sizeof(elemType);
-      AggregationPrimitives.PUT(lArr, loc, data, byte_size);
+      if loc != here.id {
+        var infoChapel = chpl_task_getInfoChapel();
+        chpl_task_data_setNextOnLongSrcPtr(infoChapel, (lArr-pad):c_void_ptr);
+        chpl_task_data_setNextOnLongDstPtr(infoChapel, (data-pad):c_void_ptr);
+        chpl_task_data_setNextOnLongSize  (infoChapel, byte_size);
+        AggregationPrimitives.PUT(lArr, loc, data, byte_size);
+      } else {
+        AggregationPrimitives.PUT(lArr, loc, data, byte_size);
+      }
     }
 
     proc GET(lArr: [] elemType, size: int) where lArr.isDefaultRectangular() {
