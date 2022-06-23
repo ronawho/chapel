@@ -339,7 +339,7 @@ static void AM_fork(gasnet_token_t token, void* buf, size_t nbytes) {
   chpl_comm_on_bundle_t *f = (chpl_comm_on_bundle_t*) buf;
   chpl_task_startMovedTask(f->task_bundle.requested_fid,
                            (chpl_fn_p)fork_wrapper,
-                           f, nbytes,
+                           f, f->task_bundle.nbytes,
                            f->task_bundle.requestedSubloc, chpl_nullTaskID);
 }
 
@@ -836,6 +836,8 @@ static void set_num_comm_domains() {
 #endif
 }
 
+static int longAMStrat = 0;
+
 void chpl_comm_init(int *argc_p, char ***argv_p) {
 //  int status; // Some compilers complain about unused variable 'status'.
 
@@ -847,6 +849,8 @@ void chpl_comm_init(int *argc_p, char ***argv_p) {
   gasnet_client_attach_hook = &chpl_comm_regMemHeapTouch;
 #endif
 #endif
+
+  longAMStrat = chpl_env_rt_get_int("LONG_AM_STRAT", 0);
 
   set_max_segsize();
   set_num_comm_domains();
@@ -1564,18 +1568,29 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
 
     arg->task_bundle.infoChapel = infoChapel;
     arg->task_bundle.requestedSubloc = subloc;
+    arg->task_bundle.nbytes = arg_size;
     arg->task_bundle.requested_fid = fid;
     arg->comm.caller = chpl_nodeID;
     arg->comm.ack = blocking ? &done : NULL;
 
     if (longSize != 0) {
-      gasnet_handle_t handle = gasnet_put_nb(node, longDstPtr, longSrcPtr, longSize);
-      while (gasnet_try_syncnb(handle) != GASNET_OK) {
-        chpl_task_yield();
+      if (longAMStrat == 1) {
+        gasnet_handle_t handle = gasnet_put_nb(node, longDstPtr, longSrcPtr, longSize);
+        while (gasnet_try_syncnb(handle) != GASNET_OK) {
+          chpl_task_yield();
+        }
+        GASNET_Safe(gasnet_AMRequestMedium0(node, op, arg, arg_size));
+      } else if (longAMStrat == 2) {
+        gasnet_put(node, longDstPtr, longSrcPtr, longSize);
+        GASNET_Safe(gasnet_AMRequestMedium0(node, op, arg, arg_size));
+      } else {
+        // TODO check that arg_size < 512 and total size < longAMMax
+        memcpy(longSrcPtr-arg_size, arg, arg_size);
+        GASNET_Safe(gasnet_AMRequestLong0(node, op, longSrcPtr-arg_size, longSize+arg_size, longDstPtr-arg_size));
       }
+    } else {
+      GASNET_Safe(gasnet_AMRequestMedium0(node, op, arg, arg_size));
     }
-
-    GASNET_Safe(gasnet_AMRequestMedium0(node, op, arg, arg_size));
   }
 
   if (blocking)
