@@ -96,7 +96,7 @@ module CopyAggregation {
   private const dstBuffSize = getEnvInt("CHPL_AGGREGATION_DST_BUFF_SIZE", defaultBuffSize);
   private const srcBuffSize = getEnvInt("CHPL_AGGREGATION_SRC_BUFF_SIZE", defaultBuffSize);
 
-  private config param aggregate = CHPL_COMM != "none";
+  private config param aggregate = true;
 
   /*
      Aggregates ``copy(ref dst, src)``. Optimized for when src is local.
@@ -144,21 +144,22 @@ module CopyAggregation {
     var lBuffers: c_ptr(c_ptr(aggType));
     var rBuffers: [myLocaleSpace] remoteBuffer(aggType);
     var bufferIdxs: c_ptr(int);
+    const pad = 512 / c_sizeof(aggType):int;
 
     proc postinit() {
       lBuffers = c_malloc(c_ptr(aggType), numLocales);
       bufferIdxs = bufferIdxAlloc();
       for loc in myLocaleSpace {
-        lBuffers[loc] = c_malloc(aggType, bufferSize);
+        lBuffers[loc] = c_malloc(aggType, bufferSize+pad)+pad;
         bufferIdxs[loc] = 0;
-        rBuffers[loc] = new remoteBuffer(aggType, bufferSize, loc);
+        rBuffers[loc] = new remoteBuffer(aggType, bufferSize, loc, pad);
       }
     }
 
     proc deinit() {
       flush();
       for loc in myLocaleSpace {
-        c_free(lBuffers[loc]);
+        c_free(lBuffers[loc]-pad);
       }
       c_free(lBuffers);
       c_free(bufferIdxs);
@@ -379,6 +380,7 @@ module AggregationPrimitives {
     type elemType;
     var size: int;
     var loc: int;
+    var pad = 0;
     var data: c_ptr(elemType);
 
     // Allocate a buffer on loc if we haven't already. Return a c_ptr to the
@@ -387,7 +389,7 @@ module AggregationPrimitives {
       if data == c_nil {
         const rvf_size = size;
         on Locales[loc] do {
-          data = c_malloc(elemType, rvf_size);
+          data = c_malloc(elemType, rvf_size+pad)+pad;
         }
       }
       return data;
@@ -416,7 +418,7 @@ module AggregationPrimitives {
         assert(this.data == data);
         assert(data != c_nil);
       }
-      c_free(data);
+      c_free(data-pad);
     }
 
     // After free'ing the data, need to nil out the records copy of the pointer
@@ -426,19 +428,6 @@ module AggregationPrimitives {
         assert(this.locale.id == here.id);
       }
       data = c_nil;
-    }
-
-    // Copy size elements from lArr to the remote buffer. Must be running on
-    // lArr's locale.
-    proc PUT(lArr: [] elemType, size: int) where lArr.isDefaultRectangular() {
-      if boundsChecking {
-        assert(size <= this.size);
-        assert(this.size == lArr.size);
-        assert(lArr.domain.lowBound == 0);
-        assert(lArr.locale.id == here.id);
-      }
-      const byte_size = size:c_size_t * c_sizeof(elemType);
-      AggregationPrimitives.PUT(c_ptrTo(lArr[0]), loc, data, byte_size);
     }
 
     proc PUT(lArr: c_ptr(elemType), size: int) {
