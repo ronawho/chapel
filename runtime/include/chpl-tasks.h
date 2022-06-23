@@ -52,7 +52,7 @@ typedef struct {
 // along as a Chapel task moves by means of on-stmts.
 //
 typedef struct {
-  unsigned char data[32];
+  unsigned char data[64];
 } chpl_task_infoChapel_t;
 
 //

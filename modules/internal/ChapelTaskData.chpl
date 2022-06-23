@@ -31,7 +31,10 @@ module ChapelTaskData {
   private const chpl_offset_endCount = 0:c_size_t;
   private const chpl_offset_serial = sizeof_endcount_ptr();
   private const chpl_offset_nextCoStmtSerial = chpl_offset_serial+1;
-  private const chpl_offset_end = chpl_offset_nextCoStmtSerial+1;
+  private const chpl_offset_nextOnLongSrcPtr = chpl_offset_nextCoStmtSerial+1;
+  private const chpl_offset_nextOnLongDstPtr = chpl_offset_nextOnLongSrcPtr+c_sizeof(c_void_ptr);
+  private const chpl_offset_nextOnLongSize = chpl_offset_nextOnLongDstPtr+c_sizeof(c_void_ptr);
+  private const chpl_offset_end = chpl_offset_nextOnLongSize+c_sizeof(c_size_t);
 
   // What is the size of a wide _EndCount pointer?
   private
@@ -123,6 +126,56 @@ module ChapelTaskData {
     return v == 1;
   }
 
+  export proc chpl_task_data_setNextOnLongSrcPtr(tls:c_ptr(chpl_task_infoChapel_t), src: c_void_ptr) : void {
+    var prv = tls:c_ptr(c_uchar);
+    var i = chpl_offset_nextOnLongSrcPtr;
+
+    var v = src;
+    c_memcpy(c_ptrTo(prv[i]), c_ptrTo(v), c_sizeof(c_void_ptr));
+  }
+
+  export proc chpl_task_data_setNextOnLongDstPtr(tls:c_ptr(chpl_task_infoChapel_t), dst: c_void_ptr) : void {
+    var prv = tls:c_ptr(c_uchar);
+    var i = chpl_offset_nextOnLongDstPtr;
+
+    var v = dst;
+    c_memcpy(c_ptrTo(prv[i]), c_ptrTo(v), c_sizeof(c_void_ptr));
+  }
+
+  export proc chpl_task_data_setNextOnLongSize(tls:c_ptr(chpl_task_infoChapel_t), size: c_size_t) : void {
+    var prv = tls:c_ptr(c_uchar);
+    var i = chpl_offset_nextOnLongSize;
+
+    var v = size;
+    c_memcpy(c_ptrTo(prv[i]), c_ptrTo(v), c_sizeof(c_size_t));
+  }
+
+  export proc chpl_task_data_getNextOnLongSrcPtr(tls:c_ptr(chpl_task_infoChapel_t)) : c_void_ptr {
+    var prv = tls:c_ptr(c_uchar);
+    var i = chpl_offset_nextOnLongSrcPtr;
+
+    var v: c_void_ptr;
+    c_memcpy(c_ptrTo(v), c_ptrTo(prv[i]), c_sizeof(c_void_ptr));
+    return v;
+  }
+
+  export proc chpl_task_data_getNextOnLongDstPtr(tls:c_ptr(chpl_task_infoChapel_t)) : c_void_ptr {
+    var prv = tls:c_ptr(c_uchar);
+    var i = chpl_offset_nextOnLongDstPtr;
+
+    var v: c_void_ptr;
+    c_memcpy(c_ptrTo(v), c_ptrTo(prv[i]), c_sizeof(c_void_ptr));
+    return v;
+  }
+
+  export proc chpl_task_data_getNextOnLongSize(tls:c_ptr(chpl_task_infoChapel_t)) : c_size_t {
+    var prv = tls:c_ptr(c_uchar);
+    var i = chpl_offset_nextOnLongSize;
+
+    var v: c_size_t;
+    c_memcpy(c_ptrTo(v), c_ptrTo(prv[i]), c_sizeof(c_size_t));
+    return v;
+  }
 
   // These functions are like the above but first get the pointer
   // to the task local storage region for the currently executing task.
