@@ -34,7 +34,8 @@ module ChapelTaskData {
   private const chpl_offset_nextOnLongSrcPtr = chpl_offset_nextCoStmtSerial+1;
   private const chpl_offset_nextOnLongDstPtr = chpl_offset_nextOnLongSrcPtr+c_sizeof(c_void_ptr);
   private const chpl_offset_nextOnLongSize = chpl_offset_nextOnLongDstPtr+c_sizeof(c_void_ptr);
-  private const chpl_offset_end = chpl_offset_nextOnLongSize+c_sizeof(c_size_t);
+  private const chpl_offset_aggBuffer = chpl_offset_nextOnLongSize+c_sizeof(c_size_t);
+  private const chpl_offset_end = chpl_offset_aggBuffer+c_sizeof(c_void_ptr);
 
   // What is the size of a wide _EndCount pointer?
   private
@@ -150,6 +151,15 @@ module ChapelTaskData {
     c_memcpy(c_ptrTo(prv[i]), c_ptrTo(v), c_sizeof(c_size_t));
   }
 
+  export proc chpl_task_data_setAggBuffer(tls:c_ptr(chpl_task_infoChapel_t), ptr: c_void_ptr) : void {
+    var prv = tls:c_ptr(c_uchar);
+    var i = chpl_offset_aggBuffer;
+
+    var v = ptr;
+    c_memcpy(c_ptrTo(prv[i]), c_ptrTo(v), c_sizeof(c_void_ptr));
+  }
+
+
   export proc chpl_task_data_getNextOnLongSrcPtr(tls:c_ptr(chpl_task_infoChapel_t)) : c_void_ptr {
     var prv = tls:c_ptr(c_uchar);
     var i = chpl_offset_nextOnLongSrcPtr;
@@ -176,6 +186,17 @@ module ChapelTaskData {
     c_memcpy(c_ptrTo(v), c_ptrTo(prv[i]), c_sizeof(c_size_t));
     return v;
   }
+
+  export proc chpl_task_data_getAggBuffer(tls:c_ptr(chpl_task_infoChapel_t)) : c_void_ptr {
+    var prv = tls:c_ptr(c_uchar);
+    var i = chpl_offset_aggBuffer;
+
+    var v: c_void_ptr;
+    c_memcpy(c_ptrTo(v), c_ptrTo(prv[i]), c_sizeof(c_void_ptr));
+    return v;
+  }
+
+
 
   // These functions are like the above but first get the pointer
   // to the task local storage region for the currently executing task.
