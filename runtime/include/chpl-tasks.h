@@ -65,6 +65,7 @@ typedef struct chpl_task_bundle {
   int filename;
   c_sublocid_t requestedSubloc;
   size_t nbytes;
+  size_t aggOffset;
   chpl_fn_int_t requested_fid;
   chpl_fn_p requested_fn;
   chpl_taskID_t id;
