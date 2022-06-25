@@ -2,7 +2,10 @@ use CyclicDist;
 use BlockDist;
 use Random;
 use Time;
+use PrivateDist;
 use CopyAggregation;
+
+config const largeAggs = 8;
 
 const numTasksPerLocale = if dataParTasksPerLocale > 0 then dataParTasksPerLocale
                                                        else here.maxTaskPar;
@@ -19,7 +22,7 @@ const tableSize = M * numTasks;
 // help indexing speed until we optimize them.
 config param useBlockArr = false;
 
-var t: stopwatch;
+var t: Timer;
 proc startTimer() {
   t.start();
 }
@@ -43,8 +46,12 @@ proc main() {
   var tmp: [UpdatesDom] int = -1;
 
   startTimer();
-  forall (t, r) in zip (tmp, Rindex) with (var agg = new SrcAggregatorImpl(int)) {
-    agg.copy(t, A[r]);
+
+  const aggD = newBlockDom(0..<numLocales);
+  var aggs: [aggD] unmanaged MultiDstAggregator(int) = [aggD] new unmanaged MultiDstAggregator(int, numAggs=largeAggs);
+  forall (t, r) in zip (tmp, Rindex) with (ref parents = aggs[here.id], var agg = new LocalDstAggregatorImpl(int, parents=parents)) {
+    agg.copy(A[r], t);
   }
+  [a in aggs] delete a;
   stopTimer("AGG");
 }

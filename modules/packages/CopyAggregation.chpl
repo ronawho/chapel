@@ -89,12 +89,35 @@ module CopyAggregation {
   use CTypes;
   use AggregationPrimitives;
 
+  iter offset(ind) where isRange(ind) || isDomain(ind) {
+    for i in ind + (ind.size/numLocales * here.id) do {
+        yield i % ind.size + ind.first;
+    }
+  }
+
+  record chpl_LocalSpinlock {
+    var l: chpl__processorAtomicType(bool);
+    var pad: 63*bool;
+    inline proc tryLock() {
+	return !l.read() && !l.testAndSet(memoryOrder.acquire);
+    }
+    inline proc lock() {
+      while !this.tryLock() do chpl_task_yield();
+    }
+    inline proc unlock() {
+      l.clear(memoryOrder.release);
+    }
+  }
+
   private config param verboseAggregation = false;
 
   private param defaultBuffSize = if CHPL_COMM == "ugni" then 4096 else 8192;
   private const yieldFrequency = getEnvInt("CHPL_AGGREGATION_YIELD_FREQUENCY", 1024);
+  private const yieldFrequency2 = getEnvInt("CHPL_AGGREGATION_YIELD_FREQUENCY2", 32);
   private const dstBuffSize = getEnvInt("CHPL_AGGREGATION_DST_BUFF_SIZE", defaultBuffSize);
   private const srcBuffSize = getEnvInt("CHPL_AGGREGATION_SRC_BUFF_SIZE", defaultBuffSize);
+  private const localSrcBuffSize = getEnvInt("CHPL_AGGREGATION_LOCAL_SRC_BUFF_SIZE", 256);
+  private const localDstBuffSize = getEnvInt("CHPL_AGGREGATION_LOCAL_DST_BUFF_SIZE", 256);
 
   private config param aggregate = CHPL_COMM != "none";
 
@@ -134,8 +157,102 @@ module CopyAggregation {
     }
   }
 
+  record LocalDstAggregatorImpl {
+    type elemType;
+    type aggType = (c_ptr(elemType), elemType);
+    const bufferSize = localDstBuffSize;
+    const myLocaleSpace = 0..<numLocales;
+    var opsUntilYield = yieldFrequency2;
+    var lBuffers: c_ptr(c_ptr(aggType));
+    var bufferIdxs: c_ptr(int);
+    
+    var parents: unmanaged MultiDstAggregator(elemType);
+
+    proc postinit() {
+      lBuffers = c_malloc(c_ptr(aggType), numLocales);
+      bufferIdxs = bufferIdxAlloc();
+      for loc in myLocaleSpace {
+        lBuffers[loc] = c_malloc(aggType, bufferSize);
+        bufferIdxs[loc] = 0;
+      }
+    }
+
+    proc deinit() {
+      flush();
+      for loc in myLocaleSpace {
+        c_free(lBuffers[loc]);
+      }
+      c_free(lBuffers);
+      c_free(bufferIdxs);
+    }
+
+    proc flush() {
+      for loc in offset(myLocaleSpace) {
+        _flushBuffer(loc, bufferIdxs[loc], freeData=true);
+      }
+    }
+
+    inline proc copy(ref dst: elemType, const in srcVal: elemType) {
+      if verboseAggregation {
+        writeln("DstAggregator.copy is called");
+      }
+      // Get the locale of dst and the local address on that locale
+      const loc = dst.locale.id;
+      const dstAddr = getAddr(dst);
+
+      // Get our current index into the buffer for dst's locale
+      ref bufferIdx = bufferIdxs[loc];
+
+      // Buffer the address and desired value
+      lBuffers[loc][bufferIdx] = (dstAddr, srcVal);
+      bufferIdx += 1;
+
+      // Flush our buffer if it's full. If it's been a while since we've let
+      // other tasks run, yield so that we're not blocking remote tasks from
+      // flushing their buffers.
+      if bufferIdx == bufferSize {
+        _flushBuffer(loc, bufferIdx, freeData=false);
+        opsUntilYield = yieldFrequency2;
+      } else if opsUntilYield == 0 {
+        chpl_task_yield();
+        opsUntilYield = yieldFrequency2;
+      } else {
+        opsUntilYield -= 1;
+      }
+    }
+
+    proc _flushBuffer(loc: int, ref bufferIdx, freeData) {
+      const myBufferIdx = bufferIdx;
+      if myBufferIdx == 0 then return;
+      
+      var copied = false;
+      while !copied {
+
+        var nAggs = parents.aggs.size;
+        for i in 0..<nAggs {
+          ref parent = parents.aggs[(i+loc)%nAggs];
+	  if parent.lock[loc].tryLock() {
+	    parent.copy(lBuffers[loc], loc, myBufferIdx);
+	    parent.lock[loc].unlock();
+	    copied = true;
+	    break;
+	  }
+	}
+	if !copied{
+          //writeln("slow copy");
+	  chpl_task_yield();
+	}
+
+      }
+
+
+
+      bufferIdx = 0;
+    }
+  }
+
   pragma "no doc"
-  record DstAggregatorImpl {
+  class DstAggregatorImpl {
     type elemType;
     type aggType = (c_ptr(elemType), elemType);
     const bufferSize = dstBuffSize;
@@ -144,6 +261,8 @@ module CopyAggregation {
     var lBuffers: c_ptr(c_ptr(aggType));
     var rBuffers: [myLocaleSpace] remoteBuffer(aggType);
     var bufferIdxs: c_ptr(int);
+    
+    var lock: [myLocaleSpace] chpl_LocalSpinlock;
 
     proc postinit() {
       lBuffers = c_malloc(c_ptr(aggType), numLocales);
@@ -165,25 +284,22 @@ module CopyAggregation {
     }
 
     proc flush() {
-      for loc in myLocaleSpace {
+      for loc in offset(myLocaleSpace) {
         _flushBuffer(loc, bufferIdxs[loc], freeData=true);
       }
     }
 
-    inline proc copy(ref dst: elemType, const in srcVal: elemType) {
-      if verboseAggregation {
-        writeln("DstAggregator.copy is called");
-      }
-      // Get the locale of dst and the local address on that locale
-      const loc = dst.locale.id;
-      const dstAddr = getAddr(dst);
+    proc copy(dst: c_ptr(aggType), loc: int, size: int) {
 
-      // Get our current index into the buffer for dst's locale
       ref bufferIdx = bufferIdxs[loc];
 
+      if bufferSize - bufferIdx - size < 0 {
+        _flushBuffer(loc, bufferIdx, freeData=false);
+      }
+
       // Buffer the address and desired value
-      lBuffers[loc][bufferIdx] = (dstAddr, srcVal);
-      bufferIdx += 1;
+      c_memcpy(c_ptrTo(lBuffers[loc][bufferIdx]), c_ptrTo(dst[0]), size*c_sizeof(aggType):int);
+      bufferIdx += size;
 
       // Flush our buffer if it's full. If it's been a while since we've let
       // other tasks run, yield so that we're not blocking remote tasks from
@@ -226,8 +342,131 @@ module CopyAggregation {
     }
   }
 
+  class MultiDstAggregator {
+    type elemType;
+    var numAggs: int;
+    var aggs:[0..<numAggs] unmanaged DstAggregatorImpl(elemType);
+
+    proc init(type elemType, numAggs) {
+      this.elemType = elemType;
+      this.numAggs = numAggs;
+      this.aggs = [0..<numAggs] new unmanaged DstAggregatorImpl(elemType);
+    }
+    proc deinit() {
+      for agg in aggs do delete agg;
+    }
+  }
+
+  class MultiSrcAggregator {
+    type elemType;
+    var numAggs: int;
+    var aggs:[0..<numAggs] unmanaged SrcAggregatorImpl(elemType);
+
+    proc init(type elemType, numAggs) {
+      this.elemType = elemType;
+      this.numAggs = numAggs;
+      this.aggs = [0..<numAggs] new unmanaged SrcAggregatorImpl(elemType);
+    }
+    proc deinit() {
+      for agg in aggs do delete agg;
+    }
+  }
+
+  record LocalSrcAggregatorImpl {
+    type elemType;
+    type aggType = c_ptr(elemType);
+    const bufferSize = localSrcBuffSize;
+    const myLocaleSpace = 0..<numLocales;
+    var opsUntilYield = yieldFrequency2;
+    var dstAddrs: c_ptr(c_ptr(aggType));
+    var lSrcAddrs: c_ptr(c_ptr(aggType));
+    var bufferIdxs: c_ptr(int);
+
+    var parents: unmanaged MultiSrcAggregator(elemType);
+
+    proc postinit() {
+      dstAddrs = c_malloc(c_ptr(aggType), numLocales);
+      lSrcAddrs = c_malloc(c_ptr(aggType), numLocales);
+      bufferIdxs = bufferIdxAlloc();
+      for loc in myLocaleSpace {
+        dstAddrs[loc] = c_malloc(aggType, bufferSize);
+        lSrcAddrs[loc] = c_malloc(aggType, bufferSize);
+        bufferIdxs[loc] = 0;
+      }
+    }
+
+    proc deinit() {
+      flush();
+      for loc in myLocaleSpace {
+        c_free(dstAddrs[loc]);
+        c_free(lSrcAddrs[loc]);
+      }
+      c_free(dstAddrs);
+      c_free(lSrcAddrs);
+      c_free(bufferIdxs);
+    }
+
+    proc flush() {
+      for loc in offset(myLocaleSpace) {
+        _flushBuffer(loc, bufferIdxs[loc], freeData=true);
+      }
+    }
+
+    inline proc copy(ref dst: elemType, const ref src: elemType) {
+      if verboseAggregation {
+        writeln("LocalSrcAggregator.copy is called");
+      }
+      if boundsChecking {
+        assert(dst.locale.id == here.id);
+      }
+      const dstAddr = getAddr(dst);
+
+      const loc = src.locale.id;
+      const srcAddr = getAddr(src);
+
+      ref bufferIdx = bufferIdxs[loc];
+      lSrcAddrs[loc][bufferIdx] = srcAddr;
+      dstAddrs[loc][bufferIdx] = dstAddr;
+      bufferIdx += 1;
+
+      if bufferIdx == bufferSize {
+        _flushBuffer(loc, bufferIdx, freeData=false);
+        opsUntilYield = yieldFrequency2;
+      } else if opsUntilYield == 0 {
+        chpl_task_yield();
+        opsUntilYield = yieldFrequency2;
+      } else {
+        opsUntilYield -= 1;
+      }
+    }
+
+    proc _flushBuffer(loc: int, ref bufferIdx, freeData) {
+      const myBufferIdx = bufferIdx;
+      if myBufferIdx == 0 then return;
+
+      var copied = false;
+      while !copied {
+
+	for parent in parents.aggs {
+	  if parent.lock[loc].tryLock() {
+	    parent.copy(dstAddrs[loc], lSrcAddrs[loc], loc, myBufferIdx);
+	    parent.lock[loc].unlock();
+	    copied = true;
+	    break;
+	  }
+	}
+	if !copied{
+	  chpl_task_yield();
+	}
+
+      }
+      bufferIdx = 0;
+    }
+  }
+
+
   pragma "no doc"
-  record SrcAggregatorImpl {
+  class SrcAggregatorImpl {
     type elemType;
     type aggType = c_ptr(elemType);
     const bufferSize = srcBuffSize;
@@ -240,6 +479,8 @@ module CopyAggregation {
     var rSrcVals: [myLocaleSpace] remoteBuffer(elemType);
 
     var bufferIdxs: c_ptr(int);
+    //var lock: chpl_LocalSpinlock;
+    var lock: [myLocaleSpace] chpl_LocalSpinlock;
 
     proc postinit() {
       dstAddrs = c_malloc(c_ptr(aggType), numLocales);
@@ -266,27 +507,21 @@ module CopyAggregation {
     }
 
     proc flush() {
-      for loc in myLocaleSpace {
+      for loc in offset(myLocaleSpace) {
         _flushBuffer(loc, bufferIdxs[loc], freeData=true);
       }
     }
 
-    inline proc copy(ref dst: elemType, const ref src: elemType) {
-      if verboseAggregation {
-        writeln("SrcAggregator.copy is called");
-      }
-      if boundsChecking {
-        assert(dst.locale.id == here.id);
-      }
-      const dstAddr = getAddr(dst);
-
-      const loc = src.locale.id;
-      const srcAddr = getAddr(src);
-
+    proc copy(dst: c_ptr(aggType), src: c_ptr(aggType), loc:int, size: int) {
       ref bufferIdx = bufferIdxs[loc];
-      lSrcAddrs[loc][bufferIdx] = srcAddr;
-      dstAddrs[loc][bufferIdx] = dstAddr;
-      bufferIdx += 1;
+
+      if bufferSize - bufferIdx - size < 0 {
+	_flushBuffer(loc, bufferIdx, freeData=false);
+      }
+      c_memcpy(c_ptrTo(lSrcAddrs[loc][bufferIdx]), c_ptrTo(src[0]), size*c_sizeof(aggType):int);
+      c_memcpy(c_ptrTo( dstAddrs[loc][bufferIdx]), c_ptrTo(dst[0]), size*c_sizeof(aggType):int);
+      bufferIdx += size;
+      
 
       if bufferIdx == bufferSize {
         _flushBuffer(loc, bufferIdx, freeData=false);
