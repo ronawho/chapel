@@ -476,6 +476,13 @@ proc Block.init(boundingBox: domain,
 
   this.boundingBox = boundingBox : domain(rank, idxType, stridable = false);
 
+  var checkArr: [LocaleSpace] bool;
+  for loc in targetLocales {
+    if checkArr[loc.id] then
+      halt("Block does not allow duplicate locales");
+    checkArr[loc.id] = true;
+  }
+
   const ranges = setupTargetLocRanges(rank, targetLocales);
   this.targetLocDom = {(...ranges)};
   this.targetLocales = reshape(targetLocales, this.targetLocDom);
