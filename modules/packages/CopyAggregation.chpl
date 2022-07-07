@@ -95,6 +95,8 @@ module CopyAggregation {
   private const yieldFrequency = getEnvInt("CHPL_AGGREGATION_YIELD_FREQUENCY", 1024);
   private const dstBuffSize = getEnvInt("CHPL_AGGREGATION_DST_BUFF_SIZE", defaultBuffSize);
   private const srcBuffSize = getEnvInt("CHPL_AGGREGATION_SRC_BUFF_SIZE", defaultBuffSize);
+  param cSize = 2048;
+  config const fastPath = true;
 
   private config param aggregate = CHPL_COMM != "none";
 
@@ -205,6 +207,22 @@ module CopyAggregation {
 
       // Allocate a remote buffer
       ref rBuffer = rBuffers[loc];
+
+      if rBuffer.data == c_nil && freeData && myBufferIdx < cSize && fastPath {
+        var asdf: c_array(aggType, cSize);
+        ref lBuffer = lBuffers[loc];
+        c_memcpy(c_ptrTo(asdf), lBuffers[loc], myBufferIdx*c_sizeof(aggType):int);
+        const rvfMeMeBuffer: c_array(aggType, cSize) = asdf;
+        on Locales[loc] {
+          const asdf = rvfMeMeBuffer;
+          for i in 0..<myBufferIdx {
+            const ref (dstAddr, srcVal) = asdf[i];//rvfMeMeBuffer[i];
+            dstAddr.deref() = srcVal;
+          }
+        }
+        bufferIdx = 0;
+        return;
+      }
       const remBufferPtr = rBuffer.cachedAlloc();
 
       // Copy local buffer to remote buffer
@@ -306,6 +324,32 @@ module CopyAggregation {
       ref myLSrcVals = lSrcVals[loc];
       ref myRSrcAddrs = rSrcAddrs[loc];
       ref myRSrcVals = rSrcVals[loc];
+
+      if myRSrcAddrs.data == c_nil && freeData && myBufferIdx < cSize && fastPath {
+        var mySrcVals: c_array(elemType, cSize);
+        const origLoc = here.id;
+        const origData = c_ptrTo(mySrcVals[0]);
+        var asdf: c_array(aggType, cSize);
+        c_memcpy(c_ptrTo(asdf), lSrcAddrs[loc], myBufferIdx*c_sizeof(aggType):int);
+        const rvfMeMeBuffer: c_array(aggType, cSize) = asdf;
+        on Locales[loc] {
+          const asdf = rvfMeMeBuffer;
+          var vals: c_array(elemType, cSize);
+          for i in 0..<myBufferIdx {
+            vals[i] = asdf[i].deref();
+          }
+          const byte_size = myBufferIdx:c_size_t * c_sizeof(elemType);
+          AggregationPrimitives.PUT(c_ptrTo(vals[0]), origLoc, origData, byte_size);
+        }
+
+        var dstAddrPtr = c_ptrTo(dstAddrs[loc][0]);
+        for i in 0..<myBufferIdx {
+          dstAddrPtr[i].deref() = mySrcVals[i];
+        }
+
+        bufferIdx = 0;
+        return;
+      }
 
       // Allocate remote buffers
       const rSrcAddrPtr = myRSrcAddrs.cachedAlloc();
