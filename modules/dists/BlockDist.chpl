@@ -65,6 +65,7 @@ config param disableBlockDistBulkTransfer = false;
 
 config param sanityCheckDistribution = false;
 
+private config param allowDuplicateTargetLocales = false;
 //
 // If the testFastFollowerOptimization flag is set to true, the
 // follower will write output to indicate whether the fast follower is
@@ -476,11 +477,13 @@ proc Block.init(boundingBox: domain,
 
   this.boundingBox = boundingBox : domain(rank, idxType, stridable = false);
 
-  var checkArr: [LocaleSpace] bool;
-  for loc in targetLocales {
-    if checkArr[loc.id] then
-      halt("Block does not allow duplicate locales");
-    checkArr[loc.id] = true;
+  if !allowDuplicateTargetLocales {
+    var checkArr: [LocaleSpace] bool;
+    for loc in targetLocales {
+      if checkArr[loc.id] then
+        halt("BlockDist does not allow duplicate targetLocales");
+      checkArr[loc.id] = true;
+    }
   }
 
   const ranges = setupTargetLocRanges(rank, targetLocales);
@@ -1079,7 +1082,8 @@ override proc BlockArr.dsiDestroyArr(deinitElts:bool) {
 }
 
 inline proc BlockArr.dsiLocalAccess(i: rank*idxType) ref {
-  return _to_nonnil(myLocArr).this(i);
+  return if allowDuplicateTargetLocales then this.dsiAccess(i)
+                                        else _to_nonnil(myLocArr).this(i);
 }
 
 //
@@ -1487,8 +1491,8 @@ proc Block.chpl__locToLocIdx(loc: locale) {
 
 // Block subdomains are continuous
 
-proc BlockArr.dsiHasSingleLocalSubdomain() param return true;
-proc BlockDom.dsiHasSingleLocalSubdomain() param return true;
+proc BlockArr.dsiHasSingleLocalSubdomain() param return !allowDuplicateTargetLocales;
+proc BlockDom.dsiHasSingleLocalSubdomain() param return !allowDuplicateTargetLocales;
 
 // returns the current locale's subdomain
 
