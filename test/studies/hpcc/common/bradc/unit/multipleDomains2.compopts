@@ -1,1 +1,1 @@
--sdebugBlockDist=true
+-sdebugBlockDist=true -sBlockDist.allowDuplicateTargetLocales
