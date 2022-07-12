@@ -3,7 +3,7 @@ import sys
 import glob
 import os
 
-import chpl_comm, chpl_comm_debug, chpl_launcher, chpl_platform
+import chpl_comm, chpl_comm_debug, chpl_comm_substrate, chpl_launcher, chpl_platform
 import overrides, third_party_utils
 
 from utils import error, memoize, try_run_command, warning
@@ -11,7 +11,9 @@ from utils import error, memoize, try_run_command, warning
 @memoize
 def get():
     comm_val = chpl_comm.get()
-    if comm_val == 'ofi':
+    ofi = comm_val == 'ofi'
+    gasnet_ofi = comm_val == 'gasnet' and chpl_comm_substrate.get() == 'ofi'
+    if ofi or gasnet_ofi:
         libfabric_val = overrides.get('CHPL_LIBFABRIC')
         platform_val = chpl_platform.get('target')
         if not libfabric_val:
@@ -23,7 +25,7 @@ def get():
             else:
                 libfabric_val = 'bundled'
         if libfabric_val == 'none':
-            error("CHPL_LIBFABRIC must not be 'none' when CHPL_COMM is ofi")
+            error("CHPL_LIBFABRIC must not be 'none' when ofi is required")
         if platform_val == 'hpe-cray-ex' and libfabric_val != 'system':
             warning('CHPL_LIBFABRIC!=system is discouraged on HPE Cray EX')
     else:
