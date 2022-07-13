@@ -43,8 +43,9 @@ proc main() {
   var tmp: [UpdatesDom] int = -1;
 
   startTimer();
-  forall (t, r) in zip (tmp, Rindex) with (var agg = new SrcAggregator(int)) {
-    agg.copy(t, A[r]);
+  forall (t, r) in zip (tmp, Rindex) with (var agg = new DstAggregator(int)) {
+    agg.copy(A[r], t);
   }
+
   stopTimer("AGG");
 }

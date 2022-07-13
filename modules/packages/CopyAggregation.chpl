@@ -100,6 +100,12 @@ module CopyAggregation {
 
   private config param aggregate = CHPL_COMM != "none";
 
+  iter offset(ind) where isRange(ind) || isDomain(ind) {
+    for i in ind + (ind.size/numLocales * here.id) do {
+      yield i % ind.size + ind.first;
+    }
+  }
+
   /*
      Aggregates ``copy(ref dst, src)``. Optimized for when src is local.
      Not parallel safe and is expected to be created on a per-task basis.
@@ -180,7 +186,7 @@ module CopyAggregation {
     }
 
     proc flush() {
-      for loc in myLocaleSpace {
+      for loc in offset(myLocaleSpace) {
         _flushBuffer(loc, bufferIdxs[loc], freeData=true);
       }
     }
@@ -220,7 +226,6 @@ module CopyAggregation {
 
       // Allocate a remote buffer
       ref rBuffer = rBuffers[loc];
-
       if rBuffer.data == c_nil && freeData && myBufferIdx < cSize && fastPath {
         var asdf: c_array(aggRec(elemType), cSize);
         ref lBuffer = lBuffers[loc];
@@ -232,9 +237,8 @@ module CopyAggregation {
         }
         const rvfMeMeBuffer: c_array(aggRec(elemType), cSize) = asdf;
         on Locales[loc] {
-          const asdf = rvfMeMeBuffer;
           for i in 0..<myBufferIdx {
-            const ref asdfi = asdf[i];
+            const ref asdfi = rvfMeMeBuffer[i];
             asdfi.dstAddr.deref() = asdfi.srcVal;
           }
         }
