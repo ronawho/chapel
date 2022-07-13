@@ -152,7 +152,7 @@ module CopyAggregation {
       for loc in myLocaleSpace {
         lBuffers[loc] = c_malloc(aggType, bufferSize+pad)+pad;
         bufferIdxs[loc] = 0;
-        rBuffers[loc] = new remoteBuffer(aggType, bufferSize, loc, pad);
+        rBuffers[loc] = new remoteBuffer(aggType, bufferSize, loc);
       }
     }
 
@@ -397,7 +397,6 @@ module AggregationPrimitives {
     type elemType;
     var size: int;
     var loc: int;
-    var pad = 0;
     var data: c_ptr(elemType);
 
     // Allocate a buffer on loc if we haven't already. Return a c_ptr to the
@@ -406,7 +405,7 @@ module AggregationPrimitives {
       if data == c_nil {
         const rvf_size = size;
         on Locales[loc] do {
-          data = c_malloc(elemType, rvf_size+pad)+pad;
+          data = c_malloc(elemType, rvf_size);
         }
       }
       return data;
@@ -435,7 +434,7 @@ module AggregationPrimitives {
         assert(this.data == data);
         assert(data != c_nil);
       }
-      c_free(data-pad);
+      c_free(data);
     }
 
     // After free'ing the data, need to nil out the records copy of the pointer
@@ -447,19 +446,25 @@ module AggregationPrimitives {
       data = c_nil;
     }
 
+    // Copy size elements from lArr to the remote buffer. Must be running on
+    // lArr's locale.
+    proc PUT(lArr: [] elemType, size: int) where lArr.isDefaultRectangular() {
+      if boundsChecking {
+        assert(size <= this.size);
+        assert(this.size == lArr.size);
+        assert(lArr.domain.lowBound == 0);
+        assert(lArr.locale.id == here.id);
+      }
+      const byte_size = size:c_size_t * c_sizeof(elemType);
+      AggregationPrimitives.PUT(c_ptrTo(lArr[0]), loc, data, byte_size);
+    }
+
     proc PUT(lArr: c_ptr(elemType), size: int) {
       if boundsChecking {
         assert(size <= this.size);
       }
       const byte_size = size:c_size_t * c_sizeof(elemType);
-      if loc != here.id {
-        var infoChapel = chpl_task_getInfoChapel();
-        chpl_task_data_setNextOnLongSrcPtr(infoChapel, lArr);
-        chpl_task_data_setNextOnLongDstPtr(infoChapel, data);
-        chpl_task_data_setNextOnLongSize  (infoChapel, byte_size);
-      } else {
-        AggregationPrimitives.PUT(lArr, loc, data, byte_size);
-      }
+      AggregationPrimitives.PUT(lArr, loc, data, byte_size);
     }
 
     proc GET(lArr: [] elemType, size: int) where lArr.isDefaultRectangular() {

@@ -840,8 +840,6 @@ static void set_num_comm_domains() {
 #endif
 }
 
-static int longAMStrat = 0;
-
 void chpl_comm_init(int *argc_p, char ***argv_p) {
 //  int status; // Some compilers complain about unused variable 'status'.
 
@@ -853,8 +851,6 @@ void chpl_comm_init(int *argc_p, char ***argv_p) {
   gasnet_client_attach_hook = &chpl_comm_regMemHeapTouch;
 #endif
 #endif
-
-  longAMStrat = chpl_env_rt_get_int("LONG_AM_STRAT", 0);
 
   set_max_segsize();
   set_num_comm_domains();
@@ -1464,22 +1460,18 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
   chpl_task_infoChapel_t* infoChapelP = chpl_task_getInfoChapel();
   chpl_task_infoChapel_t infoChapel = *infoChapelP;
   extern void*  chpl_task_data_getNextOnLongSrcPtr(chpl_task_infoChapel_t*);
-  extern void*  chpl_task_data_getNextOnLongDstPtr(chpl_task_infoChapel_t*);
   extern size_t chpl_task_data_getNextOnLongSize  (chpl_task_infoChapel_t*);
 
   extern void chpl_task_data_setNextOnLongSrcPtr(chpl_task_infoChapel_t*, void*);
-  extern void chpl_task_data_setNextOnLongDstPtr(chpl_task_infoChapel_t*, void*);
   extern void chpl_task_data_setNextOnLongSize  (chpl_task_infoChapel_t*, size_t);
 
   void*  longSrcPtr = chpl_task_data_getNextOnLongSrcPtr(&infoChapel);
-  void*  longDstPtr = chpl_task_data_getNextOnLongDstPtr(&infoChapel);
   size_t longSize   = chpl_task_data_getNextOnLongSize  (&infoChapel);
 
   chpl_task_data_setNextOnLongSrcPtr(infoChapelP, NULL);
-  chpl_task_data_setNextOnLongDstPtr(infoChapelP, NULL);
   chpl_task_data_setNextOnLongSize  (infoChapelP, 0);
 
-  if (longSize && longDstPtr == NULL) {
+  if (longSize) {
     small = false;
   }
 
@@ -1515,10 +1507,7 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
 
   if (small || large) {
     if (longSize != 0) {
-      if(longDstPtr == NULL) {
-        chpl_internal_error("not implemented yet");
-      }
-      gasnet_put(node, longDstPtr, longSrcPtr, longSize);
+      chpl_internal_error("not implemented yet");
     }
 
     special_fork_t tmp;
@@ -1586,26 +1575,12 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
     arg->comm.ack = blocking ? &done : NULL;
 
     if (longSize != 0) {
-      if(longDstPtr == NULL) {
-          arg->task_bundle.aggOffset = arg_size;
-          memcpy(longSrcPtr-arg_size, arg, arg_size);
-          GASNET_Safe(gasnet_AMRequestMedium0(node, op, longSrcPtr-arg_size, longSize+arg_size));
-      } else {
-        if (longAMStrat == 1) {
-          gasnet_handle_t handle = gasnet_put_nb(node, longDstPtr, longSrcPtr, longSize);
-          while (gasnet_try_syncnb(handle) != GASNET_OK) {
-            chpl_task_yield();
-          }
-          GASNET_Safe(gasnet_AMRequestMedium0(node, op, arg, arg_size));
-        } else if (longAMStrat == 2) {
-          gasnet_put(node, longDstPtr, longSrcPtr, longSize);
-          GASNET_Safe(gasnet_AMRequestMedium0(node, op, arg, arg_size));
-        } else {
-          // TODO check that arg_size < 512 and total size < longAMMax
-          memcpy(longSrcPtr-arg_size, arg, arg_size);
-          GASNET_Safe(gasnet_AMRequestLong0(node, op, longSrcPtr-arg_size, longSize+arg_size, longDstPtr-arg_size));
-        }
+      if (arg_size > 512) {
+        chpl_internal_error("arg_size too big");
       }
+      arg->task_bundle.aggOffset = arg_size;
+      memcpy(longSrcPtr-arg_size, arg, arg_size);
+      GASNET_Safe(gasnet_AMRequestMedium0(node, op, longSrcPtr-arg_size, longSize+arg_size));
     } else {
       GASNET_Safe(gasnet_AMRequestMedium0(node, op, arg, arg_size));
     }
