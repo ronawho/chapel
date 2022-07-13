@@ -135,6 +135,19 @@ module CopyAggregation {
       if aggregate then agg.flush();
     }
   }
+  record aggRec {
+    type elemType;
+    var dstAddr: c_ptr(elemType);
+    var srcVal: elemType;
+    proc init(type elemType) {
+      this.elemType = elemType;
+    }
+    proc init(dstAddr: c_ptr(?t), srcVal: t) {
+      this.elemType = t;
+      this.dstAddr = dstAddr;
+      this.srcVal = srcVal;
+    }
+  }
 
   pragma "no doc"
   record DstAggregatorImpl {
@@ -209,15 +222,20 @@ module CopyAggregation {
       ref rBuffer = rBuffers[loc];
 
       if rBuffer.data == c_nil && freeData && myBufferIdx < cSize && fastPath {
-        var asdf: c_array(aggType, cSize);
+        var asdf: c_array(aggRec(elemType), cSize);
         ref lBuffer = lBuffers[loc];
-        c_memcpy(c_ptrTo(asdf), lBuffers[loc], myBufferIdx*c_sizeof(aggType):int);
-        const rvfMeMeBuffer: c_array(aggType, cSize) = asdf;
+        for i in 0..<myBufferIdx {
+          const ref (dstAddr, srcVal) = lBuffer[i];
+          ref asdfi = asdf[i];
+          asdfi.dstAddr = dstAddr;
+          asdfi.srcVal = srcVal;
+        }
+        const rvfMeMeBuffer: c_array(aggRec(elemType), cSize) = asdf;
         on Locales[loc] {
           const asdf = rvfMeMeBuffer;
           for i in 0..<myBufferIdx {
-            const ref (dstAddr, srcVal) = asdf[i];//rvfMeMeBuffer[i];
-            dstAddr.deref() = srcVal;
+            const ref asdfi = asdf[i];
+            asdfi.dstAddr.deref() = asdfi.srcVal;
           }
         }
         bufferIdx = 0;
