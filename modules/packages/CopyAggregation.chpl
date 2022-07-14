@@ -224,17 +224,7 @@ module CopyAggregation {
     proc _flushBuffer(loc: int, ref bufferIdx, freeData) {
       const myBufferIdx = bufferIdx;
       if myBufferIdx == 0 then return;
-  
-      // Optimize the local case directly assigning out of the local buffer
-      if loc == here.id {
-        ref myBuffer = lBuffers[loc];
-        for i in 0..<myBufferIdx {
-          var (dstAddr, srcVal) = myBuffer[i];
-          dstAddr.deref() = srcVal;
-        }
-        bufferIdx = 0;
-        return;
-      }
+      
       var copied = false;
       while !copied {
 
@@ -293,9 +283,9 @@ module CopyAggregation {
       c_free(bufferIdxs);
     }
 
-    proc flush(freeData=true) {
-      coforall loc in offset(myLocaleSpace) {
-        _flushBuffer(loc, bufferIdxs[loc], freeData=freeData);
+    proc flush() {
+      for loc in offset(myLocaleSpace) {
+        _flushBuffer(loc, bufferIdxs[loc], freeData=true);
       }
     }
 
