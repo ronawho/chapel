@@ -329,6 +329,11 @@ static void AM_fork_fast_small(gasnet_token_t token, void* buf, size_t nbytes) {
 
 
 static void fork_wrapper(chpl_comm_on_bundle_t *f) {
+  if (f->task_bundle.aggOffset > 0) {
+    extern void chpl_task_data_setAggBuffer(chpl_task_infoChapel_t*, void*);
+    chpl_task_data_setAggBuffer(&f->task_bundle.infoChapel, ((char*)f)+f->task_bundle.aggOffset);
+  }
+
   chpl_ftable_call(f->task_bundle.requested_fid, f);
 
   GASNET_Safe(gasnet_AMRequestShort2(f->comm.caller, SIGNAL,
@@ -337,13 +342,9 @@ static void fork_wrapper(chpl_comm_on_bundle_t *f) {
 
 static void AM_fork(gasnet_token_t token, void* buf, size_t nbytes) {
   chpl_comm_on_bundle_t *f = (chpl_comm_on_bundle_t*) buf;
-  extern void chpl_task_data_setAggBuffer(chpl_task_infoChapel_t*, void*);
-  if (f->task_bundle.aggOffset > 0) {
-    chpl_task_data_setAggBuffer(&f->task_bundle.infoChapel, buf+f->task_bundle.aggOffset);
-  }
   chpl_task_startMovedTask(f->task_bundle.requested_fid,
                            (chpl_fn_p)fork_wrapper,
-                           f, f->task_bundle.nbytes,
+                           f, nbytes,
                            f->task_bundle.requestedSubloc, chpl_nullTaskID);
 }
 
@@ -1568,7 +1569,6 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
 
     arg->task_bundle.infoChapel = infoChapel;
     arg->task_bundle.requestedSubloc = subloc;
-    arg->task_bundle.nbytes = arg_size;
     arg->task_bundle.aggOffset = 0;
     arg->task_bundle.requested_fid = fid;
     arg->comm.caller = chpl_nodeID;
