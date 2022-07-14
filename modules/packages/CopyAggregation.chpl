@@ -209,14 +209,25 @@ module CopyAggregation {
       if rBuffer.data == c_nil && freeData && loc != here.id {
         var infoChapel = chpl_task_getInfoChapel();
         const byte_size = myBufferIdx:c_size_t * c_sizeof(aggType);
+
+        const origNode = here.id;
+        const lBufferAddr = c_ptrTo(lBuffers[loc][0]);
+
         chpl_task_data_setNextOnLongSrcPtr(infoChapel, lBuffers[loc]);
         chpl_task_data_setNextOnLongSize  (infoChapel, byte_size);
 
         on Locales[loc] {
           var infoChapel = chpl_task_getInfoChapel();
           var buf = chpl_task_data_getAggBuffer(infoChapel):c_ptr(aggType);
+
+          var check = c_malloc(aggType, myBufferIdx);
+          AggregationPrimitives.GET(check, origNode, lBufferAddr, byte_size);
           for i in 0..<myBufferIdx {
             ref (dstAddr, srcVal) = buf[i];
+            ref (dstAddrCheck, srcValCheck) = check[i];
+            if (dstAddr != dstAddrCheck) {
+              writeln((dstAddr, dstAddrCheck));
+            }
             dstAddr.deref() = srcVal;
           }
         }
