@@ -1159,7 +1159,7 @@ envExecopts = os.getenv('EXECOPTS')
 # sys.stdout.write('globalExecopts=%s\n'%(globalExecopts))
 
 #
-# Global PRECOMP, PREDIFF & PREEXEC
+# Global PRECOMP, PREDIFF & PREEXEC & GOODFILE
 #
 if os.access('./PRECOMP', os.R_OK|os.X_OK):
     globalPrecomp='./PRECOMP'
@@ -1175,6 +1175,12 @@ if os.access('./PREEXEC',os.R_OK|os.X_OK):
     globalPreexec='./PREEXEC'
 else:
     globalPreexec=None
+
+if os.access('./GOODFILE',os.R_OK|os.X_OK):
+    globalGoodfile='./GOODFILE'
+else:
+    globalGoodfile=None
+
 #
 # Start running tests
 #
@@ -1273,6 +1279,7 @@ for testname in testsrc:
     precomp=None
     prediff=None
     preexec=None
+    goodfile=None
 
     if os.getenv('CHPL_NO_STDIN_REDIRECT') == None:
         redirectin = '/dev/null'
@@ -1407,6 +1414,10 @@ for testname in testsrc:
 
         elif (suffix=='.preexec' and os.access(f, os.R_OK|os.X_OK)):
             preexec=f
+
+        elif (suffix=='.goodfile' and os.access(f, os.R_OK|os.X_OK)):
+            goodfile=f
+
 
         elif (suffix=='.stdin' and os.access(f, os.R_OK)):
             if redirectin == None:
@@ -2310,6 +2321,24 @@ for testname in testsrc:
                                              env=dict(list(os.environ.items()) + list(testenv.items())),
                                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                         sys.stdout.write(p.communicate()[0])
+
+                    if globalGoodfile:
+                        sys.stdout.write('[Executing ./GOODFILE]\n')
+                        sys.stdout.flush()
+                        p = py3_compat.Popen(['./GOODFILE', execname, execlog, compiler,
+                                             ' '.join(envCompopts)+ ' '+compopts, ' '.join(args)],
+                                             env=dict(list(os.environ.items()) + list(testenv.items())),
+                                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                        explicitexecgoodfile = p.communicate()[0].strip()
+
+                    if goodfile:
+                        sys.stdout.write('[Executing ./%s]\n'%(goodfile))
+                        sys.stdout.flush()
+                        p = py3_compat.Popen(['./'+goodfile, execname, execlog, compiler,
+                                             ' '.join(envCompopts)+ ' '+compopts, ' '.join(args)],
+                                             env=dict(list(os.environ.items()) + list(testenv.items())),
+                                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                        explicitexecgoodfile = p.communicate()[0].strip()
 
                     if not perftest:
                         # find the good file 
