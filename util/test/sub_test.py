@@ -329,6 +329,12 @@ def ReadFileWithComments(f, ignoreLeadingSpace=True):
         mylist.append(line)
     return mylist
 
+def maybe_accept_test_output(f1, f2):
+    if os.getenv("CHPL_TEST_ACCEPT_TEST_OUTPUT"):
+        import shutil
+        shutil.move(f2, f1)
+        subprocess.run(['git', 'add', f1])
+
 # diff 2 files
 def DiffFiles(f1, f2):
     sys.stdout.write('[Executing diff %s %s]\n'%(f1, f2))
@@ -336,6 +342,7 @@ def DiffFiles(f1, f2):
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     myoutput = p.communicate()[0] # grab stdout to avoid potential deadlock
     if p.returncode != 0:
+        maybe_accept_test_output(f1, f2)
         sys.stdout.write(trim_output(myoutput))
     return p.returncode
 
@@ -345,6 +352,7 @@ def DiffBinaryFiles(f1, f2):
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     myoutput = p.communicate()[0] # grab stdout to avoid potential deadlock
     if p.returncode != 0:
+        maybe_accept_test_output(f1, f2)
         sys.stdout.write('Binary files differed\n')
     return p.returncode
 
@@ -356,6 +364,7 @@ def DiffBadFiles(f1, f2):
                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     myoutput = p.communicate()[0] # grab stdout to avoid potential deadlock
     if p.returncode != 0:
+        maybe_accept_test_output(f1, f2)
         sys.stdout.write(myoutput)
     return p.returncode
 
