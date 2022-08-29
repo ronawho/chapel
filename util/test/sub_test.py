@@ -1288,7 +1288,7 @@ for testname in testsrc:
     precomp=None
     prediff=None
     preexec=None
-    goodfile=None
+    testgoodfile=None
 
     if os.getenv('CHPL_NO_STDIN_REDIRECT') == None:
         redirectin = '/dev/null'
@@ -1425,7 +1425,7 @@ for testname in testsrc:
             preexec=f
 
         elif (suffix=='.goodfile' and os.access(f, os.R_OK|os.X_OK)):
-            goodfile=f
+            testgoodfile=f
 
 
         elif (suffix=='.stdin' and os.access(f, os.R_OK)):
@@ -2340,10 +2340,10 @@ for testname in testsrc:
                                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                         explicitexecgoodfile = p.communicate()[0].strip()
 
-                    if goodfile:
-                        sys.stdout.write('[Executing ./%s]\n'%(goodfile))
+                    if testgoodfile:
+                        sys.stdout.write('[Executing ./%s]\n'%(testgoodfile))
                         sys.stdout.flush()
-                        p = py3_compat.Popen(['./'+goodfile, execname, execlog, compiler,
+                        p = py3_compat.Popen(['./'+testgoodfile, execname, execlog, compiler,
                                              ' '.join(envCompopts)+ ' '+compopts, ' '.join(args)],
                                              env=dict(list(os.environ.items()) + list(testenv.items())),
                                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -2363,7 +2363,7 @@ for testname in testsrc:
                         # if the .good file was explicitly specified, look for
                         # that version instead of the multiple
                         # compopts/execopts or just the base .good file 
-                        if explicitexecgoodfile != None:
+                        if explicitexecgoodfile:
                             basename  = explicitexecgoodfile.replace('.good', '')
                             commExecNum = ['']
 
