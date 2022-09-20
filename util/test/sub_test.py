@@ -329,6 +329,27 @@ def ReadFileWithComments(f, ignoreLeadingSpace=True):
         mylist.append(line)
     return mylist
 
+def append_git_good_file_patch(f1, f2):
+    out = subprocess.run(['git', 'diff', '--no-index',
+       '--src-prefix=start_test_a/', '--dst-prefix=start_test_b/',
+       '--', f1, f2],
+       capture_output=True)
+
+    f1_abs = os.path.join('test', localdir, f1)
+    orig_src_path = 'start_test_a/{}'.format(f1    ).encode('utf-8')
+    last_src_path =            'a/{}'.format(f1_abs).encode('utf-8')
+    orig_dst_path = 'start_test_b/{}'.format(f2    ).encode('utf-8')
+    last_dst_path =            'b/{}'.format(f1_abs).encode('utf-8')
+
+    diff = out.stdout
+    diff = diff.replace(orig_src_path, last_src_path)
+    diff = diff.replace(orig_dst_path, last_dst_path)
+
+    # File location should be start_test and deleted before starting testing.
+    # Also need to do with paratest. Probably like how we merge existing logs..
+    with open(os.path.join(chpl_home, "good_patch"), 'ab') as good_patch:
+        good_patch.write(diff)
+
 # diff 2 files
 def DiffFiles(f1, f2):
     sys.stdout.write('[Executing diff %s %s]\n'%(f1, f2))
@@ -337,6 +358,8 @@ def DiffFiles(f1, f2):
     myoutput = p.communicate()[0] # grab stdout to avoid potential deadlock
     if p.returncode != 0:
         sys.stdout.write(trim_output(myoutput))
+        append_git_good_file_patch(f1, f2)
+
     return p.returncode
 
 def DiffBinaryFiles(f1, f2):
@@ -346,6 +369,7 @@ def DiffBinaryFiles(f1, f2):
     myoutput = p.communicate()[0] # grab stdout to avoid potential deadlock
     if p.returncode != 0:
         sys.stdout.write('Binary files differed\n')
+        append_git_good_file_patch(f1, f2)
     return p.returncode
 
 # diff output vs. .bad file, filtering line numbers out of error messages that arise
@@ -357,6 +381,7 @@ def DiffBadFiles(f1, f2):
     myoutput = p.communicate()[0] # grab stdout to avoid potential deadlock
     if p.returncode != 0:
         sys.stdout.write(myoutput)
+        append_git_good_file_patch(f1, f2)
     return p.returncode
 
 # kill process
