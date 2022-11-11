@@ -1228,13 +1228,6 @@ module ChapelBase {
     }
   }
 
-  config param useAtomicTaskCnt = defaultAtomicTaskCount();
-
-  proc defaultAtomicTaskCount() param {
-    use ChplConfig;
-    return ChplConfig.CHPL_NETWORK_ATOMICS != "none";
-  }
-
   config param commDiagsTrackEndCounts = false;
 
   pragma "no default functions"
@@ -1267,12 +1260,10 @@ module ChapelBase {
   pragma "no default functions"
   class _EndCount : _EndCountBase {
     type iType;
-    type taskType;
     var i: iType;
-    var taskCnt: taskType;
-    proc init(type iType, type taskType) {
+    var taskCnt: int;
+    proc init(type iType) {
       this.iType = iType;
-      this.taskType = taskType;
     }
 
     inline proc add(value: int, param order: memoryOrder) {
@@ -1295,21 +1286,12 @@ module ChapelBase {
   // statement needed, because the task should be running on the same
   // locale as the sync/coforall/cobegin was initiated on and thus the
   // same locale on which the object is allocated.
-  //
-  // TODO: 'taskCnt' can sometimes be local even if 'i' has to be remote.
-  // It is currently believed that only a remote-begin will want a network
-  // atomic 'taskCnt'. There should be a separate argument to control the type
-  // of 'taskCnt'.
   pragma "dont disable remote value forwarding"
   inline proc _endCountAlloc(param forceLocalTypes : bool) {
-    type taskCntType = if !forceLocalTypes && useAtomicTaskCnt then atomic int
-                                           else int;
     if forceLocalTypes {
-      return new unmanaged _EndCount(iType=chpl__processorAtomicType(int),
-                                     taskType=taskCntType);
+      return new unmanaged _EndCount(iType=chpl__processorAtomicType(int));
     } else {
-      return new unmanaged _EndCount(iType=chpl__atomicType(int),
-                                     taskType=taskCntType);
+      return new unmanaged _EndCount(iType=chpl__atomicType(int));
     }
   }
 
@@ -1331,20 +1313,9 @@ module ChapelBase {
   pragma "no remote memory fence"
   pragma "task spawn impl fn"
   proc _upEndCount(e: _EndCount, param countRunningTasks) {
-    if isAtomic(e.taskCnt) {
-      e.add(1, memoryOrder.release);
-      e.taskCnt.add(1, memoryOrder.release);
-    } else {
-      // note that this on statement does not have the usual
-      // remote memory fence because of pragma "no remote memory fence"
-      // above. So we do an acquire fence before it.
-      chpl_rmem_consist_fence(memoryOrder.release);
-      on e {
-        e.add(1, memoryOrder.release);
-        e.taskCnt += 1;
-      }
-    }
+    e.add(1, memoryOrder.release);
     if countRunningTasks {
+      e.taskCnt += 1;
       here.runningTaskCntAdd(1);  // decrement is in _waitEndCount()
       chpl_comm_task_create();    // countRunningTasks is a proxy for "is local"
                                   // here.  Comm layers are responsible for the
@@ -1411,7 +1382,7 @@ module ChapelBase {
     e.waitFor(0, memoryOrder.acquire);
 
     if countRunningTasks {
-      const taskDec = if isAtomic(e.taskCnt) then e.taskCnt.read() else e.taskCnt;
+      const taskDec = e.taskCnt;
       // taskDec-1 to adjust for the task that was waiting for others to finish
       here.runningTaskCntSub(taskDec-1);  // increment is in _upEndCount()
     } else {
