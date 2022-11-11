@@ -2397,12 +2397,14 @@ buildBeginStmt(CallExpr* byref_vars, Expr* stmt) {
     endCount->addFlag(FLAG_END_COUNT);
     block->insertAtTail(new DefExpr(endCount));
     block->insertAtTail(new CallExpr(PRIM_MOVE, endCount, new CallExpr(PRIM_GET_DYNAMIC_END_COUNT)));
-    block->insertAtTail(new CallExpr("_upEndCount", endCount));
+    block->insertAtTail(new CallExpr("_upEndCount", endCount, gFalse));
     BlockStmt* beginBlock = new BlockStmt();
     beginBlock->blockInfoSet(new CallExpr(PRIM_BLOCK_BEGIN));
     addByrefVars(beginBlock, byref_vars);
     beginBlock->insertAtHead(stmt);
+    beginBlock->insertAtHead(new CallExpr(gChplIncRunningTask));
     beginBlock->insertAtTail(new CallExpr("_downEndCount", endCount, gNil));
+    beginBlock->insertAtTail(new CallExpr(gChplDecRunningTask));
     block->insertAtTail(beginBlock);
     return block;
   }
@@ -2468,7 +2470,7 @@ buildSyncStmt(Expr* stmt) {
   cleanup->insertAtTail(new CallExpr(PRIM_SET_DYNAMIC_END_COUNT, endCountSave));
 
   block->insertAtTail(new DeferStmt(cleanup));
-  block->insertAtTail(new CallExpr(astr_chpl_waitDynamicEndCount));
+  block->insertAtTail(new CallExpr(astr_chpl_waitDynamicEndCount, gFalse));
   return block;
 }
 

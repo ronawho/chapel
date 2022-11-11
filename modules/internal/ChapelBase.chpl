@@ -1330,7 +1330,7 @@ module ChapelBase {
   pragma "dont disable remote value forwarding"
   pragma "no remote memory fence"
   pragma "task spawn impl fn"
-  proc _upEndCount(e: _EndCount, param countRunningTasks=true) {
+  proc _upEndCount(e: _EndCount, param countRunningTasks) {
     if isAtomic(e.taskCnt) {
       e.add(1, memoryOrder.release);
       e.taskCnt.add(1, memoryOrder.release);
@@ -1355,7 +1355,7 @@ module ChapelBase {
   pragma "dont disable remote value forwarding"
   pragma "no remote memory fence"
   pragma "task spawn impl fn"
-  proc _upEndCount(e: _EndCount, param countRunningTasks=true, numTasks) {
+  proc _upEndCount(e: _EndCount, param countRunningTasks, numTasks) {
     e.add(numTasks:int, memoryOrder.release);
 
     if countRunningTasks {
@@ -1401,7 +1401,7 @@ module ChapelBase {
   pragma "dont disable remote value forwarding"
   pragma "task join impl fn"
   pragma "unchecked throws"
-  proc _waitEndCount(e: _EndCount, param countRunningTasks=true) throws {
+  proc _waitEndCount(e: _EndCount, param countRunningTasks) throws {
     // Remove the task that will just be waiting/yielding in the following
     // waitFor() from the running task count to let others do real work. It is
     // re-added after the waitFor().
@@ -1428,7 +1428,7 @@ module ChapelBase {
   pragma "dont disable remote value forwarding"
   pragma "task join impl fn"
   pragma "unchecked throws"
-  proc _waitEndCount(e: _EndCount, param countRunningTasks=true, numTasks) throws {
+  proc _waitEndCount(e: _EndCount, param countRunningTasks, numTasks) throws {
     // Wait for all tasks to finish
     e.waitFor(0, memoryOrder.acquire);
 
@@ -1446,7 +1446,7 @@ module ChapelBase {
   }
 
   pragma "task spawn impl fn"
-  proc _upDynamicEndCount(param countRunningTasks=true) {
+  proc _upDynamicEndCount(param countRunningTasks) {
     var e = __primitive("get dynamic end count");
     _upEndCount(e, countRunningTasks);
   }
@@ -1462,7 +1462,7 @@ module ChapelBase {
   // This version is called for normal sync blocks.
   pragma "task join impl fn"
   pragma "unchecked throws"
-  proc chpl_waitDynamicEndCount(param countRunningTasks=true) throws {
+  proc chpl_waitDynamicEndCount(param countRunningTasks) throws {
     var e = __primitive("get dynamic end count");
     _waitEndCount(e, countRunningTasks);
 

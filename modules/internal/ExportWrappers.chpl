@@ -30,7 +30,7 @@ module ExportWrappers {
 
   private proc _destroyDynamicEndCount() {
     var endCount = chpl_task_getDynamicEndCount();
-    _waitEndCount(endCount);
+    _waitEndCount(endCount, false);
     _endCountFree(endCount);
   }
 
