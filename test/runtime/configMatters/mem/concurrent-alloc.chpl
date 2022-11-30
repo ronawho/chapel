@@ -1,4 +1,5 @@
 use CTypes;
+use CRealloc;
 
 config const size = 256 * 1024 * 1024;
 config const numTasks = max(here.maxTaskPar, max(int(8)));
@@ -12,7 +13,7 @@ coforall i in 1..here.maxTaskPar {
     assert(m[0] == taskid && m[size-1] == taskid);
     c_free(m);
 
-    var r: c_ptr(int(8)); r = c_realloc(int(8), r, size);
+    var r: c_ptr(int(8)); r = c_realloc(r, size);
     c_memset(r, taskid, size);
     assert(r[0] == taskid && r[size-1] == taskid);
     c_free(r);
