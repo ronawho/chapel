@@ -666,6 +666,8 @@ module ChapelLocale {
   // tend to have per thread pools/arenas.
   private proc warmupRuntime() {
     extern proc chpl_task_getFixedNumThreads(): uint(32);
+    //extern proc chpl_get_oversubscribed(): bool;
+    //if chpl_get_oversubscribed() then return;
     coforall i in 0..#chpl_task_getFixedNumThreads() {
       var p = c_malloc(int, 1);
       p[0] = i;
