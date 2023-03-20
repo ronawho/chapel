@@ -399,6 +399,7 @@ PRAGMA(NO_IMPLICIT_COPY, ypr, "no implicit copy", "function does not require aut
 PRAGMA(NO_INIT, ypr, "no init", "Do not initialize this variable")
 
 PRAGMA(NO_OBJECT, ypr, "no object", ncm)
+PRAGMA(NO_VARARGS, npr, "no varargs", ncm)
 
 PRAGMA(NO_PARENS, npr, "no parens", "function without parentheses")
 

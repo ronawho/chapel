@@ -120,11 +120,17 @@ FnSymbol* expandIfVarArgs(FnSymbol* fn, CallInfo& info) {
 static bool hasVariableArgs(FnSymbol* fn) {
   bool retval = false;
 
+  if (fn->hasFlag(FLAG_NO_VARARGS))
+    return false;
+
   for_formals(formal, fn) {
     if (formal->variableExpr != NULL) {
       retval = true;
     }
   }
+
+  if (retval == false)
+    fn->addFlag(FLAG_NO_VARARGS);
 
   return retval;
 }
