@@ -47,7 +47,7 @@ static int       varargAccessIndex(SymExpr* se, CallExpr* parent, int numArgs);
 static bool      isVarargSizeExpr (SymExpr* se, CallExpr* parent);
 
 static FnSymbol* cacheLookup(FnSymbol* fn, int       numActuals);
-static void      cacheExtend(FnSymbol* fn, FnSymbol* expansion);
+static void      cacheExtend(FnSymbol* fn, FnSymbol* expansion, int numActuals);
 
 /************************************* | **************************************
 *                                                                             *
@@ -109,7 +109,7 @@ FnSymbol* expandIfVarArgs(FnSymbol* fn, CallInfo& info) {
       retval = expandVarArgs(fn, info);
 
       if (retval != NULL) {
-        cacheExtend(fn, retval);
+        cacheExtend(fn, retval, info.actuals.n);
       }
     }
   }
@@ -857,7 +857,8 @@ static bool isVarargSizeExpr(SymExpr* se, CallExpr* parent) {
 *                                                                             *
 ************************************** | *************************************/
 
-typedef std::map<FnSymbol*, std::vector<FnSymbol*>*> ExpandVarArgsMap;
+typedef std::unordered_map<int, FnSymbol*> ExpandVarArgsInnerMap;
+typedef std::unordered_map<FnSymbol*, ExpandVarArgsInnerMap*> ExpandVarArgsMap;
 
 static ExpandVarArgsMap sCache;
 
@@ -866,29 +867,23 @@ static FnSymbol* cacheLookup(FnSymbol* fn, int numActuals) {
   FnSymbol*                  retval = NULL;
 
   if (it != sCache.end()) {
-    std::vector<FnSymbol*>* fns = it->second;
-
-    for (size_t i = 0; i < (*fns).size() && retval == NULL; i++) {
-      if ((*fns)[i]->numFormals() == numActuals) {
-        retval = (*fns)[i];
-      }
+    ExpandVarArgsInnerMap::iterator it2 = it->second->find(numActuals);
+    if (it2 != it->second->end()) {
+      retval = it2->second;
     }
   }
 
   return retval;
 }
 
-static void cacheExtend(FnSymbol* fn, FnSymbol* expansion) {
+static void cacheExtend(FnSymbol* fn, FnSymbol* expansion, int numActuals) {
   ExpandVarArgsMap::iterator it = sCache.find(fn);
 
   if (it != sCache.end()) {
-    it->second->push_back(expansion);
-
+    it->second->insert({numActuals, expansion});
   } else {
-    std::vector<FnSymbol*>* fns = new std::vector<FnSymbol*>();
-
-    fns->push_back(expansion);
-
+    ExpandVarArgsInnerMap* fns = new ExpandVarArgsInnerMap();
+    fns->insert({numActuals, expansion});
     sCache[fn] = fns;
   }
 }
