@@ -1,0 +1,50 @@
+This is a study of different idioms of having each locale refer to a
+given master record and the communication induced by each version.
+
+The code essentially does the following:
+
+* declares a record instance that contains an array field and a
+  (currently unnecessary) domain field
+
+* uses a coforall+on over the locales to fire up SPMD-style execeution
+
+* calls a process() routine on (some version of) the record to perform
+  a read-only computation on it (in this case, a reduction over the
+  array elements)
+
+The versions are as follows:
+
+01-simple.chpl:       This just refers to the record directly
+02-copy.chpl:         This explicitly creates a local copy of the record
+03-serdeser.chpl:     This adds [de]serializers to the record
+04-rvf+serdesr.chpl:  This is the same as the previous w/ "always rvf"
+
+The comm counts (which can be seen in the .good files) are roughly as
+follows:
+
+01-simple.chpl: Lots of comms as we refer back to the original record
+                constantly
+
+02-copy.chpl:   Fewer comms due to copying the record once (presumably
+                with a bulk comm for the array) and then referring to
+                the copy.
+
+03-serdeser.chpl: A fairly minimal number of comms: an active message
+                  per locale and a get from that locale to copy the
+                  array data back.
+
+04-rvf+serdeser.chpl: The same as the above, which is good; I'm not
+                      sure how much the previous would need to change
+                      to have rvf not fire on its own, and this would
+                      be the stopgap if it didn't.
+
+Some other things I tried and was mildly surprised by (in a happy
+way):
+
+* if I change the record from 'const' to 'var', do things get worse
+  because r.v.f. can't tell it's constant?  Seemingly not...  This may
+  be because the record's intent going across the coforall is 'const'?
+
+* if I inline the process() routine, does it make things worse?
+  Seemingly not, for the same reasons (i.e., the `const` nature of the
+  argument to process() doesn't seem to be a factor)
