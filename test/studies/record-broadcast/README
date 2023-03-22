@@ -19,6 +19,13 @@ The versions are as follows:
 03-serdeser.chpl:     This adds [de]serializers to the record
 04-rvf+serdesr.chpl:  This is the same as the previous w/ "always rvf"
 
+And they are related to one another as follows:
+
+* 01-simple.chpl: the starting point
+  * 02-copy.chpl: a variation on 01-simple that creates a copy
+  * 03-serdeser.chpl: a variation on 01-simple that adds serializers
+    * 04-rvf+serdeser.chpl: a variation on 03-serdeser to add pragma
+
 The comm counts (which can be seen in the .good files) are roughly as
 follows:
 
