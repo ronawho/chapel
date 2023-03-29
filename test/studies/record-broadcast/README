@@ -14,36 +14,52 @@ The code essentially does the following:
 
 The versions are as follows:
 
-01-simple.chpl:       This just refers to the record directly
-02-copy.chpl:         This explicitly creates a local copy of the record
-03-serdeser.chpl:     This adds [de]serializers to the record
-04-rvf+serdesr.chpl:  This is the same as the previous w/ "always rvf"
+01-simple.chpl:          This just refers to the record directly
+02-copy.chpl:            This explicitly creates a local copy of the record
+03-serdeser.chpl:        This adds [de]serializers to the record
+03-serdeser-assign.chpl: This shows thas assigning the array field breaks rvf
+03-serdeser-assign-workaround.chpl:  This shows a workaround for the above
+04-rvf+serdesr.chpl:     This is the same as the previous w/ "always rvf"
+05-constTaskIntent.chpl: This is a feature request for task intents enabling rvf
 
 And they are related to one another as follows:
 
 * 01-simple.chpl: the starting point
   * 02-copy.chpl: a variation on 01-simple that creates a copy
   * 03-serdeser.chpl: a variation on 01-simple that adds serializers
+    * 03-serdeser-assign.chpl: a variation on 03 that breaks rvf
+      * 03-serdeser-workaround.chpl: a workaround for the previous
     * 04-rvf+serdeser.chpl: a variation on 03-serdeser to add pragma
+  * 05-constTaskIntent.chpl: a desire to have task intents fire rvf
 
 The comm counts (which can be seen in the .good files) are roughly as
 follows:
 
 01-simple.chpl: Lots of comms as we refer back to the original record
-                constantly
+  constantly
 
-02-copy.chpl:   Fewer comms due to copying the record once (presumably
-                with a bulk comm for the array) and then referring to
-                the copy.
+02-copy.chpl: Fewer comms due to copying the record once (presumably
+  with a bulk comm for the array) and then referring to the copy.
 
 03-serdeser.chpl: A fairly minimal number of comms: an active message
-                  per locale and a get from that locale to copy the
-                  array data back.
+  per locale and a get from that locale to copy the array data back.
+
+03-serdeser-assign.chpl: Something about the assignment to the array
+  field breaks RVF and drives up comm counts
+
+03-serdeser-assign-workaround.chpl: Capturing into a const record just
+  before the coforall restores previous comm counts (but isn't
+  satisfying)
 
 04-rvf+serdeser.chpl: The same as the above, which is good; I'm not
-                      sure how much the previous would need to change
-                      to have rvf not fire on its own, and this would
-                      be the stopgap if it didn't.
+  sure how much the previous would need to change to have rvf not fire
+  on its own, and this would be the stopgap if it didn't.
+
+05-constTaskIntent.chpl: Today, this is generating comms similar to
+  (but not identical to) 01-simple.chpl, where I was imagining it
+  would be more like 02-copy.chpl.  That may be worth looking into
+  why.  From what I'm seeing, the presence/absence of the ser/deser
+  routines isn't affecting things at all.
 
 Some other things I tried and was mildly surprised by (in a happy
 way):
