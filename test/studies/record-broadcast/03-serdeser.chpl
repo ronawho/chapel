@@ -1,9 +1,45 @@
-use CommDiagnostics, Time, CTypes;
+use CommDiagnostics, Memory.Diagnostics, Time, CTypes;
 
 config const size = 10,
-             printRecords = false,
-             printDiagnotics = true;
+             printRecords = false;
 
+enum diagMode { performance, correctness, commCount, verboseComm, verboseMem };
+config const mode = diagMode.performance;
+
+config const trials = if mode == diagMode.performance then 100 else 1;
+
+var t: stopwatch;
+proc startDiag() {
+  select(mode) {
+    when diagMode.performance { t.start(); }
+    when diagMode.commCount   { startCommDiagnostics(); }
+    when diagMode.verboseComm { startVerboseComm(); }
+    when diagMode.verboseMem  { startVerboseMem(); }
+    otherwise                 { halt("Unrecognized diagMode"); }
+  }
+}
+
+proc stopDiag(name) {
+  select(mode) {
+    when diagMode.performance {
+      t.stop();
+      writeln(name, "(", trials, "): ", t.elapsed());
+      t.clear();
+    }
+    when diagMode.commCount {
+      stopCommDiagnostics();
+      const d = getCommDiagnostics();
+      writeln(name, "-GETS: ", + reduce (d.get + d.get_nb));
+      writeln(name, "-PUTS: ", + reduce (d.put + d.put_nb));
+      writeln(name, "-ONS: ", + reduce (d.execute_on + d.execute_on_fast +
+                                        d.execute_on_nb));
+      resetCommDiagnostics();
+    }
+    when diagMode.verboseComm { stopVerboseComm(); writeln();}
+    when diagMode.verboseMem  { stopVerboseMem(); }
+    otherwise                 { halt("Unrecognized diagMode"); }
+  }
+}
 // Record that will be locale to each locale
 
 record foo {
@@ -15,18 +51,43 @@ record foo {
   }
 }
 
-proc main() {
-  const r = new foo(42);
+iter broadcastIter(const in toBroadcast) { }
 
-  startCommDiagnostics();
-
-  coforall loc in Locales do on loc {
-
-    process(r);
+config const numChildren = ceil(sqrt(numLocales)):int;
+iter broadcastIter(const in toBroadcast, param tag: iterKind) where tag == iterKind.standalone {
+  const startChild = here.id*numChildren + 1;
+  coforall locid in startChild..<min(startChild+numChildren,numLocales) do on Locales[locid] {
+    const startChild = here.id*numChildren + 1;
+    coforall locid in startChild..<min(startChild+numChildren,numLocales) do on Locales[locid] {
+      yield toBroadcast;
+    }
+    yield toBroadcast;
   }
+  yield toBroadcast;
+}
 
-  stopCommDiagnostics();
-  printCommDiagnosticsTable();
+proc main() {
+  var r = new foo(42);
+  r.data[1,1] = 0;
+
+  startDiag();
+  for 1..trials {
+    forall rc in broadcastIter(r) {
+      process(rc);
+    }
+  }
+  stopDiag("tree    ");
+  verifyCounter();
+
+  startDiag();
+  for 1..trials {
+    const rc = r;
+    coforall loc in Locales do on loc {
+      process(rc);
+    }
+  }
+  stopDiag("coforall");
+  verifyCounter();
 
   if printRecords then
     writeln("back home: ", r);
@@ -36,6 +97,7 @@ proc process(x) {
   if printRecords then
     writeln((here.id, x));
 
+  incCounter();
   return + reduce x.data;
 }
 
@@ -60,3 +122,13 @@ record serializedFoo {
   var locale_id: int;
 }
 
+pragma "locale private" var counter = 0;
+inline proc incCounter() { counter += 1; }
+inline proc getCounter() { return counter; }
+inline proc resCounter() { counter = 0; }
+inline proc verifyCounter() {
+  coforall loc in Locales do on loc {
+    assert(getCounter() == trials);
+    resCounter();
+  }
+}
