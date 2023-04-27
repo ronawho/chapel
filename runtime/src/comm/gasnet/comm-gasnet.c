@@ -847,11 +847,11 @@ void chpl_comm_init(int *argc_p, char ***argv_p) {
   // For configurations that register a fixed heap at startup use a gasnet hook
   // to allow us to fault and interleave in the memory in parallel for faster
   // startup and better NUMA affinity.
-#if defined(GASNET_CONDUIT_IBV) || defined(GASNET_CONDUIT_UCX) || defined(GASNET_CONDUIT_ARIES) || defined(GASNET_CONDUIT_OFI)
-#if defined(GASNET_SEGMENT_FAST)
-  gasnet_client_attach_hook = &chpl_comm_regMemHeapTouch;
-#endif
-#endif
+//#if defined(GASNET_CONDUIT_IBV) || defined(GASNET_CONDUIT_UCX) || defined(GASNET_CONDUIT_ARIES) || defined(GASNET_CONDUIT_OFI)
+//#if defined(GASNET_SEGMENT_FAST)
+//  gasnet_client_attach_hook = &chpl_comm_regMemHeapTouch;
+//#endif
+//#endif
 
   set_max_segsize();
   set_num_comm_domains();
