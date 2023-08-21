@@ -36,11 +36,9 @@
 
 #define basePBSFilename ".chpl-pbs-qsub-"
 #define baseExpectFilename ".chpl-expect-"
-#define baseSysFilename ".chpl-sys-"
 
 char pbsFilename[FILENAME_MAX];
 char expectFilename[FILENAME_MAX];
-char sysFilename[FILENAME_MAX];
 
 /* copies of binary to run per node */
 #define procsPerNode 1
@@ -69,7 +67,7 @@ static qsubVersion determineQsubVersion(void) {
 
   if (strstr(version, "NCCS")) {
     return nccs;
-  } else if (strstr(version, "PBSPro")) {
+  } else if (strstr(version, "pbs_version") || strstr(version, "PBSPro")) {
     return pbspro;
   } else if (strstr(version, "version:") || strstr(version, "Version:")) {
     return torque;
@@ -104,10 +102,10 @@ static void genNumLocalesOptions(FILE* pbsFile, qsubVersion qsub,
   switch (qsub) {
   case pbspro:
   case unknown:
-    fprintf(pbsFile, "#PBS -l mppwidth=%d\n", numLocales);
-    fprintf(pbsFile, "#PBS -l mppnppn=%d\n", procsPerNode);
     if (numCoresPerLocale)
-      fprintf(pbsFile, "#PBS -l mppdepth=%d\n", numCoresPerLocale);
+      fprintf(pbsFile, "#PBS -l place=scatter,select=%d:ncpus=%d\n",numLocales, numCoresPerLocale);
+    else
+      fprintf(pbsFile, "#PBS -l place=scatter,select=%d\n",numLocales);
     break;
   case torque:
     fprintf(pbsFile, "#PBS -l nodes=%d\n", numLocales);
@@ -132,6 +130,12 @@ static char* chpl_launch_create_command(int argc, char* argv[],
   pid_t mypid;
   char  jobName[128];
 
+  if (basenamePtr == NULL) {
+      basenamePtr = argv[0];
+  } else {
+      basenamePtr++;
+  }
+
   chpl_launcher_get_job_name(basenamePtr, jobName, sizeof(jobName));
 
   chpl_compute_real_binary_name(argv[0]);
@@ -141,8 +145,6 @@ static char* chpl_launch_create_command(int argc, char* argv[],
 #else
   mypid = 0;
 #endif
-  snprintf(sysFilename, sizeof(sysFilename), "%s%d", baseSysFilename,
-           (int)mypid);
   snprintf(expectFilename, sizeof(expectFilename), "%s%d", baseExpectFilename,
            (int)mypid);
   snprintf(pbsFilename, sizeof(pbsFilename), "%s%d", basePBSFilename,
@@ -168,7 +170,7 @@ static char* chpl_launch_create_command(int argc, char* argv[],
   fprintf(expectFile, "expect -re $prompt\n");
   fprintf(expectFile, "send \"cd \\$PBS_O_WORKDIR\\n\"\n");
   fprintf(expectFile, "expect -re $prompt\n");
-  fprintf(expectFile, "send \"%s/%s/gasnetrun_ibv -n %d -N %d",
+  fprintf(expectFile, "send \"%s/%s/gasnetrun_ibv -n %d -N %d -c 0",
           CHPL_THIRD_PARTY, WRAP_TO_STR(LAUNCH_PATH), numLocales, numLocales);
   fprintf(expectFile, " %s ", chpl_get_real_binary_name());
   for (i=1; i<argc; i++) {
@@ -207,12 +209,6 @@ static void chpl_launch_cleanup(void) {
     {
       char command[sizeof(expectFilename) + 4];
       (void) snprintf(command, sizeof(command), "rm %s", expectFilename);
-      system(command);
-    }
-
-    {
-      char command[sizeof(sysFilename) + 4];
-      (void) snprintf(command, sizeof(command), "rm %s", sysFilename);
       system(command);
     }
   }
