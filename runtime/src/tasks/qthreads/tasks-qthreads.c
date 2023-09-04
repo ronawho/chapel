@@ -58,6 +58,7 @@
 #include <errno.h>
 #include <inttypes.h>
 #include <pthread.h>
+#include <pthread/qos.h>
 #include <sched.h>
 #include <signal.h>
 #include <stdio.h>
@@ -729,6 +730,15 @@ static void setupAffinity(void) {
   }
 }
 
+static aligned_t set_qos(void *arg)
+{
+    const char *kindStr = chpl_env_rt_get("USE_PU_KIND", "performance");
+    if (!strcasecmp(kindStr, "efficiency")) {
+      int ret = pthread_set_qos_class_self_np(QOS_CLASS_BACKGROUND,0);
+    }
+    return 0;
+}
+
 void chpl_task_init(void)
 {
     int32_t   commMaxThreads;
@@ -765,6 +775,16 @@ void chpl_task_init(void)
     // QT_NUM_WORKERS_PER_SHEPHERD in which case we don't impose any limits on
     // the number of threads qthreads creates beforehand
     assert(0 == commMaxThreads || qthread_num_workers() < commMaxThreads);
+
+    // This may not run on every thread depending on scheduler
+    aligned_t rets[qthread_num_workers()];
+    for (int i=0; i<qthread_num_workers(); i++) {
+      qthread_empty(&rets[i]);
+      qthread_fork_to(set_qos, NULL, &rets[i], (qthread_shepherd_id_t)i);
+    }
+    for (int i=0; i<qthread_num_workers(); i++) {
+      qthread_readFE(NULL, &rets[i]);
+    }
 }
 
 void chpl_task_exit(void)
