@@ -30609,7 +30609,7 @@ fi
 
 ac_config_headers="$ac_config_headers include/config.h include/qthread/common.h"
 
-ac_config_files="$ac_config_files Makefile src/Makefile man/Makefile man/man3/Makefile include/Makefile include/qthread/Makefile test/Makefile test/utils/Makefile test/utils/rng/Makefile test/basics/Makefile test/features/Makefile test/multinode/Makefile test/stress/Makefile test/benchmarks/Makefile test/benchmarks/mantevo/Makefile test/benchmarks/mantevo/hpccg/Makefile test/benchmarks/finepoints/Makefile test/benchmarks/finepoints/partSendPrototype/Makefile"
+ac_config_files="$ac_config_files Makefile src/Makefile man/Makefile qthread.pc man/man3/Makefile include/Makefile include/qthread/Makefile test/Makefile test/utils/Makefile test/utils/rng/Makefile test/basics/Makefile test/features/Makefile test/multinode/Makefile test/stress/Makefile test/benchmarks/Makefile test/benchmarks/mantevo/Makefile test/benchmarks/mantevo/hpccg/Makefile test/benchmarks/finepoints/Makefile test/benchmarks/finepoints/partSendPrototype/Makefile"
 
 cat >confcache <<\_ACEOF
 # This file is a shell script that caches the results of configure
@@ -31868,6 +31868,7 @@ do
     "Makefile") CONFIG_FILES="$CONFIG_FILES Makefile" ;;
     "src/Makefile") CONFIG_FILES="$CONFIG_FILES src/Makefile" ;;
     "man/Makefile") CONFIG_FILES="$CONFIG_FILES man/Makefile" ;;
+    "qthread.pc") CONFIG_FILES="$CONFIG_FILES qthread.pc" ;;
     "man/man3/Makefile") CONFIG_FILES="$CONFIG_FILES man/man3/Makefile" ;;
     "include/Makefile") CONFIG_FILES="$CONFIG_FILES include/Makefile" ;;
     "include/qthread/Makefile") CONFIG_FILES="$CONFIG_FILES include/qthread/Makefile" ;;
