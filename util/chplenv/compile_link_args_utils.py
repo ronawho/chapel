@@ -163,6 +163,11 @@ def compute_internal_compile_link_args(runtime_subdir):
     if chpl_tasks.get() == 'qthreads':
         extend2(tgt_compile, chpl_qthreads.get_compile_args())
         extend2(tgt_link, chpl_qthreads.get_link_args())
+        #print('')
+        #print(chpl_qthreads.get_compile_args())
+        #print(chpl_qthreads.get_link_args())
+        #print('')
+        #exit()
 
     extend2(tgt_compile, chpl_unwind.get_compile_args())
     extend2(tgt_link, chpl_unwind.get_link_args())
