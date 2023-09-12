@@ -212,8 +212,9 @@ static char* chpl_launch_create_command(int argc, char* argv[],
     fprintf(expectFile, " '%s'", argv[i]);
   }
   fprintf(expectFile, "; echo 'CHPL_EXPECT_SENTINEL_2'\\n\"\n");
-  fprintf(expectFile, "expect CHPL_EXPECT_SENTINEL_2\n"); // suck up echo of sent command
-  fprintf(expectFile, "interact -o CHPL_EXPECT_SENTINEL_2 {return}\n");
+  fprintf(expectFile, "expect CHPL_EXPECT_SENTINEL_2'\\r\\n\n"); // suck up echo of sent command
+  fprintf(expectFile, "expect -re (.*)CHPL_EXPECT_SENTINEL_2\n");
+  fprintf(expectFile, "send_user $expect_out(1,string)\n");
   fprintf(expectFile, "send \"exit\\n\"\n");
   fclose(expectFile);
 
