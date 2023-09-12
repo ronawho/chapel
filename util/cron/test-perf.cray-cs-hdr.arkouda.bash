@@ -14,6 +14,7 @@ export CHPL_NIGHTLY_TEST_CONFIG_NAME="perf.cray-cs-hdr.arkouda"
 module list
 
 # setup for apollo
+source $CWD/common-perf.bash
 source $CWD/common-hpe-apollo.bash
 unset CHPL_TEST_LAUNCHCMD
 export CHPL_LAUNCHER=pbs-gasnetrun_ibv
