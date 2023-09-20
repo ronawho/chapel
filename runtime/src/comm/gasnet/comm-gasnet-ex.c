@@ -1086,36 +1086,17 @@ void chpl_comm_broadcast_private(int id, size_t size) {
 }
 
 void chpl_comm_impl_barrier(const char *msg) {
-/*
-  int id = (int) msg[0];
-  int retval;
-
-  //
-  // We don't want to just do a gasnet_barrier_wait() here, because
-  // GASNet will put us to work polling, and we already have a polling
-  // task that the tasking layer has presumably placed to best effect.
-  // We don't want to compete with that.  Also, the implementation is
-  // required to do chpl_task_yield() while waiting for the barrier to
-  // satisfy; see chpl_comm.h.  This prevents us from monopolizing the
-  // processor while waiting.
-  //
-  gasnet_barrier_notify(id, 0);
-  while ((retval = gasnet_barrier_try(id, 0)) == GASNET_ERR_NOT_READY) {
-    chpl_task_yield();
-  }
-  GASNET_Safe_Retval(gasnet_barrier_try(id, 0), retval);
-*/
-  /***************************************************************************/
-
   int retval;
   gex_Event_t bar = gex_Coll_BarrierNB(myteam, 0);
-  while ((retval = gex_Event_Test(bar)) == GASNET_ERR_NOT_READY) { // TODO gex wait condition?
+  // TODO GEX check with paul if it's worth checking for errors here
+  while ((retval = gex_Event_Test(bar)) == GASNET_ERR_NOT_READY) {
     if (!pollingRunning) {
       // Needed for progress (presumably only before progress thread is up)
       gasnet_AMPoll();
     }
     chpl_task_yield();
   }
+  // TODO GEX make this more obvious (at least pass in string instead of fn call)
   GASNET_Safe_Retval(gex_Coll_BarrierNB(myteam, 0), retval);
 }
 
@@ -1180,6 +1161,7 @@ void  chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
       // If it's in the remote segment, great, do a normal gasnet_put.
       // GASNet will handle the local portion not being in the segment.
       // TODO GEX convert to gex_RMA_PutNB with task-yield
+      // TODO GEX myteam -> local end point team -- __thread based like ofi?
       gex_RMA_PutBlocking(myteam, node, raddr, addr, size, GEX_NO_FLAGS);
     } else {
       // If it's not in the remote segment, we need to send an
