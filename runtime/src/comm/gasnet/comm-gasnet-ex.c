@@ -681,19 +681,17 @@ chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t node, void* raddr,
 
 int chpl_comm_test_nb_complete(chpl_comm_nb_handle_t h)
 {
-  return ((void*)h) == NULL;
+  return gex_Event_Test((gex_Event_t) h) == GASNET_OK;
 }
 
 void chpl_comm_wait_nb_some(chpl_comm_nb_handle_t* h, size_t nhandles)
 {
-  assert(NULL == GASNET_INVALID_HANDLE);  // serious confusion if not so
-  gasnet_wait_syncnb_some((gex_Event_t*) h, nhandles);
+  gex_Event_WaitSome((gex_Event_t*) h, nhandles, GEX_NO_FLAGS);
 }
 
 int chpl_comm_try_nb_some(chpl_comm_nb_handle_t* h, size_t nhandles)
 {
-  assert(NULL == GASNET_INVALID_HANDLE);  // serious confusion if not so
-  return gasnet_try_syncnb_some((gex_Event_t*) h, nhandles) == GASNET_OK;
+  return gex_Event_TestSome((gex_Event_t*) h, nhandles, GEX_NO_FLAGS) == GASNET_OK;
 }
 
 // TODO GEX could be scalable query to gasnet itself
