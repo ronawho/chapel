@@ -1206,8 +1206,9 @@ void  chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
 
         // Send an AM over to ask for a them to copy the data
         // passed in the active message (addr_chunk) to raddr_chunk.
-        GASNET_Safe(gasnet_AMRequestMedium4(node, DO_COPY_PAYLOAD,
+        GASNET_Safe(gex_AM_RequestMedium4(myteam, node, DO_COPY_PAYLOAD,
                                             addr_chunk, this_size,
+                                            GEX_EVENT_NOW, GEX_NO_FLAGS, // TODO GEX_EVENT_GROUP
                                             Arg0(&done), Arg1(&done),
                                             Arg0(raddr_chunk),
                                             Arg1(raddr_chunk)));
@@ -1215,6 +1216,7 @@ void  chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
         // Wait for the PUT to complete.
         wait_done_obj(&done, false);
       }
+      // TODO gex_NBI_Wait(GEX_EC_AM, GEX_NO_FLAGS);
     }
   }
 }
