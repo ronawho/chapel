@@ -53,6 +53,8 @@
 #include <assert.h>
 #include <time.h>
 
+#define GEX_NO_FLAGS 0
+
 static gasnet_seginfo_t* seginfo_table = NULL;
 static gex_Client_t      myclient;
 static gex_EP_t          myep;
@@ -607,7 +609,7 @@ chpl_comm_nb_handle_t chpl_comm_put_nb(void *addr, c_nodeid_t node, void* raddr,
                                        size_t size, int32_t commID,
                                        int ln, int32_t fn)
 {
-  gasnet_handle_t ret;
+  gex_Event_t ret;
   int remote_in_segment;
 
   // Communication callbacks
@@ -626,14 +628,17 @@ chpl_comm_nb_handle_t chpl_comm_put_nb(void *addr, c_nodeid_t node, void* raddr,
 
   if(!remote_in_segment) {
     chpl_comm_put(addr, node, raddr, size, commID, ln, fn);
-    ret = NULL;
+    ret = GEX_EVENT_INVALID;
     return (chpl_comm_nb_handle_t) ret;
   }
 
   chpl_comm_diags_verbose_rdma("put_nb", node, size, ln, fn, commID);
   chpl_comm_diags_incr(put_nb);
 
-  ret = gasnet_put_nb_bulk(node, raddr, addr, size);
+  // TODO GEX consider cases where we could benefit from early re-use of source buffer
+  // GEX_EVENT_DEFER means source memory will not change until PUT is complete
+  // FYI Can either be defer, now, or pass in gex_event_t
+  ret = gex_RMA_PutNB(myteam, node, raddr, addr, size, GEX_EVENT_DEFER, GEX_NO_FLAGS);
 
   return (chpl_comm_nb_handle_t) ret;
 }
@@ -642,7 +647,7 @@ chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t node, void* raddr,
                                        size_t size, int32_t commID,
                                        int ln, int32_t fn)
 {
-  gasnet_handle_t ret;
+  gex_Event_t ret;
   int remote_in_segment;
 
   // Communications callback support
@@ -661,33 +666,37 @@ chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t node, void* raddr,
 
   if(!remote_in_segment) {
     chpl_comm_get(addr, node, raddr, size, commID, ln, fn);
-    ret = NULL;
+    ret = GEX_EVENT_INVALID;
     return (chpl_comm_nb_handle_t) ret;
   }
 
   chpl_comm_diags_verbose_rdma("get_nb", node, size, ln, fn, commID);
   chpl_comm_diags_incr(get_nb);
 
-  ret = gasnet_get_nb_bulk(addr, node, raddr, size);
+  ret = gex_RMA_GetNB(myteam, addr, node, raddr, size, GEX_NO_FLAGS);
 
   return (chpl_comm_nb_handle_t) ret;
 }
 
 int chpl_comm_test_nb_complete(chpl_comm_nb_handle_t h)
 {
-  return ((void*)h) == NULL;
+  return ((void*)h) == GEX_EVENT_INVALID;
+  // TODO GEX Note that this just checks if the op was blocking, if we want
+  // this to check if a non-blocking op is complete it should be:
+  // return gex_Event_Test((gex_Event_t) h) == GASNET_OK;
+  
 }
 
 void chpl_comm_wait_nb_some(chpl_comm_nb_handle_t* h, size_t nhandles)
 {
-  assert(NULL == GASNET_INVALID_HANDLE);  // serious confusion if not so
-  gasnet_wait_syncnb_some((gasnet_handle_t*) h, nhandles);
+  // TODO GEX this still polls internally -- do we want that with our progress
+  // thread running or should we just task yield while doing a gex_Event_TestSome?
+  gex_Event_WaitSome((gex_Event_t*) h, nhandles, GEX_NO_FLAGS);
 }
 
 int chpl_comm_try_nb_some(chpl_comm_nb_handle_t* h, size_t nhandles)
 {
-  assert(NULL == GASNET_INVALID_HANDLE);  // serious confusion if not so
-  return gasnet_try_syncnb_some((gasnet_handle_t*) h, nhandles) == GASNET_OK;
+  return gex_Event_TestSome((gex_Event_t*) h, nhandles, GEX_NO_FLAGS) == GASNET_OK;
 }
 
 // TODO GEX could be scalable query to gasnet itself
@@ -1155,7 +1164,8 @@ void  chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
     if( remote_in_segment ) {
       // If it's in the remote segment, great, do a normal gasnet_put.
       // GASNet will handle the local portion not being in the segment.
-      gasnet_put(node, raddr, addr, size); // node, dest, src, size
+      // TODO GEX convert to gex_RMA_PutNB with task-yield
+      gex_RMA_PutBlocking(myteam, node, raddr, addr, size, GEX_NO_FLAGS);
     } else {
       // If it's not in the remote segment, we need to send an
       // active message so that the other node will copy the data
@@ -1240,7 +1250,8 @@ void  chpl_comm_get(void* addr, c_nodeid_t node, void* raddr,
     if( remote_in_segment ) {
       // If it's in the remote segment, great, do a normal gasnet_get.
       // GASNet will handle the local portion not being in the segment.
-      gasnet_get(addr, node, raddr, size); // dest, node, src, size
+      // TODO GEX convert to gex_RMA_GetNB with task-yield
+      gex_RMA_GetBlocking(myteam, addr, node, raddr, size, GEX_NO_FLAGS);
     } else {
       // If it's not in the remote segment, we need to send an
       // active message so that the other node will PUT back to us.
