@@ -1492,6 +1492,7 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
   done_t done;
   size_t payload_size = arg_size - sizeof(chpl_comm_on_bundle_t);
   size_t small_msg_size = payload_size + sizeof(small_fork_hdr_t);
+  // TODO gex call to get upper bound given our number of args
   int large = (arg_size > gasnet_AMMaxMedium());
   int small = (small_msg_size < sizeof(special_fork_t) && !large);
 
@@ -1552,7 +1553,7 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
       memcpy(f + 1, arg + 1, payload_size);
 
       // Send the AM
-      GASNET_Safe(gasnet_AMRequestMedium0(node, op, f, small_msg_size));
+      GASNET_Safe(gex_AM_RequestMedium0(myteam, node, op, f, small_msg_size, GEX_EVENT_NOW, GEX_NO_FLAGS));
     } else {
       // Setup a small message pointing to arg
       // so the other side can GET from it
@@ -1580,7 +1581,7 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
       f->arg_size = arg_size;
 
       // Send the AM
-      GASNET_Safe(gasnet_AMRequestMedium0(node, op, f, sizeof(large_fork_t)));
+      GASNET_Safe(gex_AM_RequestMedium0(myteam, node, op, f, sizeof(large_fork_t), GEX_EVENT_NOW, GEX_NO_FLAGS));
     }
   } else {
     // Neither small nor large
@@ -1591,7 +1592,10 @@ void  execute_on_common(c_nodeid_t node, c_sublocid_t subloc,
     arg->comm.caller = chpl_nodeID;
     arg->comm.ack = blocking ? &done : NULL;
 
-    GASNET_Safe(gasnet_AMRequestMedium0(node, op, arg, arg_size));
+    GASNET_Safe(gex_AM_RequestMedium0(myteam, node, op, arg, arg_size, GEX_EVENT_NOW, GEX_NO_FLAGS));
+    // TODO longer term if we had bulk/vector API that allocated all nb args ,
+    // would be nice to use GEX_EVENT_GROUP and call gex_NBI_wait later or
+    // pass gex_event_t handles back 
   }
 
   if (blocking)
