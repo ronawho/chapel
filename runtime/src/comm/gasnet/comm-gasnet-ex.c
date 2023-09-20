@@ -949,6 +949,18 @@ void chpl_comm_pre_mem_init(void) {
   // This is a naive O(numLocales) broadcast; we could do something
   // more scalable with more effort
   //
+  
+
+  // TODO FINISH 
+  // TODO what is this actually trying to do -- see 73958379efadb8f7b5cec9af8fb48f97485def5f
+  //   Instead of bcasting zeros, set locally 
+  // TODO See if this is actually used -- I think only from in segment check,
+  // which we skip for segment everything.
+  /*
+  get_event_t ev = gex_Coll_Broadcast(myteam, 0, TODO_dst, TODO_src, sizeof(gasnet_seginfo_t), GEX_NO_FLAGS);
+  get_Event_wait(ev);
+  */
+  
   if (chpl_nodeID == 0) {
     int i;
     // Skip loc 0, since that would end up memcpy'ing seginfo_table to itself
@@ -959,6 +971,7 @@ void chpl_comm_pre_mem_init(void) {
   } else {
     GASNET_BLOCKUNTIL(bcast_seginfo_done);
   }
+  
   chpl_comm_barrier("making sure everyone's done with the broadcast");
 #endif
 
