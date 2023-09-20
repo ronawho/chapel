@@ -629,7 +629,7 @@ chpl_comm_nb_handle_t chpl_comm_put_nb(void *addr, c_nodeid_t node, void* raddr,
 
   if(!remote_in_segment) {
     chpl_comm_put(addr, node, raddr, size, commID, ln, fn);
-    ret = NULL;
+    ret = GEX_EVENT_INVALID;
     return (chpl_comm_nb_handle_t) ret;
   }
 
@@ -667,7 +667,7 @@ chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t node, void* raddr,
 
   if(!remote_in_segment) {
     chpl_comm_get(addr, node, raddr, size, commID, ln, fn);
-    ret = NULL;
+    ret = GEX_EVENT_INVALID;
     return (chpl_comm_nb_handle_t) ret;
   }
 
@@ -681,11 +681,15 @@ chpl_comm_nb_handle_t chpl_comm_get_nb(void* addr, c_nodeid_t node, void* raddr,
 
 int chpl_comm_test_nb_complete(chpl_comm_nb_handle_t h)
 {
-  return gex_Event_Test((gex_Event_t) h) == GASNET_OK;
+  return ((void*)h) == GEX_EVENT_INVALID;
+  // TODO GEX should this be?:
+  //return gex_Event_Test((gex_Event_t) h) == GASNET_OK;
 }
 
 void chpl_comm_wait_nb_some(chpl_comm_nb_handle_t* h, size_t nhandles)
 {
+  // TODO GEX this still polls internally -- do we want that with our progress
+  // thread running?
   gex_Event_WaitSome((gex_Event_t*) h, nhandles, GEX_NO_FLAGS);
 }
 
