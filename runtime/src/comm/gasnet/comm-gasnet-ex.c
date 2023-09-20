@@ -1086,6 +1086,7 @@ void chpl_comm_broadcast_private(int id, size_t size) {
 }
 
 void chpl_comm_impl_barrier(const char *msg) {
+/*
   int id = (int) msg[0];
   int retval;
 
@@ -1103,6 +1104,19 @@ void chpl_comm_impl_barrier(const char *msg) {
     chpl_task_yield();
   }
   GASNET_Safe_Retval(gasnet_barrier_try(id, 0), retval);
+*/
+  /***************************************************************************/
+
+  int retval;
+  gex_Event_t bar = gex_Coll_BarrierNB(myteam, 0);
+  while ((retval = gex_Event_Test(bar)) == GASNET_ERR_NOT_READY) { // TODO gex wait condition?
+    if (!pollingRunning) {
+      // Needed for progress (presumably only before progress thread is up)
+      gasnet_AMPoll();
+    }
+    chpl_task_yield();
+  }
+  GASNET_Safe_Retval(gex_Coll_BarrierNB(myteam, 0), retval);
 }
 
 void chpl_comm_pre_task_exit(int all) {
