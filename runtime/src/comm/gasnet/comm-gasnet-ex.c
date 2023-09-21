@@ -563,23 +563,23 @@ void AM_copy_payload(gasnet_token_t token, void* buf, size_t nbytes,
 }
 
 static gex_AM_Entry_t ftable[] = {
-                                                                                       //Name                 //CDATA
-  {FORK,             AM_fork,             GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, "AM_fork",             NULL},
-  {FORK_SMALL,       AM_fork_small,       GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, "AM_fork_small",       NULL},
-  {FORK_LARGE,       AM_fork_large,       GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, "AM_fork_large",       NULL},
-  {FORK_NB,          AM_fork_nb,          GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, "AM_fork_nb",          NULL},
-  {FORK_NB_SMALL,    AM_fork_nb_small,    GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, "AM_fork_nb_small",    NULL},
-  {FORK_NB_LARGE,    AM_fork_nb_large,    GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, "AM_fork_nb_large",    NULL},
-  {FORK_FAST,        AM_fork_fast,        GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, "AM_fork_fast",        NULL},
-  {FORK_FAST_SMALL,  AM_fork_fast_small,  GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, "AM_fork_fast_small",  NULL},
-  {SIGNAL,           AM_signal,           GEX_FLAG_AM_REQREP  | GEX_FLAG_AM_SHORT,  2, "AM_signal",           NULL},
-  {SIGNAL_LONG,      AM_signal_long,      GEX_FLAG_AM_REPLY   | GEX_FLAG_AM_LONG,   2, "AM_signal_long",      NULL},
-  {PRIV_BCAST,       AM_priv_bcast,       GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, "AM_priv_bcast",       NULL},
-  {PRIV_BCAST_LARGE, AM_priv_bcast_large, GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, "AM_priv_bcast_large", NULL},
-  {FREE,             AM_free,             GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_SHORT,  2, "AM_free",             NULL},
-  {SHUTDOWN,         AM_shutdown,         GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_SHORT,  0, "AM_shutdown",         NULL},
-  {DO_REPLY_PUT,     AM_reply_put,        GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, "AM_reply_put",        NULL},
-  {DO_COPY_PAYLOAD,  AM_copy_payload,     GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 4, "AM_copy_payload",     NULL}
+                                                                                       //CDATA //NAME
+  {FORK,             AM_fork,             GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, NULL,   "AM_fork"             },
+  {FORK_SMALL,       AM_fork_small,       GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, NULL,   "AM_fork_small"       },
+  {FORK_LARGE,       AM_fork_large,       GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, NULL,   "AM_fork_large"       },
+  {FORK_NB,          AM_fork_nb,          GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, NULL,   "AM_fork_nb"          },
+  {FORK_NB_SMALL,    AM_fork_nb_small,    GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, NULL,   "AM_fork_nb_small"    },
+  {FORK_NB_LARGE,    AM_fork_nb_large,    GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, NULL,   "AM_fork_nb_large"    },
+  {FORK_FAST,        AM_fork_fast,        GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, NULL,   "AM_fork_fast"        },
+  {FORK_FAST_SMALL,  AM_fork_fast_small,  GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, NULL,   "AM_fork_fast_small"  },
+  {SIGNAL,           AM_signal,           GEX_FLAG_AM_REQREP  | GEX_FLAG_AM_SHORT,  2, NULL,   "AM_signal"           },
+  {SIGNAL_LONG,      AM_signal_long,      GEX_FLAG_AM_REPLY   | GEX_FLAG_AM_LONG,   2, NULL,   "AM_signal_long"      },
+  {PRIV_BCAST,       AM_priv_bcast,       GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, NULL,   "AM_priv_bcast"       },
+  {PRIV_BCAST_LARGE, AM_priv_bcast_large, GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, NULL,   "AM_priv_bcast_large" },
+  {FREE,             AM_free,             GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_SHORT,  2, NULL,   "AM_free"             },
+  {SHUTDOWN,         AM_shutdown,         GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_SHORT,  0, NULL,   "AM_shutdown"         },
+  {DO_REPLY_PUT,     AM_reply_put,        GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 0, NULL,   "AM_reply_put"        },
+  {DO_COPY_PAYLOAD,  AM_copy_payload,     GEX_FLAG_AM_REQUEST | GEX_FLAG_AM_MEDIUM, 4, NULL,   "AM_copy_payload"     }
 };
 
 #define GEX_NO_FLAGS 0
