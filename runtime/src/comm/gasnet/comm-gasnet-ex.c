@@ -59,28 +59,28 @@ static gasnet_seginfo_t* seginfo_table = NULL;
 // functions to get the 2 arguments for a 64-bit pointer,
 // and a function to reconstitute the pointer from the 2 arguments.
 static inline
-gasnet_handlerarg_t get_arg_from_ptr0(uintptr_t addr)
+gex_AM_Arg_t get_arg_from_ptr0(uintptr_t addr)
 {
   // This one returns the bottom 32 bits.
-  return ((gasnet_handlerarg_t)
+  return ((gex_AM_Arg_t)
             ((((uint64_t) (addr)) << 32UL) >> 32UL));
 }
 static inline
-gasnet_handlerarg_t get_arg_from_ptr1(uintptr_t addr)
+gex_AM_Arg_t get_arg_from_ptr1(uintptr_t addr)
 {
   // this one returns the top 32 bits.
-  return ((gasnet_handlerarg_t)
+  return ((gex_AM_Arg_t)
             (((uint64_t) (addr)) >> 32UL));
 }
 static inline
-uintptr_t get_uintptr_from_args(gasnet_handlerarg_t a0, gasnet_handlerarg_t a1 )
+uintptr_t get_uintptr_from_args(gex_AM_Arg_t a0, gex_AM_Arg_t a1 )
 {
   return (uintptr_t)
            (((uint64_t) (uint32_t) a0)
             | (((uint64_t) (uint32_t) a1) << 32UL));
 }
 static inline
-void* get_ptr_from_args(gasnet_handlerarg_t a0, gasnet_handlerarg_t a1 )
+void* get_ptr_from_args(gex_AM_Arg_t a0, gex_AM_Arg_t a1 )
 {
   return (void*) get_uintptr_from_args(a0, a1);
 }
@@ -489,7 +489,7 @@ static void AM_fork_nb_large(gasnet_token_t token, void* buf, size_t nbytes) {
                            f->hdr.subloc, chpl_nullTaskID);
 }
 
-static void AM_signal(gasnet_token_t token, gasnet_handlerarg_t a0, gasnet_handlerarg_t a1) {
+static void AM_signal(gasnet_token_t token, gex_AM_Arg_t a0, gex_AM_Arg_t a1) {
   done_t* done = (done_t*) get_ptr_from_args(a0, a1);
   uint_least32_t prev;
   prev = atomic_fetch_add_explicit_uint_least32_t(&done->count, 1,
@@ -499,7 +499,7 @@ static void AM_signal(gasnet_token_t token, gasnet_handlerarg_t a0, gasnet_handl
 }
 
 static void AM_signal_long(gasnet_token_t token, void *buf, size_t nbytes,
-                           gasnet_handlerarg_t a0, gasnet_handlerarg_t a1) {
+                           gex_AM_Arg_t a0, gex_AM_Arg_t a1) {
   done_t* done = (done_t*) get_ptr_from_args(a0, a1);
   uint_least32_t prev;
   prev = atomic_fetch_add_explicit_uint_least32_t(&done->count, 1,
@@ -526,7 +526,7 @@ static void AM_priv_bcast_large(gasnet_token_t token, void* buf, size_t nbytes) 
                                    Arg0(pblp->ack), Arg1(pblp->ack)));
 }
 
-static void AM_free(gasnet_token_t token, gasnet_handlerarg_t a0, gasnet_handlerarg_t a1) {
+static void AM_free(gasnet_token_t token, gex_AM_Arg_t a0, gex_AM_Arg_t a1) {
   void* to_free = get_ptr_from_args(a0, a1);
 
   chpl_mem_free(to_free, 0, 0);
@@ -552,8 +552,8 @@ static void AM_reply_put(gasnet_token_t token, void* buf, size_t nbytes) {
 // Copy from the payload in this active message to dst.
 static
 void AM_copy_payload(gasnet_token_t token, void* buf, size_t nbytes,
-                     gasnet_handlerarg_t ack0, gasnet_handlerarg_t ack1,
-                     gasnet_handlerarg_t dst0, gasnet_handlerarg_t dst1)
+                     gex_AM_Arg_t ack0, gex_AM_Arg_t ack1,
+                     gex_AM_Arg_t dst0, gex_AM_Arg_t dst1)
 {
   void* dst = get_ptr_from_args(dst0, dst1);
 
