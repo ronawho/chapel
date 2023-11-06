@@ -1328,7 +1328,7 @@ void  chpl_comm_get(void* addr, c_nodeid_t node, void* raddr,
 }
 
 //
-// This is an adapter from Chapel code to GASNet's gasnet_gets_bulk. It does:
+// This is an adapter from Chapel code to GASNet's VIS interface. It does:
 // * convert count[0] and all of 'srcstr' and 'dststr' from counts of element
 //   to counts of bytes,
 //
@@ -1340,22 +1340,17 @@ void  chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode_i
   const size_t strlvls = (size_t)stridelevels;
   const gasnet_node_t srcnode = (gasnet_node_t)srcnode_id;
 
-  size_t dststr[strlvls];
-  size_t srcstr[strlvls];
-  size_t cnt[strlvls+1];
-
-  // Only count[0] and strides are measured in number of bytes.
-  cnt[0] = count[0] * elemSize;
+  ptrdiff_t dststr[strlvls];
+  ptrdiff_t srcstr[strlvls];
+  size_t elemsz = count[0] * elemSize;
+  size_t cnt[strlvls];
 
   if (strlvls>0) {
-    srcstr[0] = srcstrides[0] * elemSize;
-    dststr[0] = dststrides[0] * elemSize;
-    for (i=1; i<strlvls; i++) {
+    for (i=0; i<strlvls; i++) {
       srcstr[i] = srcstrides[i] * elemSize;
       dststr[i] = dststrides[i] * elemSize;
-      cnt[i] = count[i];
+      cnt[i] = count[i+1];
     }
-    cnt[strlvls] = count[strlvls];
   }
 
   // Communications callback support
@@ -1374,7 +1369,8 @@ void  chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode_i
   }
 
   // TODO -- handle strided get for non-registered memory
-  gasnet_gets_bulk(dstaddr, dststr, srcnode, srcaddr, srcstr, cnt, strlvls);
+  // TODO GEX convert to NB with task-yield
+  gex_VIS_StridedGetBlocking(myteam, dstaddr, dststr, srcnode, srcaddr, srcstr, elemsz, cnt, strlvls, GEX_NO_FLAGS);
 }
 
 // See the comment for chpl_comm_gets().
