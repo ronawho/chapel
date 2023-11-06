@@ -861,7 +861,7 @@ static void set_num_comm_domains() {
 void chpl_comm_init(int *argc_p, char ***argv_p) {
   // Initialize gasnet so that we can call gex_System_QueryHostInfo and
   // set the number of locales on our node which allows the rest of the
-  // runtime to determine which cores this locale will use. gasnet_attach
+  // runtime to determine which cores this locale will use. gex_Segment_Attach
   // is called in chpl_comm_init which is called after the cores have been
   // determined.
   gex_Rank_t      infoCount;
@@ -1161,7 +1161,7 @@ void  chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
 #endif
 
     if( remote_in_segment ) {
-      // If it's in the remote segment, great, do a normal gasnet_put.
+      // If it's in the remote segment, great, do a normal RMA Put.
       // GASNet will handle the local portion not being in the segment.
       // TODO GEX convert to gex_RMA_PutNB with task-yield
       gex_RMA_PutBlocking(myteam, node, raddr, addr, size, GEX_NO_FLAGS);
@@ -1208,7 +1208,7 @@ void  chpl_comm_put(void* addr, c_nodeid_t node, void* raddr,
   }
 }
 
-////GASNET - pass trace info to gasnet_get
+////GASNET - pass trace info to GET
 ////GASNET - define GASNET_E_ PUTGET always REMOTE
 ////GASNET - look at GASNET tools at top of README.tools has atomic counters
 void  chpl_comm_get(void* addr, c_nodeid_t node, void* raddr,
@@ -1234,8 +1234,7 @@ void  chpl_comm_get(void* addr, c_nodeid_t node, void* raddr,
     // The GASNet Spec says:
     //   The source memory address for all gets and the target memory address
     //   for all puts must fall within the memory area registered for remote
-    //   access by the remote node (see gasnet_attach()), or the results are
-    //   undefined
+    //   access by the remote node, or the results are undefined
 
     // In other words, it is OK if the local side of a GET or PUT
     // is not in the registered memory region.
@@ -1247,7 +1246,7 @@ void  chpl_comm_get(void* addr, c_nodeid_t node, void* raddr,
 #endif
 
     if( remote_in_segment ) {
-      // If it's in the remote segment, great, do a normal gasnet_get.
+      // If it's in the remote segment, great, do a normal RMA Get.
       // GASNet will handle the local portion not being in the segment.
       // TODO GEX convert to gex_RMA_GetNB with task-yield
       gex_RMA_GetBlocking(myteam, addr, node, raddr, size, GEX_NO_FLAGS);
