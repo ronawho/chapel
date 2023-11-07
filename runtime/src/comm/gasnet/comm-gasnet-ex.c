@@ -1342,8 +1342,8 @@ void  chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode_i
 
   ptrdiff_t dststr[strlvls];
   ptrdiff_t srcstr[strlvls];
-  size_t elemsz = count[0] * elemSize;
   size_t cnt[strlvls];
+  size_t elemsz = count[0] * elemSize;
 
   if (strlvls>0) {
     for (i=0; i<strlvls; i++) {
@@ -1373,7 +1373,7 @@ void  chpl_comm_get_strd(void* dstaddr, size_t* dststrides, c_nodeid_t srcnode_i
   gex_VIS_StridedGetBlocking(myteam, dstaddr, dststr, srcnode, srcaddr, srcstr, elemsz, cnt, strlvls, GEX_NO_FLAGS);
 }
 
-// See the comment for chpl_comm_gets().
+// See the comment for chpl_comm_get_strd().
 void  chpl_comm_put_strd(void* dstaddr, size_t* dststrides, c_nodeid_t dstnode_id,
                          void* srcaddr, size_t* srcstrides, size_t* count,
                          int32_t stridelevels, size_t elemSize, int32_t commID,
@@ -1382,21 +1382,17 @@ void  chpl_comm_put_strd(void* dstaddr, size_t* dststrides, c_nodeid_t dstnode_i
   const size_t strlvls = (size_t)stridelevels;
   const gasnet_node_t dstnode = (gasnet_node_t)dstnode_id;
 
-  size_t dststr[strlvls];
-  size_t srcstr[strlvls];
-  size_t cnt[strlvls+1];
+  ptrdiff_t dststr[strlvls];
+  ptrdiff_t srcstr[strlvls];
+  size_t cnt[strlvls];
+  size_t elemsz = count[0] * elemSize;
 
-  // Only count[0] and strides are measured in number of bytes.
-  cnt[0] = count[0] * elemSize;
   if (strlvls>0) {
-    srcstr[0] = srcstrides[0] * elemSize;
-    dststr[0] = dststrides[0] * elemSize;
-    for (i=1; i<strlvls; i++) {
+    for (i=0; i<strlvls; i++) {
       srcstr[i] = srcstrides[i] * elemSize;
       dststr[i] = dststrides[i] * elemSize;
-      cnt[i] = count[i];
+      cnt[i] = count[i+1];
     }
-    cnt[strlvls] = count[strlvls];
   }
 
   // Communications callback support
@@ -1415,7 +1411,8 @@ void  chpl_comm_put_strd(void* dstaddr, size_t* dststrides, c_nodeid_t dstnode_i
   }
 
   // TODO -- handle strided put for non-registered memory
-  gasnet_puts_bulk(dstnode, dstaddr, dststr, srcaddr, srcstr, cnt, strlvls);
+  // TODO GEX convert to NB with task-yield
+  gex_VIS_StridedPutBlocking(myteam, dstnode, dstaddr, dststr, srcaddr, srcstr, elemsz, cnt, strlvls, GEX_NO_FLAGS);
 }
 
 #define MAX_UNORDERED_TRANS_SZ 1024
